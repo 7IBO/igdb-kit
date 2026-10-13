@@ -1,5 +1,11 @@
 # igdb-kit
 
+## 0.6.1
+
+### Patch Changes
+
+- 8fa8edf: The README is now a short overview, with the detailed documentation in [`docs/`](https://github.com/7IBO/igdb-kit/tree/main/packages/igdb-kit/docs) on GitHub. `popularitySnapshot()` documents that a type IGDB returns no rows for is left out.
+
 ## 0.6.0
 
 ### Minor Changes
