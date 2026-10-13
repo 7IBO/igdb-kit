@@ -49,6 +49,6 @@ for await (const rows of igdb.popularitySnapshot({ limit: 1000 })) {
 }
 ```
 
-Key the history on `game_id`, `popularity_type` and `calculated_at`: each metric is recomputed on its own schedule (IGDB's daily, Steam's and Twitch's on other days), so running a snapshot twice the same day stores nothing new.
+A metric IGDB returns no rows for is left out, which happened to Steam's for a while on two mornings. Key the history on `game_id`, `popularity_type` and `calculated_at`: each metric is recomputed on its own schedule (IGDB's daily, Steam's and Twitch's on other days), so running a snapshot twice the same day stores nothing new.
 
 `limit` reads the 1000 most popular rows of each of the 11 metrics in 3 requests. Without it, every row (about 700,000) is read in id order: the metrics are counted, then each one's pages are requested at once, two metrics at a time, for about 145 multiqueries and 40 seconds at the default rate limit. Three metrics are held in memory at most. `types` picks the metrics.

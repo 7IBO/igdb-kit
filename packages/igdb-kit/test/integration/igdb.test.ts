@@ -273,7 +273,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(pages).toHaveLength(1);
     expect(new Set(pages[0]?.map((r) => r.game_id)).size).toBe(total);
     expect(pages[0]?.[0]?.rank).toBe(1);
-  });
+  }, 15_000); // about 10 pages, in 1 to 5 s depending on IGDB's load
 
   test("artworkType() converts artwork_type as IGDB does, where image_type is missing", async () => {
     const [missing, both] = await Promise.all([
@@ -300,8 +300,17 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     const types = [PopularityType.IGDBPlaying, PopularityType.Steam24hrPeakPlayers];
     const pages = [];
     for await (const rows of igdb.popularitySnapshot({ types, limit: 10 })) pages.push(rows);
-    expect(pages.map((rows) => rows[0]?.popularity_type)).toEqual(types);
-    expect(pages.map((rows) => rows[0]?.external_popularity_source)).toEqual([121, 1]);
+    // A type IGDB answers with no rows is left out: Steam's had none around 10:00 UTC on 2026-10-11
+    // and 2026-10-12, though its rows are updated in place. The others come in the order asked.
+    const got = pages.map((rows) => rows[0]?.popularity_type);
+    expect(got[0]).toBe(PopularityType.IGDBPlaying);
+    expect(got).toEqual(types.filter((type) => got.includes(type)));
+    const sources = new Map<number, number>([
+      [PopularityType.IGDBPlaying, 121],
+      [PopularityType.Steam24hrPeakPlayers, 1],
+    ]);
+    for (const rows of pages)
+      expect(rows[0]?.external_popularity_source).toBe(sources.get(rows[0]?.popularity_type ?? 0));
     for (const rows of pages) {
       expect(rows.map((r) => r.rank)[0]).toBe(1);
       // Each type is recomputed in one batch, at most a few days ago.
