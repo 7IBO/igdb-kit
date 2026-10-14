@@ -24,7 +24,7 @@ for (const hit of hits) {
 IGDB returns the most recently indexed matches first, so last week's mods come before the original (153 of the 381 game matches for "zelda" are mods). `searchAll` corrects that:
 
 - It leaves out mods, DLCs, bundles, packs, updates and editions by default (`gameTypes`, whose default is `MAIN_GAME_TYPES`, and `includeEditions`).
-- It reads every match (500 per request, up to `maxRows`, 2000 by default) and ranks them: exact name, then names starting with the term, then names containing its words, then alternative names; ties go to the most rated games. `order: "igdb"` keeps IGDB's order in a single request.
+- It reads every match (500 per request, up to `maxRows`, 2000 by default) and ranks them: exact name, then names starting with the term, then names containing its words, then alternative names; ties go to the most rated games. Accents, punctuation and case do not count, kana voicing marks do ("ポケモン" is not "ボケモン"). `order: "igdb"` keeps IGDB's order in a single request.
 - Companies are not in the search index, and rows pointing to deleted entities or to people are dropped. `alternative_name` holds every alternative name joined into one string.
 
 ### Titles in other languages
@@ -59,7 +59,7 @@ const [best, next] = await igdb.games
 if (best && best.score >= 0.95 && (next?.score ?? 0) < best.score) save(best.game.id);
 ```
 
-It looks in names, alternative names and localized titles ("Pokémon Épée" finds Pokémon Sword with `matched: "alternative_name"` and 0.97), ignores trademark signs, punctuation, accents and case, reads "VII" as "7", and also tries the title without its edition or platform label: "The Witcher® 3: Wild Hunt - GOTY Edition" finds the Game of the Year Edition with 1, then the game with 0.95. Below 0.9 a title only resembles the name.
+It looks in names, alternative names and localized titles ("Pokémon Épée" finds Pokémon Sword with `matched: "alternative_name"` and 0.97), ignores trademark signs, punctuation, accents and case (kana keep their voicing marks: "パズルボブル" is not "バズルボブル"), reads "VII" as "7", and also tries the title without its edition or platform label: "The Witcher® 3: Wild Hunt - GOTY Edition" finds the Game of the Year Edition with 1, then the game with 0.95. Below 0.9 a title only resembles the name.
 
 - `platforms` and `year` lower the games that disagree (times 0.7 on none of the platforms, 0.9 or 0.6 a year or more apart): without them, the 2016 Doom and the 1993 one both score 1 for "DOOM", and the next candidate tells you so.
 - Mods, forks and updates are scored times 0.9; equal scores go to full games before DLCs and packs, then to games before their editions, then to the most rated.
