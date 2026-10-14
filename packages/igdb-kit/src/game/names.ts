@@ -4,7 +4,7 @@ import {
   type AlternativeNameVariant,
   parseAlternativeName,
 } from "./alternative-names";
-import { parseLocale, resolveLocale } from "./locale";
+import { type Locale, parseLocale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Requires, type RequiresIfSelected } from "./select";
 
 /** Fields of `game_localizations` that {@link localizedName} reads when they are selected. */
@@ -66,7 +66,7 @@ const regionLanguages: Record<number, string> = { [Region.Korea]: "ko-KR", [Regi
  */
 export function localization<G extends object>(
   game: G & Requires<G, LocalizationFields>,
-  locale: string,
+  locale: Locale,
 ): ItemOf<G, "game_localizations"> | null {
   const rows = (game as LocalizedNameInput).game_localizations ?? [];
   for (const region of resolveLocale(locale).localizationRegions) {
@@ -99,7 +99,7 @@ export function localization<G extends object>(
  */
 export function localizedName<G extends object>(
   game: G & LocalizedNameRequires<G>,
-  locale: string,
+  locale: Locale,
 ): LocalizedName | null {
   const input = game as LocalizedNameInput;
   const resolved = resolveLocale(locale);
@@ -150,7 +150,7 @@ export interface LocalizedCover {
  */
 export function localizedCover<G extends object>(
   game: G & Requires<G, LocalizedCoverFields>,
-  locale: string,
+  locale: Locale,
 ): LocalizedCover | null {
   const input = game as { cover?: LocalizationRow["cover"]; game_localizations?: readonly LocalizationRow[] };
   for (const region of resolveLocale(locale).localizationRegions) {

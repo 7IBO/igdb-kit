@@ -1,6 +1,6 @@
 import { ExternalGameSource } from "../generated/schema";
 import { numericCountry } from "./countries";
-import { resolveLocale } from "./locale";
+import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires, type RequiresIfSelected } from "./select";
 
 /** Stores recognized from a link's address. */
@@ -85,7 +85,7 @@ export interface StoreLinksOptions {
    * {@link localizeStoreUrl}), and Amazon products of its country only, when IGDB says where they
    * are sold.
    */
-  locale?: string | undefined;
+  locale?: Locale | undefined;
 }
 
 interface StoreDef {
@@ -239,7 +239,7 @@ const otherLanguages: Record<string, readonly string[]> = {
  * stores have different addresses per country, and an App Store app may not exist in every country.
  * 99.5% of IGDB's PlayStation links and 99.3% of its Xbox links are in `en-us`.
  */
-export function localizeStoreUrl(url: string, locale: string): string {
+export function localizeStoreUrl(url: string, locale: Locale): string {
   const store = storeOf(url);
   if (store !== "playstation" && store !== "xbox" && store !== "epic" && store !== "gog") return url;
   const { language, script, country } = resolveLocale(locale);

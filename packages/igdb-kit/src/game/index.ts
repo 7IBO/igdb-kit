@@ -51,7 +51,7 @@ export {
   type WebsiteLinksOptions,
   websiteLinks,
 } from "./links";
-export { type ResolvedLocale, resolveLocale } from "./locale";
+export { type Locale, type ResolvedLocale, resolveLocale } from "./locale";
 export { type Multiplayer, type MultiplayerFields, multiplayer } from "./multiplayer";
 export {
   type AlternativeNameFields,

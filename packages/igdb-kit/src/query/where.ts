@@ -1,5 +1,5 @@
 import { QueryError } from "../core/errors";
-import { resolveLocale } from "../game/locale";
+import { type Locale, resolveLocale } from "../game/locale";
 import {
   type EndpointName,
   type Endpoints,
@@ -309,7 +309,7 @@ export interface GameFilters {
    * holds for one `language_supports` row: `and(g.supportsLanguage("fr", "audio"),
    * g.supportsLanguage("fr", "subtitles"))` matches no game.
    */
-  supportsLanguage(language: number | readonly number[] | string, kind?: LanguageSupportKind): Condition;
+  supportsLanguage(language: number | readonly number[] | Locale, kind?: LanguageSupportKind): Condition;
   /**
    * Full games, as a catalog lists them: the {@link MAIN_GAME_TYPES} (no DLCs, mods, bundles,
    * episodes, packs or updates), no editions (Gold, GOTY: `version_parent`), no Erotic theme, and
@@ -457,7 +457,7 @@ const gameFilters: Record<keyof GameFilters, (...args: never[]) => Condition> = 
     }
     return new Condition(parts.join(" & "), parts.length > 1);
   },
-  supportsLanguage: (language: number | readonly number[] | string, kind?: LanguageSupportKind) => {
+  supportsLanguage: (language: number | readonly number[] | Locale, kind?: LanguageSupportKind) => {
     const languages =
       typeof language === "string"
         ? resolveLocale(language).languages

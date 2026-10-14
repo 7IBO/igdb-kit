@@ -3486,6 +3486,221 @@ export const ArtworkType = {
   HistoricalArtwork: 15,
 } as const;
 
+/**
+ * Ids of the `age_rating_content_description_types` reference table, held by `age_rating_content_descriptions_v2.description_type`.
+ * IGDB can add rows at any time: regenerate with `bun run codegen --fetch`.
+ */
+export const AgeRatingContentDescriptionType = {
+  /** Content */
+  Content: 1,
+  /** Interactive Element */
+  InteractiveElement: 2,
+} as const;
+
+/**
+ * Ids of the `age_rating_content_descriptions_v2` reference table, held by `age_ratings.rating_content_descriptions`.
+ * IGDB can add rows at any time: regenerate with `bun run codegen --fetch`.
+ */
+export const AgeRatingContentDescriptionV2 = {
+  /** ESRB Alcohol Reference */
+  ESRB_AlcoholReference: 1,
+  /** ESRB Animated Blood */
+  ESRB_AnimatedBlood: 2,
+  /** ESRB Blood */
+  ESRB_Blood: 3,
+  /** ESRB Blood and Gore */
+  ESRB_BloodAndGore: 4,
+  /** ESRB Cartoon Violence */
+  ESRB_CartoonViolence: 5,
+  /** ESRB Comic Mischief */
+  ESRB_ComicMischief: 6,
+  /** ESRB Crude Humor */
+  ESRB_CrudeHumor: 7,
+  /** ESRB Drug Reference */
+  ESRB_DrugReference: 8,
+  /** ESRB Fantasy Violence */
+  ESRB_FantasyViolence: 9,
+  /** ESRB Intense Violence */
+  ESRB_IntenseViolence: 10,
+  /** ESRB Language */
+  ESRB_Language: 11,
+  /** ESRB Lyrics */
+  ESRB_Lyrics: 12,
+  /** ESRB Mature Humor */
+  ESRB_MatureHumor: 13,
+  /** ESRB Nudity */
+  ESRB_Nudity: 14,
+  /** ESRB Partial Nudity */
+  ESRB_PartialNudity: 15,
+  /** ESRB Real Gambling */
+  ESRB_RealGambling: 16,
+  /** ESRB Sexual Content */
+  ESRB_SexualContent: 17,
+  /** ESRB Sexual Themes */
+  ESRB_SexualThemes: 18,
+  /** ESRB Sexual Violence */
+  ESRB_SexualViolence: 19,
+  /** ESRB Simulated Gambling */
+  ESRB_SimulatedGambling: 20,
+  /** ESRB Strong Language */
+  ESRB_StrongLanguage: 21,
+  /** ESRB Strong Lyrics */
+  ESRB_StrongLyrics: 22,
+  /** ESRB Strong Sexual Content */
+  ESRB_StrongSexualContent: 23,
+  /** ESRB Suggestive Themes */
+  ESRB_SuggestiveThemes: 24,
+  /** ESRB Tobacco Reference */
+  ESRB_TobaccoReference: 25,
+  /** ESRB Use of Alcohol */
+  ESRB_UseOfAlcohol: 26,
+  /** ESRB Use of Drugs */
+  ESRB_UseOfDrugs: 27,
+  /** ESRB Use of Tobacco */
+  ESRB_UseOfTobacco: 28,
+  /** ESRB Violence */
+  ESRB_Violence: 29,
+  /** ESRB Violent References */
+  ESRB_ViolentReferences: 30,
+  /** ESRB Animated Violence */
+  ESRB_AnimatedViolence: 31,
+  /** ESRB Mild Language */
+  ESRB_MildLanguage: 32,
+  /** ESRB Mild Violence */
+  ESRB_MildViolence: 33,
+  /** ESRB Use of Drugs and Alcohol */
+  ESRB_UseOfDrugsAndAlcohol: 34,
+  /** ESRB Drug and Alcohol Reference */
+  ESRB_DrugAndAlcoholReference: 35,
+  /** ESRB Mild Suggestive Themes */
+  ESRB_MildSuggestiveThemes: 36,
+  /** ESRB Mild Cartoon Violence */
+  ESRB_MildCartoonViolence: 37,
+  /** ESRB Mild Blood */
+  ESRB_MildBlood: 38,
+  /** ESRB Realistic Blood and Gore */
+  ESRB_RealisticBloodAndGore: 39,
+  /** ESRB Realistic Violence */
+  ESRB_RealisticViolence: 40,
+  /** ESRB Alcohol and Tobacco Reference */
+  ESRB_AlcoholAndTobaccoReference: 41,
+  /** ESRB Mature Sexual Themes */
+  ESRB_MatureSexualThemes: 42,
+  /** ESRB Mild Animated Violence */
+  ESRB_MildAnimatedViolence: 43,
+  /** ESRB Mild Sexual Themes */
+  ESRB_MildSexualThemes: 44,
+  /** ESRB Use of Alcohol and Tobacco */
+  ESRB_UseOfAlcoholAndTobacco: 45,
+  /** ESRB Animated Blood and Gore */
+  ESRB_AnimatedBloodAndGore: 46,
+  /** ESRB Mild Fantasy Violence */
+  ESRB_MildFantasyViolence: 47,
+  /** ESRB Mild Lyrics */
+  ESRB_MildLyrics: 48,
+  /** ESRB Realistic Blood */
+  ESRB_RealisticBlood: 49,
+  /** PEGI Violence */
+  PEGI_Violence: 50,
+  /** PEGI Sex */
+  PEGI_Sex: 51,
+  /** PEGI Drugs */
+  PEGI_Drugs: 52,
+  /** PEGI Fear */
+  PEGI_Fear: 53,
+  /** PEGI Discrimination */
+  PEGI_Discrimination: 54,
+  /** PEGI Bad Language */
+  PEGI_BadLanguage: 55,
+  /** PEGI Gambling */
+  PEGI_Gambling: 56,
+  /** PEGI Online Gameplay */
+  PEGI_OnlineGameplay: 57,
+  /** PEGI In-Game Purchases */
+  PEGI_InGamePurchases: 58,
+  /** CERO Love */
+  CERO_Love: 59,
+  /** CERO Sexual Content */
+  CERO_SexualContent: 60,
+  /** CERO Violence */
+  CERO_Violence: 61,
+  /** CERO Horror */
+  CERO_Horror: 62,
+  /** CERO Drinking/Smoking */
+  CERO_DrinkingSmoking: 63,
+  /** CERO Gambling */
+  CERO_Gambling: 64,
+  /** CERO Crime */
+  CERO_Crime: 65,
+  /** CERO Controlled substances */
+  CERO_ControlledSubstances: 66,
+  /** CERO Languages and others */
+  CERO_LanguagesAndOthers: 67,
+  /** GRAC Sexuality */
+  GRAC_Sexuality: 68,
+  /** GRAC Violence */
+  GRAC_Violence: 69,
+  /** GRAC Fear, Horror, Threatening */
+  GRAC_FearHorrorThreatening: 70,
+  /** GRAC Language */
+  GRAC_Language: 71,
+  /** GRAC Alcohol, Tobacco, Drug */
+  GRAC_AlcoholTobaccoDrug: 72,
+  /** GRAC Crime, Anti-Social */
+  GRAC_CrimeAntiSocial: 73,
+  /** GRAC Gambling */
+  GRAC_Gambling: 74,
+  /** CLASS_IND Violência (Violence) */
+  CLASSIND_Violence: 75,
+  /** CLASS_IND Violência Extrema (Extreme Violence) */
+  CLASSIND_ExtremeViolence: 76,
+  /** CLASS_IND Conteúdo Sexual (Sexual Content) */
+  CLASSIND_SexualContent: 77,
+  /** CLASS_IND Nudez (Nudity) */
+  CLASSIND_Nudity: 78,
+  /** CLASS_IND Sexo (Sex) */
+  CLASSIND_Sex: 79,
+  /** CLASS_IND Sexo Explícito (Explicit Sex) */
+  CLASSIND_ExplicitSex: 80,
+  /** CLASS_IND Drogas (Drugs) */
+  CLASSIND_Drugs: 81,
+  /** CLASS_IND Drogas Lícitas (Legal Drugs) */
+  CLASSIND_LegalDrugs: 82,
+  /** CLASS_IND Drogas Ilícitas (Illegal Drugs) */
+  CLASSIND_IllegalDrugs: 83,
+  /** CLASS_IND Linguagem Imprópria (Inappropriate Language) */
+  CLASSIND_InappropriateLanguage: 84,
+  /** CLASS_IND Atos Criminosos (Criminal Acts) */
+  CLASSIND_CriminalActs: 85,
+  /** ESRB In-Game Purchases */
+  ESRB_InGamePurchases: 86,
+  /** ESRB In-Game Purchases (Includes Random Items) */
+  ESRB_InGamePurchasesIncludesRandomItems: 87,
+  /** ESRB Users Interact */
+  ESRB_UsersInteract: 88,
+  /** ESRB Shares Location */
+  ESRB_SharesLocation: 89,
+  /** ESRB Unrestricted Internet */
+  ESRB_UnrestrictedInternet: 90,
+  /** ESRB Online Interactions Not Rated by the ESRB */
+  ESRB_OnlineInteractionsNotRatedByTheESRB: 91,
+  /** CLASS_IND Violência Fantasiosa (Fantasy Violence) */
+  CLASSIND_FantasyViolence: 92,
+  /** CLASS_IND Conteúdo Impactante (Shocking Content) */
+  CLASSIND_ShockingContent: 93,
+  /** CLASS_IND Temas Sensíveis (Sensitive Themes) */
+  CLASSIND_SensitiveThemes: 94,
+  /** CLASS_IND Procedimentos Médicos (Medical Procedures) */
+  CLASSIND_MedicalProcedures: 95,
+  /** CLASS_IND Medo (Fear) */
+  CLASSIND_Fear: 96,
+  /** ESRB Gambling Themes */
+  ESRB_GamblingThemes: 97,
+} as const;
+
+/** Locales of IGDB's languages (`languages.locale`), such as `"fr-FR"` and `"pt-BR"`. */
+export type LanguageLocale = "ar" | "cs-CZ" | "da-DK" | "de-DE" | "en-GB" | "en-US" | "es-ES" | "es-MX" | "fi-FI" | "fr-FR" | "he-IL" | "hu-HU" | "it-IT" | "ja-JP" | "ko-KR" | "nb-NO" | "nl-NL" | "pl-PL" | "pt-BR" | "pt-PT" | "ru-RU" | "sv-SE" | "th-TH" | "tr-TR" | "uk-UA" | "vi-VN" | "zh-CN" | "zh-TW";
+
 /** Maps each endpoint path to the entity it returns. */
 export interface Endpoints {
   age_rating_categories: AgeRatingCategory;

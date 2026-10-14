@@ -84,6 +84,21 @@ const REFERENCE_TABLES: {
   { name: "PlatformFamily", endpoint: "platform_families", label: "name" },
   { name: "ImageType", endpoint: "image_types", label: "name" },
   { name: "ArtworkType", endpoint: "artwork_types", label: "name" },
+  {
+    name: "AgeRatingContentDescriptionType",
+    endpoint: "age_rating_content_description_types",
+    label: "name",
+  },
+  // Descriptors repeat across organizations (Violence): the key starts with the organization.
+  {
+    name: "AgeRatingContentDescriptionV2",
+    endpoint: "age_rating_content_descriptions_v2",
+    label: "description",
+    extra: "organization",
+    // ClassInd's are in Portuguese and English: "Violência (Violence)" -> CLASSIND_Violence. ESRB's
+    // "In-Game Purchases (Includes Random Items)" is left whole.
+    rename: [[/^[^-()]+ \(([^)]+)\)$/, "$1"]],
+  },
 ];
 
 type ReferenceRow = { id: number } & Record<string, string | number>;
@@ -391,7 +406,7 @@ for (const t of REFERENCE_TABLES) {
     for (const [pattern, replacement] of t.rename ?? []) label = label.replace(pattern, replacement);
     // Popularity types from another source than IGDB itself get its name: Steam24hrPeakPlayers.
     const source = t.extra === "external_popularity_source" ? sourceNames.get(Number(row[t.extra])) : "";
-    // Age rating categories get their organization: PEGI_18, ESRB_M.
+    // Age rating categories and descriptors get their organization: PEGI_18, ESRB_BloodAndGore.
     const organization = t.extra === "organization" ? organizationNames.get(Number(row[t.extra])) : undefined;
     let key = organization
       ? `${identifier(organization)}_${identifier(label).replace(/^_/, "")}`
@@ -412,6 +427,13 @@ for (const t of REFERENCE_TABLES) {
   );
   out += `export const ${t.name} = {\n${members.join("\n")}\n} as const;\n\n`;
 }
+
+// The locales of IGDB's languages, which editors suggest for a locale option (see `Locale`).
+const languageLocales = [...new Set((referenceTables.languages ?? []).map((r) => r.locale))]
+  .filter((locale): locale is string => typeof locale === "string" && locale !== "")
+  .sort();
+out += jsdoc(['Locales of IGDB\'s languages (`languages.locale`), such as `"fr-FR"` and `"pt-BR"`.'], "");
+out += `export type LanguageLocale = ${languageLocales.map((locale) => JSON.stringify(locale)).join(" | ")};\n\n`;
 
 const endpointEntries = [...endpointOf.entries()].sort((a, b) => a[1].localeCompare(b[1]));
 out += `/** Maps each endpoint path to the entity it returns. */

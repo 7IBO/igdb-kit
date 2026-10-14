@@ -1,4 +1,4 @@
-import { resolveLocale } from "./locale";
+import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `age_ratings` that {@link ageRating} reads. */
@@ -108,7 +108,7 @@ const categories: Record<number, [organization: number, label: string, minimumAg
  */
 export function ageRating<G extends object>(
   game: G & Requires<G, AgeRatingFields | DescriptorPath<G>>,
-  organization: number | readonly number[] | { locale: string },
+  organization: number | readonly number[] | { locale: Locale },
 ): GameAgeRating<ItemOf<G, "age_ratings">> | null {
   const rows = (game as AgeRatingInput).age_ratings ?? [];
   const organizations =

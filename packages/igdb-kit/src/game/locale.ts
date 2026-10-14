@@ -1,4 +1,19 @@
-import { AgeRatingOrganization, Language, Region, ReleaseDateRegion } from "../generated/schema";
+import {
+  AgeRatingOrganization,
+  Language,
+  type LanguageLocale,
+  Region,
+  ReleaseDateRegion,
+} from "../generated/schema";
+
+/**
+ * A BCP 47 locale: `"fr-FR"`, `"ja"`, `"pt_BR"`. Editors suggest the locales of IGDB's languages
+ * and their language codes (`"fr"`), and any other tag is accepted, such as `navigator.language`
+ * or a locale read from a request.
+ */
+export type Locale = LanguageLocale | LanguageCode<LanguageLocale> | (string & {});
+
+type LanguageCode<L extends string> = L extends `${infer Code}-${string}` ? Code : L;
 
 /**
  * Countries whose games IGDB files under Europe: the European release region, and the European
@@ -132,7 +147,7 @@ const languageIds: Record<string, number> = {
  * //   localizationRegions: [], ageRatingOrganizations: [1, 2], languages: [12] }
  * ```
  */
-export function resolveLocale(locale: string): ResolvedLocale {
+export function resolveLocale(locale: Locale): ResolvedLocale {
   const { canonical, language, script, country } = parseLocale(locale);
   let releaseRegion: number | null = null;
   if (country)

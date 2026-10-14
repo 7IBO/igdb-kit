@@ -1,11 +1,11 @@
 import type { ReleaseDetails } from "../query/release-period";
 import { alpha2 } from "./countries";
-import { resolveLocale } from "./locale";
+import { type Locale, resolveLocale } from "./locale";
 import type { Requires } from "./select";
 
 export interface FormatReleaseDateOptions {
   /** BCP 47 locale: `"fr-FR"`, `"ja"`. */
-  locale: string;
+  locale: Locale;
   /**
    * `"medium"` (default): "19 nov. 2026", "nov. 2026". `"long"`: "19 novembre 2026", "novembre 2026".
    * `"short"`: "19/11/2026", "11/2026". Quarters, years and TBD are the same in every style.
@@ -95,7 +95,7 @@ const releaseRegionCodes: Record<number, [code: string, english: string]> = {
  * The name of a `ReleaseDateRegion` in the user's language: "Europe", "Amérique du Nord", "Japon",
  * "Monde" for worldwide. Null for an id added to IGDB after this version.
  */
-export function releaseRegionName(region: number, locale: string): string | null {
+export function releaseRegionName(region: number, locale: Locale): string | null {
   const known = releaseRegionCodes[region];
   if (!known) return null;
   return displayName("region", known[0], locale) ?? known[1];
@@ -105,7 +105,7 @@ export function releaseRegionName(region: number, locale: string): string | null
  * The name of a country from an ISO 3166-1 code, numeric as IGDB stores them (`companies.country`,
  * `external_games.countries`: 250) or alpha-2 (`"FR"`): "France", "Frankreich". Null when unknown.
  */
-export function countryName(country: number | string, locale: string): string | null {
+export function countryName(country: number | string, locale: Locale): string | null {
   const letters = typeof country === "number" ? alpha2(country) : country.toUpperCase();
   if (!letters || !/^[A-Z]{2}$/.test(letters)) return null;
   return displayName("region", letters, locale);
@@ -167,8 +167,8 @@ export interface LanguageNameOptions {
  * tag. Names are as `Intl` writes them, in lowercase in some languages. Null when unknown.
  */
 export function languageName(
-  language: number | string,
-  locale: string,
+  language: number | Locale,
+  locale: Locale,
   options: LanguageNameOptions = {},
 ): string | null {
   const tag =
@@ -216,7 +216,7 @@ const timeZones: Record<string, string> = {
 };
 
 export interface EventTimeOptions {
-  locale: string;
+  locale: Locale;
   /** IANA zone to show the time in, such as the user's. Default: the event's own zone. */
   timeZone?: string | undefined;
 }

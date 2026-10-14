@@ -1,5 +1,5 @@
 import { LanguageSupportType } from "../generated/schema";
-import { resolveLocale } from "./locale";
+import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `language_supports` that {@link languages} reads. */
@@ -43,7 +43,7 @@ const kinds = [
 
 export interface LanguagesOptions {
   /** The user's locale: its languages come first (`fr-CA`: French; `en-GB`: English (UK), then English). */
-  locale?: string | undefined;
+  locale?: Locale | undefined;
 }
 
 /**
@@ -125,7 +125,7 @@ export interface LanguageSupport {
  */
 export function supportsLanguage<G extends object>(
   game: G & Requires<G, LanguageFields>,
-  locale: string,
+  locale: Locale,
 ): LanguageSupport {
   const rows = (game as LanguagesInput).language_supports ?? [];
   const known = new Set(rows.map((row) => idOf(row.language_support_type)));

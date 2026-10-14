@@ -2450,5 +2450,502 @@
       "id": 15,
       "name": "Historical artwork"
     }
+  ],
+  "age_rating_content_description_types": [
+    {
+      "id": 1,
+      "name": "Content"
+    },
+    {
+      "id": 2,
+      "name": "Interactive Element"
+    }
+  ],
+  "age_rating_content_descriptions_v2": [
+    {
+      "id": 1,
+      "description": "Alcohol Reference",
+      "organization": 1
+    },
+    {
+      "id": 2,
+      "description": "Animated Blood",
+      "organization": 1
+    },
+    {
+      "id": 3,
+      "description": "Blood",
+      "organization": 1
+    },
+    {
+      "id": 4,
+      "description": "Blood and Gore",
+      "organization": 1
+    },
+    {
+      "id": 5,
+      "description": "Cartoon Violence",
+      "organization": 1
+    },
+    {
+      "id": 6,
+      "description": "Comic Mischief",
+      "organization": 1
+    },
+    {
+      "id": 7,
+      "description": "Crude Humor",
+      "organization": 1
+    },
+    {
+      "id": 8,
+      "description": "Drug Reference",
+      "organization": 1
+    },
+    {
+      "id": 9,
+      "description": "Fantasy Violence",
+      "organization": 1
+    },
+    {
+      "id": 10,
+      "description": "Intense Violence",
+      "organization": 1
+    },
+    {
+      "id": 11,
+      "description": "Language",
+      "organization": 1
+    },
+    {
+      "id": 12,
+      "description": "Lyrics",
+      "organization": 1
+    },
+    {
+      "id": 13,
+      "description": "Mature Humor",
+      "organization": 1
+    },
+    {
+      "id": 14,
+      "description": "Nudity",
+      "organization": 1
+    },
+    {
+      "id": 15,
+      "description": "Partial Nudity",
+      "organization": 1
+    },
+    {
+      "id": 16,
+      "description": "Real Gambling",
+      "organization": 1
+    },
+    {
+      "id": 17,
+      "description": "Sexual Content",
+      "organization": 1
+    },
+    {
+      "id": 18,
+      "description": "Sexual Themes",
+      "organization": 1
+    },
+    {
+      "id": 19,
+      "description": "Sexual Violence",
+      "organization": 1
+    },
+    {
+      "id": 20,
+      "description": "Simulated Gambling",
+      "organization": 1
+    },
+    {
+      "id": 21,
+      "description": "Strong Language",
+      "organization": 1
+    },
+    {
+      "id": 22,
+      "description": "Strong Lyrics",
+      "organization": 1
+    },
+    {
+      "id": 23,
+      "description": "Strong Sexual Content",
+      "organization": 1
+    },
+    {
+      "id": 24,
+      "description": "Suggestive Themes",
+      "organization": 1
+    },
+    {
+      "id": 25,
+      "description": "Tobacco Reference",
+      "organization": 1
+    },
+    {
+      "id": 26,
+      "description": "Use of Alcohol",
+      "organization": 1
+    },
+    {
+      "id": 27,
+      "description": "Use of Drugs",
+      "organization": 1
+    },
+    {
+      "id": 28,
+      "description": "Use of Tobacco",
+      "organization": 1
+    },
+    {
+      "id": 29,
+      "description": "Violence",
+      "organization": 1
+    },
+    {
+      "id": 30,
+      "description": "Violent References",
+      "organization": 1
+    },
+    {
+      "id": 31,
+      "description": "Animated Violence",
+      "organization": 1
+    },
+    {
+      "id": 32,
+      "description": "Mild Language",
+      "organization": 1
+    },
+    {
+      "id": 33,
+      "description": "Mild Violence",
+      "organization": 1
+    },
+    {
+      "id": 34,
+      "description": "Use of Drugs and Alcohol",
+      "organization": 1
+    },
+    {
+      "id": 35,
+      "description": "Drug and Alcohol Reference",
+      "organization": 1
+    },
+    {
+      "id": 36,
+      "description": "Mild Suggestive Themes",
+      "organization": 1
+    },
+    {
+      "id": 37,
+      "description": "Mild Cartoon Violence",
+      "organization": 1
+    },
+    {
+      "id": 38,
+      "description": "Mild Blood",
+      "organization": 1
+    },
+    {
+      "id": 39,
+      "description": "Realistic Blood and Gore",
+      "organization": 1
+    },
+    {
+      "id": 40,
+      "description": "Realistic Violence",
+      "organization": 1
+    },
+    {
+      "id": 41,
+      "description": "Alcohol and Tobacco Reference",
+      "organization": 1
+    },
+    {
+      "id": 42,
+      "description": "Mature Sexual Themes",
+      "organization": 1
+    },
+    {
+      "id": 43,
+      "description": "Mild Animated Violence",
+      "organization": 1
+    },
+    {
+      "id": 44,
+      "description": "Mild Sexual Themes",
+      "organization": 1
+    },
+    {
+      "id": 45,
+      "description": "Use of Alcohol and Tobacco",
+      "organization": 1
+    },
+    {
+      "id": 46,
+      "description": "Animated Blood and Gore",
+      "organization": 1
+    },
+    {
+      "id": 47,
+      "description": "Mild Fantasy Violence",
+      "organization": 1
+    },
+    {
+      "id": 48,
+      "description": "Mild Lyrics",
+      "organization": 1
+    },
+    {
+      "id": 49,
+      "description": "Realistic Blood",
+      "organization": 1
+    },
+    {
+      "id": 50,
+      "description": "Violence",
+      "organization": 2
+    },
+    {
+      "id": 51,
+      "description": "Sex",
+      "organization": 2
+    },
+    {
+      "id": 52,
+      "description": "Drugs",
+      "organization": 2
+    },
+    {
+      "id": 53,
+      "description": "Fear",
+      "organization": 2
+    },
+    {
+      "id": 54,
+      "description": "Discrimination",
+      "organization": 2
+    },
+    {
+      "id": 55,
+      "description": "Bad Language",
+      "organization": 2
+    },
+    {
+      "id": 56,
+      "description": "Gambling",
+      "organization": 2
+    },
+    {
+      "id": 57,
+      "description": "Online Gameplay",
+      "organization": 2
+    },
+    {
+      "id": 58,
+      "description": "In-Game Purchases",
+      "organization": 2
+    },
+    {
+      "id": 59,
+      "description": "Love",
+      "organization": 3
+    },
+    {
+      "id": 60,
+      "description": "Sexual Content",
+      "organization": 3
+    },
+    {
+      "id": 61,
+      "description": "Violence",
+      "organization": 3
+    },
+    {
+      "id": 62,
+      "description": "Horror",
+      "organization": 3
+    },
+    {
+      "id": 63,
+      "description": "Drinking/Smoking",
+      "organization": 3
+    },
+    {
+      "id": 64,
+      "description": "Gambling",
+      "organization": 3
+    },
+    {
+      "id": 65,
+      "description": "Crime",
+      "organization": 3
+    },
+    {
+      "id": 66,
+      "description": "Controlled substances",
+      "organization": 3
+    },
+    {
+      "id": 67,
+      "description": "Languages and others",
+      "organization": 3
+    },
+    {
+      "id": 68,
+      "description": "Sexuality",
+      "organization": 5
+    },
+    {
+      "id": 69,
+      "description": "Violence",
+      "organization": 5
+    },
+    {
+      "id": 70,
+      "description": "Fear, Horror, Threatening",
+      "organization": 5
+    },
+    {
+      "id": 71,
+      "description": "Language",
+      "organization": 5
+    },
+    {
+      "id": 72,
+      "description": "Alcohol, Tobacco, Drug",
+      "organization": 5
+    },
+    {
+      "id": 73,
+      "description": "Crime, Anti-Social",
+      "organization": 5
+    },
+    {
+      "id": 74,
+      "description": "Gambling",
+      "organization": 5
+    },
+    {
+      "id": 75,
+      "description": "Violência (Violence)",
+      "organization": 6
+    },
+    {
+      "id": 76,
+      "description": "Violência Extrema (Extreme Violence)",
+      "organization": 6
+    },
+    {
+      "id": 77,
+      "description": "Conteúdo Sexual (Sexual Content)",
+      "organization": 6
+    },
+    {
+      "id": 78,
+      "description": "Nudez (Nudity)",
+      "organization": 6
+    },
+    {
+      "id": 79,
+      "description": "Sexo (Sex)",
+      "organization": 6
+    },
+    {
+      "id": 80,
+      "description": "Sexo Explícito (Explicit Sex)",
+      "organization": 6
+    },
+    {
+      "id": 81,
+      "description": "Drogas (Drugs)",
+      "organization": 6
+    },
+    {
+      "id": 82,
+      "description": "Drogas Lícitas (Legal Drugs)",
+      "organization": 6
+    },
+    {
+      "id": 83,
+      "description": "Drogas Ilícitas (Illegal Drugs)",
+      "organization": 6
+    },
+    {
+      "id": 84,
+      "description": "Linguagem Imprópria (Inappropriate Language)",
+      "organization": 6
+    },
+    {
+      "id": 85,
+      "description": "Atos Criminosos (Criminal Acts)",
+      "organization": 6
+    },
+    {
+      "id": 86,
+      "description": "In-Game Purchases",
+      "organization": 1
+    },
+    {
+      "id": 87,
+      "description": "In-Game Purchases (Includes Random Items)",
+      "organization": 1
+    },
+    {
+      "id": 88,
+      "description": "Users Interact",
+      "organization": 1
+    },
+    {
+      "id": 89,
+      "description": "Shares Location",
+      "organization": 1
+    },
+    {
+      "id": 90,
+      "description": "Unrestricted Internet",
+      "organization": 1
+    },
+    {
+      "id": 91,
+      "description": "Online Interactions Not Rated by the ESRB",
+      "organization": 1
+    },
+    {
+      "id": 92,
+      "description": "Violência Fantasiosa (Fantasy Violence)",
+      "organization": 6
+    },
+    {
+      "id": 93,
+      "description": "Conteúdo Impactante (Shocking Content)",
+      "organization": 6
+    },
+    {
+      "id": 94,
+      "description": "Temas Sensíveis (Sensitive Themes)",
+      "organization": 6
+    },
+    {
+      "id": 95,
+      "description": "Procedimentos Médicos (Medical Procedures)",
+      "organization": 6
+    },
+    {
+      "id": 96,
+      "description": "Medo (Fear)",
+      "organization": 6
+    },
+    {
+      "id": 97,
+      "description": "Gambling Themes",
+      "organization": 1
+    }
   ]
 }
