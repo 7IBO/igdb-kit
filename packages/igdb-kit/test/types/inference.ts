@@ -831,7 +831,14 @@ const versionDates = await igdb.platforms
 platformVersions(versionDates);
 
 // igdb-kit/i18n: tables and ids are checked, rows of any selection are accepted.
-import { createLabels, type LabelDictionary, type LabelIds, type Locale } from "../../src/i18n";
+import {
+  createLabels,
+  type LabelDictionary,
+  type LabelEntry,
+  type LabelIds,
+  type Labels,
+  type Locale,
+} from "../../src/i18n";
 import { fr } from "../../src/i18n/fr";
 
 const { label, description, entries } = createLabels([fr]);
@@ -881,6 +888,15 @@ label("genres", 12, 12);
 expectType<
   Equal<Extract<Locale, "fr-FR" | "pt-BR" | "zh-TW" | "fr" | "ja">, "fr-FR" | "pt-BR" | "zh-TW" | "fr" | "ja">
 >();
+// Wrapping the labels: their own arguments can be passed back, and a fallback keeps a string.
+const labels = createLabels([fr]);
+const orDash: Labels = { ...labels, label: (table, row, locale) => labels.label(table, row, locale) ?? "-" };
+orDash.label("genres", 999, "fr");
+// A list of options can hold other ids once typed as LabelEntry[].
+const genreOptions: LabelEntry[] = entries("genres", "fr");
+genreOptions.unshift({ id: 0, label: "Tous les genres" });
+// @ts-expect-error entries() ids are the table's ids
+entries("genres", "fr").unshift({ id: 0, label: "Tous les genres" });
 declare const browserLocale: string;
 label("genres", Genre.Adventure, browserLocale);
 igdb.games.where((g) => g.supportsLanguage(browserLocale));

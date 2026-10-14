@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GameType, Genre, ReleaseDateStatus } from "../../src";
-import { createLabels, en, type LabelDictionary } from "../../src/i18n";
+import { createLabels, type DescribedTable, en, type LabelDictionary } from "../../src/i18n";
 import { de } from "../../src/i18n/de";
 import { es } from "../../src/i18n/es";
 import { fr } from "../../src/i18n/fr";
@@ -27,6 +27,12 @@ describe("igdb-kit/i18n", () => {
       expect(reference[table]).toBeDefined();
       expect(Object.keys(rows).map(Number)).toEqual(sorted(table));
     }
+    expect(Object.keys(en.descriptions ?? {}).sort()).toEqual([
+      "collection_membership_types",
+      "collection_relation_types",
+      "collection_types",
+      "release_date_statuses",
+    ] satisfies DescribedTable[]);
     for (const [table, rows] of Object.entries(en.descriptions as Texts))
       expect(Object.keys(rows).map(Number)).toEqual(sorted(table));
     expect(Object.keys(en.labels).length).toBe(27);

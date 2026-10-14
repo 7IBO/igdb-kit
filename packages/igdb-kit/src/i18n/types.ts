@@ -81,7 +81,7 @@ type Texts<T extends LabelTable> = { readonly [Id in LabelIds[T]]?: string };
  * several. English has a label for each, so `label()` of such an id is never null.
  */
 type KnownId<T extends LabelTable> = (T extends LabelTable ? (id: LabelIds[T]) => void : never) extends (
-  id: infer Id,
+  id: infer Id extends number,
 ) => void
   ? Id
   : never;
