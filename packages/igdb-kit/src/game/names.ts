@@ -3,6 +3,7 @@ import {
   type AlternativeNameFields,
   type AlternativeNameVariant,
   parseAlternativeName,
+  titleLocale,
 } from "./alternative-names";
 import { type Locale, parseLocale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Requires, type RequiresIfSelected } from "./select";
@@ -166,26 +167,6 @@ function imageIdOf(cover: LocalizationRow["cover"]): string | undefined {
   return typeof cover === "object" ? cover.image_id || undefined : undefined;
 }
 
-// Scripts of the languages that are not written in Latin letters. A name is only taken for these
-// languages when it has at least one letter of the script.
-const scripts: Record<string, RegExp> = {
-  ja: /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,
-  zh: /\p{Script=Han}/u,
-  ko: /\p{Script=Hangul}/u,
-  ru: /\p{Script=Cyrillic}/u,
-  uk: /\p{Script=Cyrillic}/u,
-  bg: /\p{Script=Cyrillic}/u,
-  be: /\p{Script=Cyrillic}/u,
-  mk: /\p{Script=Cyrillic}/u,
-  el: /\p{Script=Greek}/u,
-  he: /\p{Script=Hebrew}/u,
-  ar: /\p{Script=Arabic}/u,
-  fa: /\p{Script=Arabic}/u,
-  th: /\p{Script=Thai}/u,
-  hi: /\p{Script=Devanagari}/u,
-};
-const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
-
 /** Lower is better; undefined for names that are not titles in the language. */
 const variantRanks: Partial<Record<AlternativeNameVariant | "none", number>> = {
   original: 0,
@@ -207,16 +188,15 @@ function alternativeName(
   for (const row of rows) {
     const name = row.name?.trim();
     if (!name) continue;
-    const { kind, language, variant } = parseAlternativeName(row.comment);
-    if ((kind !== "language" && kind !== "regional") || language === null) continue;
+    const info = parseAlternativeName(row.comment);
+    const { kind, variant } = info;
+    // Only names written in their language: not a "Japanese title" in Latin letters.
+    const language = titleLocale(name, info);
+    if (language === null) continue;
     const tag = parseLocale(language);
     if (tag.language !== locale.language) continue;
     let rank = variantRanks[variant ?? "none"];
     if (rank === undefined) continue;
-    const script = scripts[tag.language];
-    if (script && variant !== "original") {
-      if (!script.test(name) || (tag.language === "zh" && kana.test(name))) continue;
-    } else if (variant === "translated") continue;
     if (tag.language === "zh") {
       // Chinese is told apart by script: "zh-TW" (Taiwanese) is Traditional, for Hong Kong too.
       if (!/-(?:Hans|Hant|TW)$/.test(language)) rank += 0.5;

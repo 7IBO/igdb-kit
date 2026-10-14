@@ -18,6 +18,7 @@ Every function that takes a locale types it as `Locale`: editors suggest the loc
 | Show an event's time in the user's zone | `eventTime(event, { locale, timeZone })` | [`igdb-kit/game`](display.md#names-and-languages) |
 | Find games by a title in another language | `searchAll("ウィッチャー")`, `games.match({ name: "Pokémon Épée" })` | [Finding games](finding-games.md#titles-in-other-languages) |
 | Read IGDB's alternative names | `alternativeTitles(game)`, `parseAlternativeName(comment)` | [`igdb-kit/game`](display.md#names-and-languages) |
+| Store every title of a game with the language it is written in | `alternativeTitles(game)`, with `locale` | [`igdb-kit/game`](display.md#names-and-languages) |
 
 ## What a locale picks
 

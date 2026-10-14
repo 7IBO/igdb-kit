@@ -817,9 +817,54 @@ describe("alternativeTitles()", () => {
         kind: "other",
         language: null,
         variant: null,
+        locale: null,
+        inScript: false,
         row: { id: 2, name: "X", comment: " " },
       },
     ]);
+  });
+
+  test("the language each name is written in, by the rules of localizedName()", () => {
+    const cases: [comment: string, name: string, locale: string | null, inScript: boolean][] = [
+      ["Russian title", "Vedmak 3", null, false],
+      ["Russian title", "Ведьмак 3", "ru", true],
+      ["Greek title", "O Magos", null, false],
+      ["Chinese title - simplified", "巫师3", "zh-Hans", true],
+      ["Chinese title - traditional", "マリオ博士64", null, false],
+      ["Japanese title", "Uitcha 3", null, false],
+      ["Japanese title", "위쳐 3", null, false],
+      ["Japanese title - original", "BIOHAZARD", "ja", false],
+      ["Japanese title - translated", "Dragon Warrior", null, false],
+      ["Japanese title - translated", "ラストウィンドウ 真夜中の約束", "ja", true],
+      ["Japanese title - romanization", "Mazā Surī", null, false],
+      // Still written in Japanese: localizedName() leaves out former titles by their variant.
+      ["Former Japanese title", "バイオハザード", "ja", true],
+      ["Korean title - translated", "드래곤 퀘스트", "ko", true],
+      ["Korean title - romanization", "Deuraegon Kweseuteu", null, false],
+      ["Portuguese title - translated", "Dragon Quest", null, true],
+      ["Brazilian title", "O Bruxo 3", "pt-BR", true],
+      ["Serbian title", "Цанди Блитз Делуке", "sr", true],
+      ["UK title", "Bubble Buster", "en-GB", true],
+      ["North American title", "Bust-a-Move", "en-US", true],
+      ["European title", "Monster Rancher", null, false],
+      ["Steam title", "The Witcher 3", null, false],
+      ["Acronym", "TW3", null, false],
+    ];
+    const rows = cases.map(([comment, name]) => ({ comment, name }));
+    expect(
+      alternativeTitles({ alternative_names: rows }).map((t) => [t.comment, t.name, t.locale, t.inScript]),
+    ).toEqual(cases);
+    // localizedName() takes a name in its language exactly when it has a locale and is a current title.
+    const notCurrent = new Set(["abbreviation", "unofficial", "working", "former"]);
+    const games = [fixtures.witcher3, fixtures.mother3, fixtures.persona5Royal, { alternative_names: rows }];
+    for (const t of games.flatMap((game) => alternativeTitles(game))) {
+      if (t.language === null) continue;
+      const taken = localizedName({ name: "Game", alternative_names: [t.row] }, t.language);
+      expect([t.name, taken?.source === "alternative_name"]).toEqual([
+        t.name,
+        t.locale !== null && !notCurrent.has(t.variant ?? ""),
+      ]);
+    }
   });
 });
 

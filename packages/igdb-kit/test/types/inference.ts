@@ -685,7 +685,12 @@ const title = alternativeTitles(localized)[0];
 if (title) {
   expectType<Equal<typeof title.row, { id: number; name?: string; comment?: string; game?: number }>>();
   expectType<Equal<typeof title.kind, AlternativeNameKind>>();
+  expectType<Equal<typeof title.locale, string | null>>();
+  expectType<Equal<typeof title.inScript, boolean>>();
 }
+// Rows of a local copy, read without a query.
+alternativeTitles({ alternative_names: [{ name: "Vedmak 3", comment: "Russian title" }] })[0]
+  ?.locale satisfies string | null | undefined;
 // @ts-expect-error alternative_names.comment is not selected
 alternativeTitles(await igdb.games.select("alternative_names.name").findByIdOrThrow(1));
 expectType<Equal<ReturnType<typeof resolveLocale>["languages"], number[]>>();
