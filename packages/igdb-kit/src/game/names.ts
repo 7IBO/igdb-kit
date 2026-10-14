@@ -89,7 +89,8 @@ export function localization<G extends object>(
  * "original" is trusted as is, since some official titles are in Latin letters ("BIOHAZARD").
  * Romanizations, abbreviations, unofficial, working and former titles are skipped, and so are
  * translations, unless written in the language's own script ("Korean title - translated" is usually
- * in hangul, "Japanese title - translated" in English).
+ * in hangul, "Japanese title - translated" in English). A "Latin America title" comes before a
+ * "Spanish title" where `resolveLocale()` picks Latin American Spanish (`es-419`, `es-MX`, `es-US`).
  *
  * ```ts
  * const game = await igdb.games.select("name", "game_localizations.name", "game_localizations.region",
@@ -205,8 +206,11 @@ function alternativeName(
       // A market's title only in that market: "North American title" for the US and Canada.
       if (resolveLocale(language).releaseRegion !== locale.releaseRegion) continue;
     } else if (/-(?:[A-Z]{2}|\d{3})$/.test(language)) {
-      // A country's title first in that country, then for others that speak its language.
-      if (tag.country !== locale.country) rank += 2;
+      // A country's title first in that country, then for others that speak its language. A
+      // region's title ("Latin America title", es-419) first where its IGDB language comes first.
+      const region = /\d{3}$/.test(language) ? resolveLocale(language).languages[0] : undefined;
+      if (tag.country !== locale.country && (region === undefined || region !== locale.languages[0]))
+        rank += 2;
     } else rank += 0.25; // "Brazilian title" over "Portuguese title" in Brazil.
     if (!best || rank < best.rank) best = { name, language, variant, rank };
   }

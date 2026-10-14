@@ -625,6 +625,20 @@ describe("localizedName()", () => {
     expect(localizedName(game, "en-GB")?.source).toBe("name");
     expect(localizedName(game, "en-CA")?.name).toBe("Bust-a-Move");
   });
+
+  test("a Latin American title for Spanish in the Americas, as resolveLocale() picks", () => {
+    const game = {
+      name: "The Witcher 3: Wild Hunt",
+      alternative_names: [
+        { comment: "Spanish title", name: "The Witcher 3: Caza Salvaje" },
+        { comment: "Latin America title", name: "El Brujo 3: Cacería Salvaje" },
+      ],
+    };
+    for (const locale of ["es-419", "es-MX", "es-AR", "es-US", "es_419"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "El Brujo 3: Cacería Salvaje"]);
+    for (const locale of ["es-ES", "es", "es-IC"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "The Witcher 3: Caza Salvaje"]);
+  });
 });
 
 describe("resolveLocale()", () => {
@@ -1227,6 +1241,9 @@ describe("storeLinks() with a locale", () => {
       "https://amazon.co.jp/dp/B00T3SPV36",
     ]);
     expect(urls("en-US").filter((url) => url.includes("amazon"))).toHaveLength(2);
+    expect(urls("es-419")[0]).toBe(
+      "https://www.epicgames.com/store/es-MX/product/the-witcher-3-wild-hunt/home",
+    );
   });
 
   test("localizeStoreUrl()", () => {
@@ -1247,9 +1264,21 @@ describe("storeLinks() with a locale", () => {
     expect(localizeStoreUrl("https://www.microsoft.com/en-us/p/-1-/9N116V0599HB", "ko")).toBe(
       "https://www.microsoft.com/ko-kr/p/-1-/9N116V0599HB",
     );
-    expect(localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", "es-AR")).toBe(
-      "https://store.epicgames.com/es-MX/p/hades",
-    );
+    // Epic's Latin American Spanish where resolveLocale() picks it, its Spain Spanish elsewhere.
+    for (const [locale, tag] of [
+      ["es-AR", "es-MX"],
+      ["es-419", "es-MX"],
+      ["es_419", "es-MX"],
+      ["es-US", "es-MX"],
+      ["es-PY", "es-MX"],
+      ["es-ES", "es-ES"],
+      ["es", "es-ES"],
+      ["es-IC", "es-ES"],
+    ] as const)
+      expect([locale, localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", locale)]).toEqual([
+        locale,
+        `https://store.epicgames.com/${tag}/p/hades`,
+      ]);
     expect(localizeStoreUrl("https://store.epicgames.com/p/hades", "zh-TW")).toBe(
       "https://store.epicgames.com/zh-Hant/p/hades",
     );
