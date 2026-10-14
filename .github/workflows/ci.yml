@@ -1,12 +1,8 @@
 name: CI
 
+# Pull requests only: main only receives merged pull requests, already checked.
 on:
-  push:
-    branches: [main]
   pull_request:
-  schedule:
-    # Nightly, so a change on IGDB's side shows up even without commits.
-    - cron: "0 3 * * *"
   # Manual runs. The "Version packages" PR, opened by github-actions, gets its required checks
   # once a maintainer approves or re-runs its pull_request run: dispatched runs don't count.
   workflow_dispatch:
