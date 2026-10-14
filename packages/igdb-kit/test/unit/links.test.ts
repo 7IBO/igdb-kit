@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { defineSelection, type EndpointName, endpoints, gameLink, QueryError } from "../../src";
-import { type Call, mockFetch, testClient } from "./helpers";
+import { type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 type Row = Record<string, unknown> & { id: number };
 
@@ -235,6 +235,31 @@ describe("findByGames()", () => {
       [2, 500],
     ]);
     expect(pages.filter(([, limit]) => (limit as number) <= 100).every(([count]) => count === 1)).toBe(true);
+  });
+
+  test("a page IGDB or the attempt timeout gives up on is split by its games at once, each half alone", async () => {
+    // 60 games with 2 screenshots each; pages of more than 30 games time out.
+    const rows = Array.from({ length: 120 }, (_, i) => ({ id: i + 1, game: (i % 60) + 1 }));
+    const fake = fakeIgdb({ screenshots: rows });
+    const games = (body: string) => body.match(/game = \(([\d,]+)\)/)?.[1]?.split(",").length ?? 0;
+    const ids = Array.from({ length: 60 }, (_, i) => i + 1);
+    for (const timeOut of [
+      () => Response.json({ message: "Endpoint request timed out" }, { status: 504 }),
+      noAnswer,
+    ]) {
+      const mock = mockFetch((call) =>
+        games(call.body) > 30 ? timeOut(call) : fake.fetch(call.url, { method: "POST", body: call.body }),
+      );
+      const igdb = testClient(mock.fetch, { attemptTimeoutMs: 50 });
+      const byGame = await igdb.screenshots.findByGames(ids);
+      expect([...byGame.values()].every((group) => group.length === 2)).toBe(true);
+      // Each page once, with no retry, and the halves in requests of their own.
+      expect(mock.calls.map((c) => [c.url.split("/").pop(), games(c.body)])).toEqual([
+        ["screenshots", 60],
+        ["screenshots", 30],
+        ["screenshots", 30],
+      ]);
+    }
   });
 
   test("rejects what it cannot do", async () => {

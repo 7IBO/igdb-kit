@@ -86,6 +86,13 @@ export class QueryTimeoutError extends IGDBError {
 /** A 5xx or network failure that persisted until the retry budget ran out. */
 export class NetworkError extends IGDBError {
   override name = "NetworkError";
+  /** No answer came within `attemptTimeoutMs`. */
+  readonly timedOut: boolean;
+
+  constructor(message: string, options: IGDBErrorOptions & { timedOut?: boolean | undefined } = {}) {
+    super(message, options);
+    this.timedOut = options.timedOut ?? false;
+  }
 }
 
 /** The request queue is full (`maxQueueSize`). */

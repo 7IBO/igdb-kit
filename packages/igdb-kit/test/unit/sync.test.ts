@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { artworkType, ImageType, imageUrl, LocalLimiter, QueryError } from "../../src";
-import { apicalypseError, type Call, mockFetch, testClient } from "./helpers";
+import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 /** A fake endpoint holding `ids` (in increasing order, read at each call), answering the queries sync() sends. */
 function dataset(ids: number[], updatedAt: (id: number) => number = () => 1000, extra: object = {}) {
@@ -192,7 +192,7 @@ describe("sync", () => {
         ? Response.json({ message: "Endpoint request timed out" }, { status: 504 })
         : handler(call),
     );
-    const igdb = testClient(mock.fetch, { retryTimeoutMs: 1 });
+    const igdb = testClient(mock.fetch);
     const pages = await collect(igdb.games.select("name").sync());
     expect(pages.flat().map((g) => g.id)).toEqual(ids);
     const asked = lines(mock.calls).map((b) => ({
@@ -205,17 +205,34 @@ describe("sync", () => {
     expect(asked.every((a) => a.after + a.skip < ids.length)).toBe(true);
   });
 
-  test("a first page IGDB finds too heavy is halved, cursor or not", async () => {
+  test("a first page IGDB finds too heavy or times out on is halved, cursor or not", async () => {
     const ids = Array.from({ length: 2_000 }, (_, i) => i + 1);
     const handler = dataset(ids);
     const tooLarge = () => apicalypseError(413, "Payload Too Large", "Response size exceeds maximum allowed");
-    for (const cursorThreshold of [0, 5000]) {
-      const mock = mockFetch((call) =>
-        Number(call.body.match(/limit (\d+)/)?.[1]) > 300 ? tooLarge() : handler(call),
-      );
-      const pages = await collect(testClient(mock.fetch).games.select("name").sync({ cursorThreshold }));
-      expect(pages.flat().map((g) => g.id)).toEqual(ids);
+    const timedOut = () => Response.json({ message: "Endpoint request timed out" }, { status: 504 });
+    for (const refuse of [tooLarge, timedOut]) {
+      for (const cursorThreshold of [0, 5000]) {
+        const mock = mockFetch((call) =>
+          Number(call.body.match(/limit (\d+)/)?.[1]) > 300 ? refuse() : handler(call),
+        );
+        const pages = await collect(testClient(mock.fetch).games.select("name").sync({ cursorThreshold }));
+        expect(pages.flat().map((g) => g.id)).toEqual(ids);
+      }
     }
+  });
+
+  test("pages that get no answer in time are asked again in halves, the first one too", async () => {
+    const ids = Array.from({ length: 3_000 }, (_, i) => i + 1);
+    const handler = dataset(ids);
+    // The count goes out with the first page: it is sent again alone, and the page in halves.
+    const mock = mockFetch((call) =>
+      Number(call.body.match(/limit (\d+)/)?.[1]) > 300 ? noAnswer(call) : handler(call),
+    );
+    const igdb = testClient(mock.fetch, { attemptTimeoutMs: 50 });
+    const pages = await collect(igdb.games.select("name").sync());
+    expect(pages.flat().map((g) => g.id)).toEqual(ids);
+    const counts = mock.calls.filter((c) => c.url.endsWith("/count") || c.body.includes("games/count"));
+    expect(counts).toHaveLength(2);
   });
 
   test("pages of one row, when one row fills a page, still read every row once", async () => {

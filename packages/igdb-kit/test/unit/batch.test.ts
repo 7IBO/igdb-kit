@@ -95,6 +95,29 @@ describe("automatic batching", () => {
     expect(mock.calls).toHaveLength(7);
   });
 
+  test("a page that times out in a multiquery is read in halves, and the other blocks are sent again", async () => {
+    const mock = mockFetch((call) => {
+      if (call.url.endsWith("/count")) return Response.json({ count: 300 });
+      const ids = (call.body.match(/id = \(([\d,]+)\)/)?.[1] ?? "").split(",").map(Number);
+      return ids.length > 100
+        ? Response.json({ message: "Endpoint request timed out" }, { status: 504 })
+        : Response.json(ids.map((id) => ({ id })));
+    });
+    const igdb = testClient(mock.fetch);
+    const ids = Array.from({ length: 300 }, (_, i) => i + 1);
+    const { games, total } = await igdb.batch({
+      games: igdb.games.findByIds(ids),
+      total: igdb.games.count(),
+    });
+    expect(games.map((g) => g.id)).toEqual(ids);
+    expect(total).toBe(300);
+    // The multiquery once, then the count alone, and the page in 2 halves, then 4.
+    const paths = mock.calls.map((c) => c.url.split("/").pop());
+    expect(paths.filter((path) => path === "multiquery")).toHaveLength(1);
+    expect(paths.filter((path) => path === "count")).toHaveLength(1);
+    expect(paths.filter((path) => path === "games")).toHaveLength(6);
+  });
+
   test("a single block that is too large rejects with PayloadTooLargeError", async () => {
     const mock = mockFetch(() => apicalypseError(413, "Payload Too Large", "Response exceeds 10MB limit."));
     const igdb = testClient(mock.fetch);

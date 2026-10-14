@@ -23,8 +23,8 @@ createIGDB({
   clientSecret,               // or accessToken: a token you manage (never renewed)
   tokenStore,                 // { get, set, delete, lock? }; default in memory
   limiter,                    // LocalLimiterOptions or your own Limiter; shared per clientId, first options win
-  retryTimeoutMs: 30_000,
-  attemptTimeoutMs: 30_000,
+  retryTimeoutMs: 30_000,     // how long a failing request is retried, from its first failure
+  attemptTimeoutMs: 45_000,   // one try, reading the response included
   autoBatch: true,            // group concurrent queries into multiqueries
   batchWindowMs: 2,           // how long to wait for more queries before sending
   maxBatchBytes: 4_000_000,   // target size of one multiquery response, and of a page
@@ -151,7 +151,7 @@ All errors extend `IGDBError` and carry `status`, `endpoint`, `details` (IGDB's 
 | `AuthError` | Bad credentials, or a token still refused after one renewal |
 | `RateLimitError` | Still 429 when the retry budget ran out |
 | `NotFoundError` | `findByIdOrThrow()` or `firstOrThrow()` found nothing, or a name in `named()`, `developedBy()` or `publishedBy()` matches nothing (`suggestions` lists close names) |
-| `NetworkError` | 5xx or network failure that persisted |
+| `NetworkError` | 5xx or network failure that persisted; `timedOut` is true when no answer came within `attemptTimeoutMs` |
 | `IGDBError` | A response that is not JSON, such as a `proxyUrl` answering with an HTML page |
 
-429, 5xx and network errors are retried with backoff until `retryTimeoutMs` (30 s by default) runs out. Every request accepts an `AbortSignal`: `query.execute({ signal })`.
+429, 5xx and network errors are retried with backoff until `retryTimeoutMs` (30 s by default) runs out, counted from the first failure: time waiting for a request slot does not count. An attempt that gets no answer within `attemptTimeoutMs` (45 s by default: IGDB gives up after 29 s, and the rest leaves time to download a large response) is retried the same way. A page of `findByIds()`, `findBy()`, `findByGames()`, `iterate()` or `sync()` that IGDB gives up on (504 "Endpoint request timed out") or that gets no answer in time is not retried but read again in halves (see [Reading results](queries.md#reading-results)). Every request accepts an `AbortSignal`: `query.execute({ signal })`, and `signal: AbortSignal.timeout(ms)` caps its total time.

@@ -18,6 +18,7 @@ import {
   imageSrcSet,
   type Language,
   MAIN_GAME_TYPES,
+  NetworkError,
   or,
   Platform,
   PopularityType,
@@ -977,3 +978,10 @@ endpointSchema("games").linkedFrom[0]?.endpoint satisfies EndpointName | undefin
 jsonSchema("release_dates") satisfies Record<string, unknown>;
 // @ts-expect-error not an endpoint
 endpointSchema("game");
+
+// A NetworkError says whether the attempt got no answer within attemptTimeoutMs.
+const timedOut = new NetworkError("Request to games timed out after 45000 ms", { timedOut: true });
+timedOut.timedOut satisfies boolean;
+// @ts-expect-error read-only
+timedOut.timedOut = false;
+new NetworkError("IGDB server error 502", { status: 502 });

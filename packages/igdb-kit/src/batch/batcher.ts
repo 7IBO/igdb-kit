@@ -1,7 +1,14 @@
 import { IGDBError, PayloadTooLargeError, QueryError } from "../core/errors";
 import type { Priority } from "../core/limiter";
+import type { SendOptions } from "../core/transport";
 import type { EndpointName } from "../generated/schema";
-import { type ExecuteOptions, MAX_BODY_BYTES, type QueryRequest, type RawResponse } from "../query/query";
+import {
+  type ExecuteOptions,
+  MAX_BODY_BYTES,
+  pageTimedOut,
+  type QueryRequest,
+  type RawResponse,
+} from "../query/query";
 
 /** IGDB accepts at most 10 queries per multiquery. */
 export const MAX_BLOCKS = 10;
@@ -27,7 +34,7 @@ export interface BatcherOptions {
   maxBodyBytes?: number | undefined;
 }
 
-export type Send = (path: string, body: string, options: ExecuteOptions) => Promise<RawResponse>;
+export type Send = (path: string, body: string, options: SendOptions) => Promise<RawResponse>;
 
 interface Entry {
   request: QueryRequest;
@@ -99,8 +106,9 @@ export class SizeEstimator {
  *
  * IGDB fails a whole multiquery when one block is invalid (400, without naming it) and when the
  * response exceeds 10 MB (413). Both are handled by splitting the batch in two and retrying each
- * half, so only the faulty query rejects. Queries using `search` are always sent alone: one search
- * block makes IGDB return an empty multiquery.
+ * half, so only the faulty query rejects. When it times out, the pages igdb-kit reads again in
+ * halves fail and the other blocks are sent again. Queries using `search` are always sent alone:
+ * one search block makes IGDB return an empty multiquery.
  */
 export class Batcher {
   readonly sizes = new SizeEstimator();
@@ -173,7 +181,10 @@ export class Batcher {
   private async direct(request: QueryRequest, options: ExecuteOptions): Promise<RawResponse> {
     let response: RawResponse;
     try {
-      response = await this.send(request.path, request.body, options);
+      response = await this.send(request.path, request.body, {
+        ...options,
+        splits: (error) => halved(request, error),
+      });
     } catch (error) {
       if (error instanceof PayloadTooLargeError && error.message.startsWith("Response"))
         this.sizes.learnTooLarge(request);
@@ -232,8 +243,19 @@ export class Batcher {
       .join("\n");
     let response: RawResponse;
     try {
-      response = await this.send("multiquery", body, { priority });
+      response = await this.send("multiquery", body, {
+        priority,
+        splits: (error) => group.some((entry) => halved(entry.request, error)),
+      });
     } catch (error) {
+      // Pages that time out are read again in halves by their callers; the other blocks go again.
+      const timedOut = group.filter((entry) => halved(entry.request, error));
+      if (timedOut.length > 0) {
+        for (const entry of timedOut) fail(entry, error);
+        const rest = group.filter((entry) => !timedOut.includes(entry));
+        if (rest.length > 0) await this.sendGroup(rest);
+        return;
+      }
       const splittable =
         error instanceof PayloadTooLargeError || (error instanceof QueryError && error.status === 400);
       if (!splittable) {
@@ -274,6 +296,11 @@ export class Batcher {
       settle(entry, { data: result });
     });
   }
+}
+
+/** A page whose caller reads it again in halves after this timeout, instead of having it retried. */
+function halved(request: QueryRequest, error: unknown): boolean {
+  return request.halvable === true && pageTimedOut(error, request.limit);
 }
 
 /** Bytes of `query <path> "q0" { <body> };` and its line break, as a block of a multiquery. */

@@ -38,9 +38,15 @@ interface CommonClientOptions extends BatcherOptions {
    * process (4 requests per second, 8 in flight). Pass options to tune it, or your own (e.g. Redis-backed).
    */
   limiter?: Limiter | LocalLimiterOptions | undefined;
-  /** Total retry budget per request (429, 5xx, network). Default 30 s. */
+  /**
+   * How long a request is retried after a 429, a 5xx or a network error, counted from its first
+   * failure; time waiting for a request slot does not count. Default 30 s.
+   */
   retryTimeoutMs?: number | undefined;
-  /** Timeout of one HTTP attempt. Default 30 s. */
+  /**
+   * Timeout of one HTTP attempt, reading the response included. Default 45 s: IGDB gives up after
+   * 29 s, and the rest leaves time to download a large response.
+   */
   attemptTimeoutMs?: number | undefined;
   fetch?: typeof fetch | undefined;
   hooks?: (TransportHooks & { onTokenRefresh?: (info: { expiresAt: number }) => void }) | undefined;

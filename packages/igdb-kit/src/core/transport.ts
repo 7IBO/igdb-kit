@@ -59,18 +59,34 @@ export interface TransportOptions {
   limiter: Limiter;
   fetch?: typeof fetch | undefined;
   baseUrl?: string | undefined;
-  /** Total time budget for retries of one request. Default 30 s. */
+  /**
+   * How long a request is retried, counted from its first failure; time waiting for a request slot
+   * does not count. Default 30 s.
+   */
   retryTimeoutMs?: number | undefined;
-  /** Timeout of a single HTTP attempt. Default 30 s (IGDB itself gives up after ~27 s). */
+  /**
+   * Timeout of a single HTTP attempt, reading the response included. Default 45 s: IGDB gives up
+   * after 29 s, and the rest leaves time to download a large response.
+   */
   attemptTimeoutMs?: number | undefined;
   hooks?: TransportHooks | undefined;
+}
+
+/** @internal Request options, and the errors after which the caller reads the request in parts. */
+export interface SendOptions extends ExecuteOptions {
+  /**
+   * True for an error after which the caller reads the request again in smaller parts (a page that
+   * timed out): it is thrown at once instead of retried.
+   */
+  splits?: ((error: IGDBError) => boolean) | undefined;
 }
 
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 
 /**
  * Sends one POST to IGDB through the limiter, with auth renewal on 401 and retries on 429, 5xx and
- * network errors until the retry budget runs out. Every IGDB request is a read, so retries are safe.
+ * network errors until the retry budget, which starts at the first failure, runs out. Every IGDB
+ * request is a read, so retries are safe.
  */
 export class Transport {
   private readonly fetchFn: typeof fetch;
@@ -82,7 +98,7 @@ export class Transport {
   }
 
   /** Sends an Apicalypse query. */
-  send(path: string, body: string, options: ExecuteOptions = {}): Promise<RawResponse> {
+  send(path: string, body: string, options: SendOptions = {}): Promise<RawResponse> {
     return this.request("POST", path, { body, contentType: "text/plain" }, options);
   }
 
@@ -91,16 +107,21 @@ export class Transport {
     method: "GET" | "POST" | "DELETE",
     path: string,
     { body, contentType }: { body?: string | undefined; contentType?: string | undefined },
-    options: ExecuteOptions = {},
+    options: SendOptions = {},
   ): Promise<RawResponse> {
-    const { signal, priority } = options;
-    const deadline = Date.now() + (this.options.retryTimeoutMs ?? 30_000);
+    const { signal, priority, splits } = options;
+    const budget = this.options.retryTimeoutMs ?? 30_000;
+    const timeoutMs = this.options.attemptTimeoutMs ?? 45_000;
+    // Set at the first failure, and pushed back by the time retries wait for a slot.
+    let deadline: number | undefined;
     let renewedToken = false;
 
     for (let attempt = 0; ; attempt++) {
       signal?.throwIfAborted();
+      const queued = Date.now();
       const release = await this.options.limiter.acquire({ signal, priority });
       const started = Date.now();
+      if (deadline !== undefined) deadline += started - queued;
       const report = (status: number, bytes: number) =>
         reportRequest(this.options.hooks, {
           path,
@@ -117,9 +138,10 @@ export class Transport {
       let bytes: number;
       let headers: Headers;
       let token: string | undefined;
+      let timeout: AbortSignal | undefined;
       try {
         token = await this.options.tokens?.getToken(signal);
-        const attemptSignal = AbortSignal.timeout(this.options.attemptTimeoutMs ?? 30_000);
+        timeout = AbortSignal.timeout(timeoutMs);
         const res = await this.fetchFn(`${this.baseUrl}/${path}`, {
           method,
           headers: {
@@ -129,7 +151,7 @@ export class Transport {
             ...(contentType ? { "Content-Type": contentType } : {}),
           },
           ...(body === undefined ? {} : { body }),
-          signal: signal ? AbortSignal.any([signal, attemptSignal]) : attemptSignal,
+          signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         });
         status = res.status;
         headers = res.headers;
@@ -142,13 +164,15 @@ export class Transport {
         if (!(error instanceof IGDBError)) report(0, 0);
         if (signal?.aborted) throw signal.reason;
         if (error instanceof IGDBError) throw error; // from the token provider
-        if (!(await this.backoff(path, attempt, deadline, error, signal))) {
-          throw new NetworkError(`Request to ${path} failed: ${errorMessage(error)}`, {
-            cause: error,
-            endpoint: path,
-            query: body,
-          });
-        }
+        const timedOut = timeout?.aborted === true;
+        const failure = new NetworkError(
+          timedOut
+            ? `Request to ${path} timed out after ${timeoutMs} ms`
+            : `Request to ${path} failed: ${errorMessage(error)}`,
+          { cause: error, endpoint: path, query: body, timedOut },
+        );
+        deadline ??= Date.now() + budget;
+        if (splits?.(failure) || !(await this.backoff(path, attempt, deadline, error, signal))) throw failure;
         continue;
       }
       release();
@@ -173,7 +197,8 @@ export class Transport {
         this.options.limiter.reportRateLimited();
         this.options.hooks?.onRateLimited?.({ path });
       }
-      if (!RETRYABLE.has(status)) throw error;
+      if (!RETRYABLE.has(status) || splits?.(error)) throw error;
+      deadline ??= Date.now() + budget;
       if (!(await this.backoff(path, attempt, deadline, error, signal))) {
         throw status === 429
           ? new RateLimitError(`Still rate limited after retrying ${path}`, {
