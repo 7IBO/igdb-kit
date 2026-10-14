@@ -1,4 +1,7 @@
+import type { Locale } from "../game/locale";
 import type {
+  AgeRatingContentDescriptionType,
+  AgeRatingContentDescriptionV2,
   ArtworkType,
   CharacterGender,
   CharacterSpecie,
@@ -55,10 +58,10 @@ export interface LabelIds {
   collection_relation_types: Ids<typeof CollectionRelationType>;
   image_types: Ids<typeof ImageType>;
   artwork_types: Ids<typeof ArtworkType>;
-  /** Content and interactive element types of the descriptors: 1 content, 2 interactive element. */
-  age_rating_content_description_types: number;
+  /** Content and interactive element types of the descriptors. */
+  age_rating_content_description_types: Ids<typeof AgeRatingContentDescriptionType>;
   /** The 97 descriptors of the ESRB, PEGI, CERO, GRAC and ClassInd ("Blood and Gore", "Fear"). */
-  age_rating_content_descriptions_v2: number;
+  age_rating_content_descriptions_v2: Ids<typeof AgeRatingContentDescriptionV2>;
 }
 
 /** A table {@link createLabels} has labels for. */
@@ -74,13 +77,26 @@ export type DescribedTable =
 type Texts<T extends LabelTable> = { readonly [Id in LabelIds[T]]?: string };
 
 /**
+ * The ids every table of `T` has a label for: `LabelIds[T]` for one table, the ids they share for
+ * several. English has a label for each, so `label()` of such an id is never null.
+ */
+type KnownId<T extends LabelTable> = (T extends LabelTable ? (id: LabelIds[T]) => void : never) extends (
+  id: infer Id extends number,
+) => void
+  ? Id
+  : never;
+
+/** What `label()` and `description()` take: an id, or a row of a query with any selection. */
+type LabelInput = number | LabelRow | null | undefined;
+
+/**
  * The labels of one language. igdb-kit has `en` built in and one entry point per language
  * (`igdb-kit/i18n/fr`); write your own for another language, or to change some labels: a table
  * or an id it leaves out falls back to the next dictionary, then to English.
  */
 export interface LabelDictionary {
   /** BCP 47 tag of the language: `"fr"`, `"pt-BR"`, `"zh-CN"`. */
-  locale: string;
+  locale: Locale;
   labels: { readonly [T in LabelTable]?: Texts<T> };
   descriptions?: { readonly [T in DescribedTable]?: Texts<T> } | undefined;
 }
@@ -96,8 +112,9 @@ export interface LabelRow {
   description?: string | undefined;
 }
 
-export interface LabelEntry {
-  id: number;
+/** One option of {@link Labels.entries}: an id of the table and its label. */
+export interface LabelEntry<Id extends number = number> {
+  id: Id;
   label: string;
 }
 
@@ -106,18 +123,13 @@ export interface Labels {
    * The label of a row in the user's language, from its id or from the row itself:
    * `label("genres", 12, "fr-FR")` is "Jeu de rôle (RPG)". English when no dictionary has it, the
    * row's own label for an id added to IGDB after this version, null for an unknown id without one.
+   * A known id, such as `Genre.RolePlayingRPG`, always has a label: the result is then a `string`.
    */
-  label<T extends LabelTable>(
-    table: T,
-    row: LabelIds[T] | number | LabelRow | null | undefined,
-    locale: string,
-  ): string | null;
+  label<T extends LabelTable>(table: T, row: KnownId<T>, locale: Locale): string;
+  label<T extends LabelTable>(table: T, row: LabelInput, locale: Locale): string | null;
   /** The description of a release status or collection type, as {@link Labels.label} does labels. */
-  description<T extends DescribedTable>(
-    table: T,
-    row: LabelIds[T] | number | LabelRow | null | undefined,
-    locale: string,
-  ): string | null;
+  description<T extends DescribedTable>(table: T, row: KnownId<T>, locale: Locale): string;
+  description<T extends DescribedTable>(table: T, row: LabelInput, locale: Locale): string | null;
   /** Every id of a table with its label, in IGDB's id order: the options of a filter. */
-  entries(table: LabelTable, locale: string): LabelEntry[];
+  entries<T extends LabelTable>(table: T, locale: Locale): LabelEntry<LabelIds[T]>[];
 }

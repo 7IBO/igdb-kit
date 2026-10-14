@@ -1,3 +1,4 @@
+import type { Locale } from "./locale";
 import type { Requires } from "./select";
 
 /** Fields of `game_time_to_beats` that {@link timeToBeat} reads. */
@@ -62,7 +63,7 @@ export function timeToBeat(
 
 export interface FormatPlaytimeOptions {
   /** BCP 47 locale for `Intl.NumberFormat`. Default: the runtime's. */
-  locale?: string | readonly string[] | undefined;
+  locale?: Locale | readonly Locale[] | undefined;
   /** `short` (default): "71 hr"; `narrow`: "71h"; `long`: "71 hours". */
   unitDisplay?: "short" | "narrow" | "long" | undefined;
 }

@@ -2,6 +2,8 @@
 
 IGDB's data is mostly in English, with the other languages spread over localizations, alternative names and language supports. igdb-kit gathers them so a page can follow the user's locale (`"fr-FR"`, `"ja"`, `"pt-BR"`).
 
+Every function that takes a locale types it as `Locale`: editors suggest the locales of IGDB's languages (`"fr-FR"`, `"es-MX"`, `"zh-TW"`) and their language codes (`"fr"`), and any other string is accepted, since a locale usually comes from `navigator.language` or a request.
+
 | To | Use | In |
 |---|---|---|
 | Show a game's title in the user's language | `localizedName(game, locale)` | [`igdb-kit/game`](display.md#names-and-languages) |
@@ -49,5 +51,6 @@ entries("themes", "fr");                              // [{ id: 1, label: "Actio
 
 - **Tables:** 27 tables by endpoint name (`genres`, `themes`, `game_modes`, `player_perspectives`, `game_types`, `game_statuses`, `release_date_statuses`, `release_date_regions`, `website_types`, `popularity_types`, `company_sizes`, `image_types`, `artwork_types`…) and the 97 content descriptors of the ESRB, PEGI, CERO, GRAC and ClassInd, with descriptions for release statuses and collection types. Platforms, companies and games keep their names: for a game's title in the user's language, see [`localizedName()`](display.md#names-and-languages).
 - **Locales:** a locale reads the dictionaries of its language and script, the one of its country first (`fr-CA` reads `fr`, `pt-PT` reads `pt-BR`, `zh-TW` does not read `zh-CN`), then English.
+- **Types:** `label()` takes the tables above only, and `description()` only release statuses and collection types. A known id, such as `Genre.RolePlayingRPG` or `AgeRatingContentDescriptionV2.PEGI_Fear`, returns a `string`, since English has every one; any other number or a row returns `string | null`. `entries("genres", locale)` returns the ids of genres (type the list as `LabelEntry[]` to add an "All" option), and a `LabelDictionary` only takes each table's ids.
 - **New rows:** a row passed as an object (`{ id, name }`) keeps its own English label when its id was added to IGDB after this version; an id alone gives `null`.
 - **Your own texts:** a `LabelDictionary` is a plain object. Pass one for another language, or before a built-in one to change some labels: an id it leaves out comes from the next dictionary.

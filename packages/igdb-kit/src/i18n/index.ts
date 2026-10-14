@@ -1,6 +1,8 @@
-import { parseLocale } from "../game/locale";
+import { type Locale, parseLocale } from "../game/locale";
 import { en } from "./en";
 import type { LabelDictionary, LabelEntry, LabelRow, Labels, LabelTable } from "./types";
+
+export type { Locale } from "../game/locale";
 
 export { en } from "./en";
 export type {
@@ -77,14 +79,16 @@ export function createLabels(dictionaries: readonly LabelDictionary[] = []): Lab
     return typeof own === "string" ? own : null;
   };
 
+  type Find = (table: LabelTable, row: number | LabelRow | null | undefined, locale: Locale) => string | null;
   return {
-    label: (table, row, locale) => find("labels", table, row, locale),
-    description: (table, row, locale) => find("descriptions", table, row, locale),
-    entries: (table, locale) =>
+    label: ((table, row, locale) => find("labels", table, row, locale)) as Find as Labels["label"],
+    description: ((table, row, locale) =>
+      find("descriptions", table, row, locale)) as Find as Labels["description"],
+    entries: ((table: LabelTable, locale: Locale) =>
       Object.keys(en.labels[table] ?? {}).map((key): LabelEntry => {
         const id = Number(key);
         return { id, label: find("labels", table, id, locale) ?? "" };
-      }),
+      })) as Labels["entries"],
   };
 }
 

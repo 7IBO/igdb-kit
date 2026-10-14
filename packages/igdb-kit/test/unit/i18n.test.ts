@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { GameType, Genre, ReleaseDateStatus } from "../../src";
-import { createLabels, en, type LabelDictionary } from "../../src/i18n";
+import { createLabels, type DescribedTable, en, type LabelDictionary } from "../../src/i18n";
 import { de } from "../../src/i18n/de";
 import { es } from "../../src/i18n/es";
 import { fr } from "../../src/i18n/fr";
@@ -21,18 +21,22 @@ const ids = (texts: Texts | undefined) =>
   Object.fromEntries(Object.entries(texts ?? {}).map(([table, rows]) => [table, Object.keys(rows)]));
 
 describe("igdb-kit/i18n", () => {
-  test("English has a label for every row of the reference tables and the 97 descriptors", () => {
+  test("English has a label for every row of the reference tables, and a description where IGDB has one", () => {
+    const sorted = (table: string) => (reference[table] ?? []).map((row) => row.id).sort((a, b) => a - b);
     for (const [table, rows] of Object.entries(en.labels as Texts)) {
-      if (table === "age_rating_content_descriptions_v2" || table === "age_rating_content_description_types")
-        continue;
-      expect(Object.keys(rows).map(Number)).toEqual(
-        (reference[table] ?? []).map((row) => row.id).sort((a, b) => a - b),
-      );
+      expect(reference[table]).toBeDefined();
+      expect(Object.keys(rows).map(Number)).toEqual(sorted(table));
     }
+    expect(Object.keys(en.descriptions ?? {}).sort()).toEqual([
+      "collection_membership_types",
+      "collection_relation_types",
+      "collection_types",
+      "release_date_statuses",
+    ] satisfies DescribedTable[]);
+    for (const [table, rows] of Object.entries(en.descriptions as Texts))
+      expect(Object.keys(rows).map(Number)).toEqual(sorted(table));
     expect(Object.keys(en.labels).length).toBe(27);
-    expect(Object.keys(en.labels.age_rating_content_descriptions_v2 ?? {}).map(Number)).toEqual(
-      Array.from({ length: 97 }, (_, i) => i + 1),
-    );
+    expect(Object.keys(en.labels.age_rating_content_descriptions_v2 ?? {}).length).toBe(97);
   });
 
   for (const [locale, dictionary] of Object.entries(dictionaries))

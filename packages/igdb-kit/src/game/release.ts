@@ -1,6 +1,6 @@
 import { ReleaseDateRegion, ReleaseDateStatus } from "../generated/schema";
 import { type ReleaseDetails, type ReleasePrecision, releaseDetails } from "../query/release-period";
-import { resolveLocale } from "./locale";
+import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `release_dates` that {@link releaseDate} reads. */
@@ -75,7 +75,7 @@ export interface ReleaseDateOptions {
    * Zealand and Brazil. A locale without a country takes its likely one (`"fr"`: France). Another
    * country requests no region.
    */
-  locale?: string | undefined;
+  locale?: Locale | undefined;
   /** `Platform` id. Only rows of that platform are considered. */
   platform?: number | undefined;
   /**

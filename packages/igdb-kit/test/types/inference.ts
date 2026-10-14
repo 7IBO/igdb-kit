@@ -1,6 +1,7 @@
 // Compile-time tests: `tsc -p test/types` fails if an inferred type drifts.
 import {
   type AgeRatingCategory,
+  AgeRatingContentDescriptionV2,
   and,
   artworkType,
   type CalendarRelease,
@@ -830,24 +831,75 @@ const versionDates = await igdb.platforms
 platformVersions(versionDates);
 
 // igdb-kit/i18n: tables and ids are checked, rows of any selection are accepted.
-import { createLabels, type LabelDictionary } from "../../src/i18n";
+import {
+  createLabels,
+  type LabelDictionary,
+  type LabelEntry,
+  type LabelIds,
+  type Labels,
+  type Locale,
+} from "../../src/i18n";
 import { fr } from "../../src/i18n/fr";
 
 const { label, description, entries } = createLabels([fr]);
 expectType<Equal<ReturnType<typeof label>, string | null>>();
-label("genres", Genre.Adventure, "fr");
-const labeled = await igdb.games.select("genres.name", "game_type.type").findByIdOrThrow(1942);
-for (const genre of labeled.genres ?? []) label("genres", genre, "fr");
+// A known id always has a label; any other number or a row may not.
+const known = label("genres", Genre.Adventure, "fr");
+expectType<Equal<typeof known, string>>();
+const unknown = label("genres", 999, "fr");
+expectType<Equal<typeof unknown, string | null>>();
+const labeled = await igdb.games
+  .select("genres.name", "game_type.type", "age_ratings.rating_content_descriptions")
+  .findByIdOrThrow(1942);
+for (const genre of labeled.genres ?? []) {
+  const text = label("genres", genre, "fr");
+  expectType<Equal<typeof text, string | null>>();
+}
 label("game_types", labeled.game_type, "fr");
-description("release_date_statuses", 6, "fr");
-entries("themes", "fr") satisfies { id: number; label: string }[];
+for (const rating of labeled.age_ratings ?? [])
+  for (const descriptor of rating.rating_content_descriptions ?? [])
+    label("age_rating_content_descriptions_v2", descriptor, "ja");
+const fear = label("age_rating_content_descriptions_v2", AgeRatingContentDescriptionV2.PEGI_Fear, "ja");
+expectType<Equal<typeof fear, string>>();
+// A table chosen at run time: only the ids every one of its tables has are sure to have a label.
+declare const genresOrThemes: "genres" | "themes";
+const shared = label(genresOrThemes, 31, "fr"); // Adventure and Drama
+expectType<Equal<typeof shared, string>>();
+const genreOnly = label(genresOrThemes, Genre.RolePlayingRPG, "fr");
+expectType<Equal<typeof genreOnly, string | null>>();
+const early = description("release_date_statuses", ReleaseDateStatus.EarlyAccess, "fr");
+expectType<Equal<typeof early, string>>();
+const themes = entries("themes", "fr");
+expectType<Equal<(typeof themes)[number], { id: LabelIds["themes"]; label: string }>>();
+themes satisfies { id: number; label: string }[];
 // @ts-expect-error not a table with labels
 label("platforms", 6, "fr");
 // @ts-expect-error genres have no description
 description("genres", 12, "fr");
+// @ts-expect-error a locale is a string
+label("genres", 12, 12);
 ({ locale: "fr", labels: { genres: { 12: "RPG" } } }) satisfies LabelDictionary;
 // @ts-expect-error not a genre id
 ({ locale: "fr", labels: { genres: { 999: "RPG" } } }) satisfies LabelDictionary;
+// @ts-expect-error not a descriptor id
+({ locale: "fr", labels: { age_rating_content_descriptions_v2: { 98: "Peur" } } }) satisfies LabelDictionary;
+
+// Locales: IGDB's are suggested, any string is accepted (navigator.language, a request header).
+expectType<
+  Equal<Extract<Locale, "fr-FR" | "pt-BR" | "zh-TW" | "fr" | "ja">, "fr-FR" | "pt-BR" | "zh-TW" | "fr" | "ja">
+>();
+// Wrapping the labels: their own arguments can be passed back, and a fallback keeps a string.
+const labels = createLabels([fr]);
+const orDash: Labels = { ...labels, label: (table, row, locale) => labels.label(table, row, locale) ?? "-" };
+orDash.label("genres", 999, "fr");
+// A list of options can hold other ids once typed as LabelEntry[].
+const genreOptions: LabelEntry[] = entries("genres", "fr");
+genreOptions.unshift({ id: 0, label: "Tous les genres" });
+// @ts-expect-error entries() ids are the table's ids
+entries("genres", "fr").unshift({ id: 0, label: "Tous les genres" });
+declare const browserLocale: string;
+label("genres", Genre.Adventure, browserLocale);
+igdb.games.where((g) => g.supportsLanguage(browserLocale));
 
 // Language filter and alternative titles in searchAll().
 igdb.games.where((g) => g.supportsLanguage("fr-FR", "audio"));
