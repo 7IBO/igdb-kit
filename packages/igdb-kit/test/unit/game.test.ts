@@ -41,6 +41,54 @@ import * as fixtures from "./fixtures/games";
 
 const { externalRows, releaseRows, timeToBeatRows, untrustedWebsites } = fixtures;
 
+// Released on PC in 2015; the Wii U version, announced for 2014, was cancelled.
+const cancelledPort = {
+  release_dates: [
+    {
+      id: 1,
+      date: 1431993600,
+      human: "May 19, 2015",
+      platform: Platform.PCMicrosoftWindows,
+      date_format: 0,
+      release_region: ReleaseDateRegion.Worldwide,
+      status: ReleaseDateStatus.FullRelease,
+    },
+    {
+      id: 2,
+      date: 1419984000,
+      human: "2014",
+      platform: Platform.WiiU,
+      date_format: 2,
+      release_region: ReleaseDateRegion.Worldwide,
+      status: ReleaseDateStatus.Cancelled,
+    },
+  ],
+};
+
+// Released on Switch in Japan; the European release, planned for 2021, was cancelled.
+const cancelledInEurope = {
+  release_dates: [
+    {
+      id: 3,
+      date: 1614816000,
+      human: "Mar 04, 2021",
+      platform: Platform.NintendoSwitch,
+      date_format: 0,
+      release_region: ReleaseDateRegion.Japan,
+      status: ReleaseDateStatus.FullRelease,
+    },
+    {
+      id: 4,
+      date: 1640908800,
+      human: "2021",
+      platform: Platform.NintendoSwitch,
+      date_format: 2,
+      release_region: ReleaseDateRegion.Europe,
+      status: ReleaseDateStatus.Cancelled,
+    },
+  ],
+};
+
 describe("releaseDate()", () => {
   test("the first full release, like IGDB's first_release_date", () => {
     const release = releaseDate(fixtures.witcher3);
@@ -144,7 +192,9 @@ describe("releaseDate()", () => {
   });
 
   test("TBD and cancelled", () => {
-    const release = releaseDate(fixtures.scalebound);
+    // Scalebound was cancelled before it had a date: no release, unless statuses asks for it.
+    expect(releaseDate(fixtures.scalebound)).toBeNull();
+    const release = releaseDate(fixtures.scalebound, { statuses: "all" });
     expect(release).toMatchObject({
       precision: "tbd",
       status: ReleaseDateStatus.Cancelled,
@@ -152,6 +202,48 @@ describe("releaseDate()", () => {
       start: null,
       end: null,
       year: null,
+    });
+    expect(releaseDate(fixtures.scalebound, { statuses: ReleaseDateStatus.Cancelled })).toEqual(release);
+  });
+
+  test("offline and cancelled dates are left out, as in releases()", () => {
+    expect(releaseDate(cancelledPort)).toMatchObject({ platform: Platform.PCMicrosoftWindows, year: 2015 });
+    expect(releaseDate(cancelledPort, { platform: Platform.WiiU })).toBeNull();
+    // With every status, a cancelled date still ranks last.
+    expect(releaseDate(cancelledPort, { statuses: "all" })?.platform).toBe(Platform.PCMicrosoftWindows);
+    expect(releaseDate(cancelledPort, { platform: Platform.WiiU, statuses: "all" })).toMatchObject({
+      status: ReleaseDateStatus.Cancelled,
+      year: 2014,
+    });
+    // A game taken offline keeps the date it came out.
+    const shutDown = {
+      release_dates: [
+        { id: 1, date: 1348531200, human: "Sep 25, 2012", platform: 6, date_format: 0, release_region: 8 },
+        {
+          id: 2,
+          date: 1601510400,
+          human: "Oct 01, 2020",
+          platform: 6,
+          date_format: 0,
+          release_region: 8,
+          status: ReleaseDateStatus.Offline,
+        },
+      ],
+    };
+    expect(releaseDate(shutDown)).toMatchObject({ human: "Sep 25, 2012", status: null });
+    expect(releaseDate({ release_dates: shutDown.release_dates.slice(1) })).toBeNull();
+  });
+
+  test("a cancelled date of the requested region does not hide another region's release", () => {
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR" })).toMatchObject({
+      region: ReleaseDateRegion.Japan,
+      match: "other_region",
+    });
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR", fallback: false })).toBeNull();
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR", statuses: "all" })).toMatchObject({
+      region: ReleaseDateRegion.Europe,
+      status: ReleaseDateStatus.Cancelled,
+      match: "exact",
     });
   });
 
@@ -239,7 +331,21 @@ describe("releaseDate()", () => {
       [169, "Dec 14, 2022"],
       [508, "Sep 29, 2026"],
     ]);
-    expect(releasesByPlatform(fixtures.scalebound).map((r) => r.precision)).toEqual(["tbd", "tbd"]);
+    expect(releasesByPlatform(fixtures.scalebound)).toEqual([]);
+    expect(releasesByPlatform(fixtures.scalebound, { statuses: "all" }).map((r) => r.precision)).toEqual([
+      "tbd",
+      "tbd",
+    ]);
+  });
+
+  test("releasesByPlatform() leaves out a platform the game was cancelled on", () => {
+    expect(releasesByPlatform(cancelledPort).map((r) => r.platform)).toEqual([Platform.PCMicrosoftWindows]);
+    expect(releasesByPlatform(cancelledPort, { statuses: "all" }).map((r) => [r.platform, r.status])).toEqual(
+      [
+        [Platform.WiiU, ReleaseDateStatus.Cancelled],
+        [Platform.PCMicrosoftWindows, ReleaseDateStatus.FullRelease],
+      ],
+    );
   });
 });
 
@@ -1082,6 +1188,14 @@ describe("regionalReleases()", () => {
       year: 2020,
     });
     expect(regionalReleases({ release_dates: [] })).toEqual([]);
+  });
+
+  test("leaves out a region whose release was cancelled", () => {
+    expect(regionalReleases(cancelledInEurope).map((r) => r.region)).toEqual([ReleaseDateRegion.Japan]);
+    expect(regionalReleases(cancelledInEurope, { statuses: "all" }).map((r) => r.region)).toEqual([
+      ReleaseDateRegion.Japan,
+      ReleaseDateRegion.Europe,
+    ]);
   });
 });
 

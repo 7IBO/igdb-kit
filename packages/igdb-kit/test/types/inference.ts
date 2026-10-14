@@ -579,6 +579,7 @@ import {
   parentGame,
   regionalReleases,
   releaseDate,
+  releasesByPlatform,
   type resolveLocale,
   type Store,
   storeLinks,
@@ -622,8 +623,13 @@ if (release) {
 }
 releaseDate(page, { locale: "fr-FR", statuses: [ReleaseDateStatus.FullRelease, null] });
 releaseDate(page, { statuses: ReleaseDateStatus.FullRelease });
+releaseDate(page, { statuses: "all" });
+releasesByPlatform(page, { statuses: "all" });
+regionalReleases(page, { statuses: "all" });
 // @ts-expect-error not a status
 releaseDate(page, { statuses: ["released"] });
+// @ts-expect-error "all" stands for the whole list, not for one status
+releaseDate(page, { statuses: [ReleaseDateStatus.FullRelease, "all"] });
 expectType<Equal<ReturnType<typeof storeOf>, Store | null>>();
 expectType<Equal<ReturnType<typeof companies<typeof page>>["developers"], { id: number; name?: string }[]>>();
 storeLinks(page);
