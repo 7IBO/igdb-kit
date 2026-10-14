@@ -1,6 +1,6 @@
 import type { ReleaseDetails } from "../query/release-period";
 import { alpha2 } from "./countries";
-import { type Locale, resolveLocale } from "./locale";
+import { type Locale, parseLocale, resolveLocale } from "./locale";
 import type { Requires } from "./select";
 
 export interface FormatReleaseDateOptions {
@@ -60,14 +60,14 @@ export function formatReleaseDate(
   options: FormatReleaseDateOptions,
 ): string {
   const { locale, dateStyle = "medium", labels } = options;
-  const { language, script } = resolveLocale(locale);
+  const { locale: tag, language, script } = resolveLocale(locale);
   const [tbd, quarter] =
     releaseLabels[language === "zh" && script === "Hant" ? "zh-Hant" : language] ?? englishLabels;
   const { precision, start, year } = release;
   if (precision === "tbd" || !start || year === null) return labels?.tbd ?? tbd;
   if (precision === "quarter") return (labels?.quarter ?? quarter)(release.quarter ?? 1, year);
   const format = (options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(start);
+    new Intl.DateTimeFormat(tag, { ...options, timeZone: "UTC" }).format(start);
   if (precision === "day") return format({ dateStyle });
   if (precision === "month")
     return format({
@@ -171,10 +171,12 @@ export function languageName(
   locale: Locale,
   options: LanguageNameOptions = {},
 ): string | null {
-  const tag =
-    typeof language === "number"
-      ? languageTags[language]
-      : (languageTags[igdbLocales[language] ?? 0] ?? language.replace(/_/g, "-"));
+  let tag: string | undefined;
+  if (typeof language === "number") tag = languageTags[language];
+  else {
+    const code = parseLocale(language).canonical; // "zh_TW" is "zh-TW"
+    tag = languageTags[igdbLocales[code] ?? 0] ?? code;
+  }
   if (!tag) return null;
   return displayName("language", tag, options.native ? tag : locale);
 }
@@ -186,7 +188,7 @@ function displayName(type: "region" | "language", code: string, locale: string):
     const key = `${type} ${locale}`;
     let names = displayNames.get(key);
     if (!names) {
-      names = new Intl.DisplayNames([locale, "en"], { type, fallback: "none" });
+      names = new Intl.DisplayNames([parseLocale(locale).canonical, "en"], { type, fallback: "none" });
       displayNames.set(key, names);
     }
     return names.of(code) ?? null;
@@ -251,12 +253,13 @@ export function eventTime<E extends object>(
   let text: string | null = null;
   if (start) {
     const zone = ianaZone(options.timeZone) ?? timeZone ?? "UTC";
-    text = new Intl.DateTimeFormat(options.locale, {
+    const locale = parseLocale(options.locale).canonical;
+    text = new Intl.DateTimeFormat(locale, {
       dateStyle: "medium",
       timeStyle: "short",
       timeZone: zone,
     }).format(start);
-    const offset = new Intl.DateTimeFormat(options.locale, { timeZone: zone, timeZoneName: "short" })
+    const offset = new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: "short" })
       .formatToParts(start)
       .find((part) => part.type === "timeZoneName")?.value;
     if (offset) text = `${text} ${offset}`;

@@ -2,7 +2,7 @@
 
 IGDB's data is mostly in English, with the other languages spread over localizations, alternative names and language supports. igdb-kit gathers them so a page can follow the user's locale (`"fr-FR"`, `"ja"`, `"pt-BR"`).
 
-Every function that takes a locale types it as `Locale`: editors suggest the locales of IGDB's languages (`"fr-FR"`, `"es-MX"`, `"zh-TW"`) and their language codes (`"fr"`), and any other string is accepted, since a locale usually comes from `navigator.language` or a request.
+Every function that takes a locale types it as `Locale`: editors suggest the locales of IGDB's languages (`"fr-FR"`, `"es-MX"`, `"zh-TW"`) and their language codes (`"fr"`), and any other string is accepted, since a locale usually comes from `navigator.language` or a request. Underscore tags, as Java and Android write them (`"pt_BR"`), read as `"pt-BR"`.
 
 | To | Use | In |
 |---|---|---|

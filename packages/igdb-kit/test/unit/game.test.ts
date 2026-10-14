@@ -1075,6 +1075,26 @@ describe("names of regions, countries and languages", () => {
   });
 });
 
+describe("underscore locales", () => {
+  test("pt_BR is pt-BR in every display helper", () => {
+    const release = {
+      precision: "day",
+      start: new Date(Date.UTC(2026, 10, 19)),
+      year: 2026,
+      quarter: null,
+    } as const;
+    expect(formatReleaseDate(release, { locale: "pt_BR" })).toBe("19 de nov. de 2026");
+    expect(formatPlaytime(7200, { locale: "pt_BR" })).toBe("2 h");
+    expect(formatPlaytime(7200, { locale: ["pt_BR", "en"] })).toBe("2 h");
+    const event = { id: 1, start_time: 1781110800, time_zone: "PST" };
+    expect(eventTime(event, { locale: "pt_BR" }).text).toBe(eventTime(event, { locale: "pt-BR" }).text);
+    expect(releaseRegionName(ReleaseDateRegion.Europe, "pt_BR")).toBe("Europa");
+    expect(countryName(250, "pt_BR")).toBe("França");
+    expect(languageName(Language.French, "pt_BR")).toBe(languageName(Language.French, "pt-BR"));
+    expect(languageName("zh_TW", "en")).toBe("Traditional Chinese");
+  });
+});
+
 describe("eventTime()", () => {
   // Summer Game Fest style: 10:00 Pacific time.
   const event = { id: 1, start_time: 1781110800, end_time: 1781118000, time_zone: "PST" };
