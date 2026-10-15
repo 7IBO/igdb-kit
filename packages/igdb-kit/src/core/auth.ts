@@ -1,4 +1,4 @@
-import { AuthError, NetworkError } from "./errors";
+import { AuthError, IGDBError, NetworkError } from "./errors";
 import { backoffDelay, sleep } from "./util";
 
 export interface StoredToken {
@@ -48,7 +48,11 @@ export interface TokenProviderOptions {
   /** Renew in the background when less than this share of the lifetime is left. Default 0.05 (~3 days). */
   refreshThreshold?: number | undefined;
   onTokenRefresh?: ((info: { expiresAt: number }) => void) | undefined;
+  /** A renewal ahead of expiry failed: the next one waits `delayMs`. */
+  onRetry?: ((info: { path: string; attempt: number; delayMs: number; reason: unknown }) => void) | undefined;
   tokenUrl?: string | undefined;
+  /** How long one try of the token request may take, reading the response included. Default 10 s. */
+  timeoutMs?: number | undefined;
 }
 
 const TWITCH_TOKEN_URL = "https://id.twitch.tv/oauth2/token";
@@ -59,6 +63,9 @@ export class TokenProvider {
   private readonly fetchFn: typeof fetch;
   private inflight: Promise<StoredToken> | null = null;
   private lifetime = 60 * 24 * 3600 * 1000;
+  /** Renewals ahead of expiry that failed in a row, and when the next one may start. */
+  private renewalFailures = 0;
+  private renewAfter = 0;
 
   constructor(private readonly options: TokenProviderOptions) {
     if (!options.accessToken && !options.clientSecret) {
@@ -78,13 +85,28 @@ export class TokenProvider {
     const stored = await this.store.get();
     if (stored && stored.expiresAt > now + 60_000) {
       const threshold = this.options.refreshThreshold ?? 0.05;
-      if (stored.expiresAt - now < this.lifetime * threshold) {
+      if (stored.expiresAt - now < this.lifetime * threshold && now >= this.renewAfter && !this.inflight) {
         // Renew ahead of time without making this request wait.
-        this.refresh().catch(() => {});
+        this.refresh().catch((error: unknown) => this.renewalFailed(error));
       }
       return stored.token;
     }
     return (await this.refresh(signal)).token;
+  }
+
+  /**
+   * The token still works, so the next renewal waits 1 min, then 2, 4... up to 30 min, instead of
+   * starting again with every request.
+   */
+  private renewalFailed(error: unknown): void {
+    const delayMs = Math.min(60_000 * 2 ** this.renewalFailures, 30 * 60_000);
+    this.renewalFailures++;
+    this.renewAfter = Date.now() + delayMs;
+    try {
+      this.options.onRetry?.({ path: "oauth2/token", attempt: this.renewalFailures, delayMs, reason: error });
+    } catch {
+      // ignored
+    }
   }
 
   /** Called after a 401: drops `token` (if nobody replaced it yet) and fetches a new one. */
@@ -97,9 +119,14 @@ export class TokenProvider {
   }
 
   private refresh(signal?: AbortSignal): Promise<StoredToken> {
-    this.inflight ??= this.refreshWithLock().finally(() => {
-      this.inflight = null;
-    });
+    this.inflight ??= this.refreshWithLock()
+      .then((token) => {
+        this.renewalFailures = 0;
+        return token;
+      })
+      .finally(() => {
+        this.inflight = null;
+      });
     if (!signal) return this.inflight;
     return Promise.race([
       this.inflight,
@@ -139,7 +166,11 @@ export class TokenProvider {
   private async fetchAndStore(): Promise<StoredToken> {
     const token = await this.fetchToken();
     await this.store.set(token);
-    this.options.onTokenRefresh?.({ expiresAt: token.expiresAt });
+    try {
+      this.options.onTokenRefresh?.({ expiresAt: token.expiresAt });
+    } catch {
+      // ignored: the token is stored, and the request that needed it goes on
+    }
     return token;
   }
 
@@ -153,13 +184,19 @@ export class TokenProvider {
     for (let attempt = 0; attempt < 4; attempt++) {
       if (attempt > 0) await sleep(backoffDelay(attempt));
       let res: Response;
+      let text: string;
       try {
-        res = await this.fetchFn(this.options.tokenUrl ?? TWITCH_TOKEN_URL, { method: "POST", body });
+        // Its own timeout, not a caller's signal: every request waiting for the token shares it.
+        res = await this.fetchFn(this.options.tokenUrl ?? TWITCH_TOKEN_URL, {
+          method: "POST",
+          body,
+          signal: AbortSignal.timeout(this.options.timeoutMs ?? 10_000),
+        });
+        text = await res.text();
       } catch (error) {
         lastError = error;
         continue;
       }
-      const text = await res.text();
       if (res.ok) {
         const json = JSON.parse(text) as { access_token: string; expires_in: number };
         this.lifetime = json.expires_in * 1000;
@@ -173,8 +210,11 @@ export class TokenProvider {
       }
       lastError = new NetworkError(`Twitch token endpoint returned ${res.status}`, { status: res.status });
     }
-    throw lastError instanceof Error
+    throw lastError instanceof IGDBError
       ? lastError
-      : new NetworkError("Could not obtain a Twitch token", { cause: lastError });
+      : new NetworkError(
+          `Could not obtain a Twitch token: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+          { cause: lastError },
+        );
   }
 }

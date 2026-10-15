@@ -46,3 +46,12 @@ export async function readBodyCapped(request: Request, maxBytes: number): Promis
   }
   return new TextDecoder().decode(bytes);
 }
+
+/**
+ * `error` of igdbProxy's 502 when IGDB or Twitch refuses its own credentials: the browser client
+ * throws an `AuthError` instead of retrying it.
+ */
+export const PROXY_AUTH_ERROR = "proxy_credentials";
+
+/** `cause` of igdbProxy's refusal of a multiquery: the browser client then sends its queries alone. */
+export const MULTIQUERY_REFUSED = "Multiqueries are not allowed";

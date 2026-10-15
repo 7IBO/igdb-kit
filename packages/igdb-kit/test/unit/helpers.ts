@@ -4,6 +4,7 @@ export interface Call {
   url: string;
   body: string;
   headers: Record<string, string>;
+  signal?: AbortSignal | undefined;
 }
 
 type Handler = (call: Call) => Response | Promise<Response>;
@@ -22,6 +23,7 @@ export function mockFetch(handler: Handler, onMultiquery?: (call: Call) => Respo
       url,
       body: String(init?.body ?? ""),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
+      signal: init?.signal ?? undefined,
     };
     calls.push(call);
     if (url.endsWith("/multiquery")) return onMultiquery?.(call) ?? emulateMultiquery(call, handler);
@@ -51,6 +53,12 @@ export function testClient(fetch: typeof globalThis.fetch, options: Partial<IGDB
 export const apicalypseError = (status: number, title: string, cause?: string) =>
   Response.json([{ title, status, ...(cause ? { cause } : {}) }], { status });
 
+/** No answer, as from a connection that hangs: settles only when the request is aborted. */
+export const noAnswer = (call: Call) =>
+  new Promise<Response>((_, reject) =>
+    call.signal?.addEventListener("abort", () => reject(call.signal?.reason), { once: true }),
+  );
+
 /** Answers a multiquery by running each block through the single-query handler, like IGDB does. */
 async function emulateMultiquery(call: Call, handler: Handler): Promise<Response> {
   const blocks = [...call.body.matchAll(/query (\S+) "([^"]+)" \{ (.*?) \};/g)];
@@ -60,6 +68,7 @@ async function emulateMultiquery(call: Call, handler: Handler): Promise<Response
       url: call.url.replace(/multiquery$/, path as string),
       body: body as string,
       headers: call.headers,
+      signal: call.signal,
     });
     if (!res.ok) return res; // IGDB fails the whole multiquery
     const data = await res.json();
