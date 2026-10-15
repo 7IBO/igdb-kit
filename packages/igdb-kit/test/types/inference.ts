@@ -18,11 +18,13 @@ import {
   imageSrcSet,
   type Language,
   MAIN_GAME_TYPES,
+  NetworkError,
   or,
   Platform,
   PopularityType,
   type Query,
   type QueryOf,
+  type QueryRequest,
   type ReleaseCalendarEntry,
   ReleaseDateRegion,
   ReleaseDateStatus,
@@ -563,6 +565,11 @@ import { igdbProxy } from "../../src/proxy";
 igdbProxy({ igdb, endpoints: ["games", "covers"] });
 // @ts-expect-error unknown endpoint
 igdbProxy({ igdb, endpoints: ["gamez"] });
+// Behind a proxy that refuses multiqueries, the client sends every query alone.
+igdbProxy({ igdb, multiquery: false });
+createIGDB({ proxyUrl: "/api/igdb", multiquery: false });
+// @ts-expect-error a boolean
+createIGDB({ proxyUrl: "/api/igdb", multiquery: "off" });
 
 // igdb-kit/game: helpers require the fields they read and accept any richer selection.
 import {
@@ -997,3 +1004,14 @@ endpointSchema("games").linkedFrom[0]?.endpoint satisfies EndpointName | undefin
 jsonSchema("release_dates") satisfies Record<string, unknown>;
 // @ts-expect-error not an endpoint
 endpointSchema("game");
+
+// A NetworkError says whether the attempt got no answer within attemptTimeoutMs.
+const timedOut = new NetworkError("Request to games timed out after 45000 ms", { timedOut: true });
+timedOut.timedOut satisfies boolean;
+// @ts-expect-error read-only
+timedOut.timedOut = false;
+new NetworkError("IGDB server error 502", { status: 502 });
+// One of igdb-kit's own pages carries the number of rows or ids its caller halves when it times out.
+({ halvable: 500 }) satisfies Partial<QueryRequest>;
+// @ts-expect-error a number
+({ halvable: true }) satisfies Partial<QueryRequest>;

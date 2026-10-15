@@ -1,7 +1,15 @@
-import { IGDBError, PayloadTooLargeError, QueryError } from "../core/errors";
+import { IGDBError, PayloadTooLargeError, QueryError, TierError } from "../core/errors";
 import type { Priority } from "../core/limiter";
+import type { SendOptions } from "../core/transport";
+import { MULTIQUERY_REFUSED } from "../core/util";
 import type { EndpointName } from "../generated/schema";
-import { type ExecuteOptions, MAX_BODY_BYTES, type QueryRequest, type RawResponse } from "../query/query";
+import {
+  type ExecuteOptions,
+  MAX_BODY_BYTES,
+  pageTimedOut,
+  type QueryRequest,
+  type RawResponse,
+} from "../query/query";
 
 /** IGDB accepts at most 10 queries per multiquery. */
 export const MAX_BLOCKS = 10;
@@ -25,19 +33,38 @@ export interface BatcherOptions {
    * 16,384 through `proxyUrl`, the default `maxBodyBytes` of `igdbProxy` (raise both together).
    */
   maxBodyBytes?: number | undefined;
+  /**
+   * Send queries together as multiqueries, automatically or through `batch()`. Default true. `false`
+   * sends every query alone, for a proxy made with `igdbProxy({ multiquery: false })`; without it,
+   * the client does so after the proxy's first refusal.
+   */
+  multiquery?: boolean | undefined;
 }
 
-export type Send = (path: string, body: string, options: ExecuteOptions) => Promise<RawResponse>;
+export type Send = (path: string, body: string, options: SendOptions) => Promise<RawResponse>;
 
 interface Entry {
   request: QueryRequest;
   key: string;
   priority: Priority;
+  /** Aborts once every caller waiting on the query has aborted. */
+  signal: AbortSignal;
   resolve: (response: RawResponse) => void;
   reject: (error: unknown) => void;
   estimate: number;
   /** Bytes the query adds to a multiquery body. */
   blockBytes: number;
+}
+
+/** A request that identical queries share. */
+interface Shared {
+  promise: Promise<RawResponse>;
+  /** Cancels the request: aborted once every caller has aborted. */
+  controller: AbortController;
+  /** Callers waiting with a signal of their own. */
+  waiting: number;
+  /** A caller without a signal waits on it too: it is never cancelled. */
+  pinned: boolean;
 }
 
 /**
@@ -98,9 +125,14 @@ export class SizeEstimator {
  * written one by one cost 3 HTTP requests instead of 30. Also deduplicates identical queries in flight.
  *
  * IGDB fails a whole multiquery when one block is invalid (400, without naming it) and when the
- * response exceeds 10 MB (413). Both are handled by splitting the batch in two and retrying each
- * half, so only the faulty query rejects. Queries using `search` are always sent alone: one search
- * block makes IGDB return an empty multiquery.
+ * response exceeds 10 MB (413). Both, and a 403 for a block outside the API tier, are handled by
+ * splitting the batch in two and retrying each half, so only the faulty query rejects. When it
+ * times out, the pages igdb-kit reads again in halves fail and the other blocks are sent again.
+ * Queries using `search` are always sent alone: one search block makes IGDB return an empty
+ * multiquery. Behind a proxy that refuses multiqueries, every query is sent alone.
+ *
+ * A request is cancelled once every caller waiting on it has aborted, and a multiquery once none of
+ * its queries is wanted.
  */
 export class Batcher {
   readonly sizes = new SizeEstimator();
@@ -108,9 +140,11 @@ export class Batcher {
   private readonly windowMs: number;
   private readonly maxBytes: number;
   private readonly maxBodyBytes: number;
+  /** Turned off by the option, or by the first multiquery a proxy refuses. */
+  private multiquery: boolean;
   private pending: Entry[] = [];
   private readonly pendingByKey = new Map<string, Entry>();
-  private readonly inflight = new Map<string, Promise<RawResponse>>();
+  private readonly inflight = new Map<string, Shared>();
   private timer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -121,11 +155,12 @@ export class Batcher {
     this.windowMs = options.batchWindowMs ?? 2;
     this.maxBytes = options.maxBatchBytes ?? 4_000_000;
     this.maxBodyBytes = options.maxBodyBytes ?? MAX_BODY_BYTES;
+    this.multiquery = options.multiquery ?? true;
   }
 
   run(request: QueryRequest, options: ExecuteOptions = {}): Promise<RawResponse> {
     if (options.signal?.aborted) return Promise.reject(options.signal.reason);
-    const batchable = (options.batch ?? this.autoBatch) && !request.hasSearch;
+    const batchable = this.multiquery && (options.batch ?? this.autoBatch) && !request.hasSearch;
     const key = `${batchable ? "batch" : "direct"}\n${request.path}\n${request.body}`;
     const pending = this.pendingByKey.get(key);
     if (pending && options.priority !== "background") pending.priority = "interactive";
@@ -133,22 +168,63 @@ export class Batcher {
     // Identical queries pending or in flight share one request.
     let shared = this.inflight.get(key);
     if (!shared) {
-      shared = batchable
-        ? this.enqueue(request, key, options)
-        : this.direct(request, { priority: options.priority });
-      this.inflight.set(key, shared);
-      const cleanup = () => this.inflight.delete(key);
-      shared.then(cleanup, cleanup);
+      const controller = new AbortController();
+      const sendOptions = { priority: options.priority, signal: controller.signal };
+      const promise = batchable ? this.enqueue(request, key, sendOptions) : this.direct(request, sendOptions);
+      const created: Shared = { promise, controller, waiting: 0, pinned: false };
+      this.inflight.set(key, created);
+      const cleanup = () => {
+        if (this.inflight.get(key) === created) this.inflight.delete(key);
+      };
+      promise.then(cleanup, cleanup);
+      shared = created;
     }
-    return withSignal(shared, options.signal);
+    return this.join(key, shared, options.signal);
   }
 
-  private enqueue(request: QueryRequest, key: string, options: ExecuteOptions): Promise<RawResponse> {
+  /**
+   * Waits on a shared request. A caller that aborts stops waiting at once, and the request is
+   * cancelled when it was the last one waiting.
+   */
+  private join(key: string, shared: Shared, signal: AbortSignal | undefined): Promise<RawResponse> {
+    if (!signal) {
+      shared.pinned = true;
+      return shared.promise;
+    }
+    shared.waiting++;
+    return new Promise<RawResponse>((resolve, reject) => {
+      const onAbort = () => {
+        reject(signal.reason);
+        if (--shared.waiting > 0 || shared.pinned) return;
+        // An identical query started from now on sends its own request.
+        if (this.inflight.get(key) === shared) this.inflight.delete(key);
+        shared.controller.abort(signal.reason);
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      shared.promise.then(
+        (value) => {
+          signal.removeEventListener("abort", onAbort);
+          resolve(value);
+        },
+        (error) => {
+          signal.removeEventListener("abort", onAbort);
+          reject(error);
+        },
+      );
+    });
+  }
+
+  private enqueue(
+    request: QueryRequest,
+    key: string,
+    options: { priority?: Priority | undefined; signal: AbortSignal },
+  ): Promise<RawResponse> {
     return new Promise<RawResponse>((resolve, reject) => {
       const entry: Entry = {
         request,
         key,
         priority: options.priority ?? "interactive",
+        signal: options.signal,
         resolve,
         reject,
         estimate: this.sizes.estimate(request),
@@ -156,6 +232,17 @@ export class Batcher {
       };
       this.pendingByKey.set(key, entry);
       this.pending.push(entry);
+      // Cancelled before the batch is sent: it leaves the batch.
+      options.signal.addEventListener(
+        "abort",
+        () => {
+          reject(options.signal.reason);
+          if (this.pendingByKey.get(key) !== entry) return;
+          this.pendingByKey.delete(key);
+          this.pending = this.pending.filter((pending) => pending !== entry);
+        },
+        { once: true },
+      );
       this.timer ??= setTimeout(() => this.flush(), this.windowMs);
     });
   }
@@ -167,13 +254,21 @@ export class Batcher {
     const entries = this.pending;
     this.pending = [];
     this.pendingByKey.clear();
-    for (const group of this.group(entries)) void this.sendGroup(group);
+    for (const group of this.group(entries)) {
+      // Whatever goes wrong reading the answer rejects the group's queries rather than leave them pending.
+      this.sendGroup(group).catch((error) => {
+        for (const entry of group) fail(entry, error);
+      });
+    }
   }
 
   private async direct(request: QueryRequest, options: ExecuteOptions): Promise<RawResponse> {
     let response: RawResponse;
     try {
-      response = await this.send(request.path, request.body, options);
+      response = await this.send(request.path, request.body, {
+        ...options,
+        splits: (error) => halved(request, error),
+      });
     } catch (error) {
       if (error instanceof PayloadTooLargeError && error.message.startsWith("Response"))
         this.sizes.learnTooLarge(request);
@@ -183,6 +278,14 @@ export class Batcher {
       this.sizes.learn(request, response.bytes, response.data.length);
     }
     return response;
+  }
+
+  private async sendAlone(entry: Entry): Promise<void> {
+    try {
+      settle(entry, await this.direct(entry.request, { priority: entry.priority, signal: entry.signal }));
+    } catch (error) {
+      fail(entry, error);
+    }
   }
 
   /**
@@ -214,17 +317,15 @@ export class Batcher {
     return groups;
   }
 
-  private async sendGroup(group: Entry[]): Promise<void> {
-    const priority: Priority = group.some((e) => e.priority === "interactive") ? "interactive" : "background";
-    if (group.length === 1) {
-      const entry = group[0] as Entry;
-      try {
-        settle(entry, await this.direct(entry.request, { priority }));
-      } catch (error) {
-        fail(entry, error);
-      }
+  private async sendGroup(entries: Entry[]): Promise<void> {
+    // Queries every caller has aborted are not sent.
+    const group = entries.filter((entry) => !entry.signal.aborted);
+    if (group.length === 0) return;
+    if (group.length === 1 || !this.multiquery) {
+      await Promise.all(group.map((entry) => this.sendAlone(entry)));
       return;
     }
+    const priority: Priority = group.some((e) => e.priority === "interactive") ? "interactive" : "background";
 
     const names = group.map((_, i) => `q${i}`);
     const body = group
@@ -232,23 +333,52 @@ export class Batcher {
       .join("\n");
     let response: RawResponse;
     try {
-      response = await this.send("multiquery", body, { priority });
+      response = await this.send("multiquery", body, {
+        priority,
+        signal: allAborted(group.map((entry) => entry.signal)),
+        splits: (error) => group.some((entry) => halved(entry.request, error)),
+      });
     } catch (error) {
+      if (multiqueryRefused(error)) {
+        // From now on, every query goes alone.
+        this.multiquery = false;
+        await this.sendGroup(group);
+        return;
+      }
+      // Pages that time out are read again in halves by their callers; the other blocks go again.
+      const timedOut = group.filter((entry) => halved(entry.request, error));
+      if (timedOut.length > 0) {
+        for (const entry of timedOut) fail(entry, error);
+        const rest = group.filter((entry) => !timedOut.includes(entry));
+        if (rest.length > 0) await this.sendGroup(rest);
+        return;
+      }
       const splittable =
-        error instanceof PayloadTooLargeError || (error instanceof QueryError && error.status === 400);
+        error instanceof PayloadTooLargeError ||
+        error instanceof TierError ||
+        (error instanceof QueryError && error.status === 400);
       if (!splittable) {
         for (const entry of group) fail(entry, error);
         return;
       }
-      // Isolate the faulty block (400) or shrink the response (413): retry each half.
+      // Isolate the faulty block (400, 403 outside the tier) or shrink the response (413): retry each half.
       const middle = Math.ceil(group.length / 2);
       await Promise.all([this.sendGroup(group.slice(0, middle)), this.sendGroup(group.slice(middle))]);
       return;
     }
 
+    if (!Array.isArray(response.data)) {
+      // A proxy or a gateway answering with its own error, for example.
+      const error = new IGDBError(
+        `Multiquery response is not a list of blocks: ${JSON.stringify(response.data).slice(0, 100)}`,
+        { endpoint: "multiquery", query: body },
+      );
+      for (const entry of group) fail(entry, error);
+      return;
+    }
     const blocks = new Map<string, { result?: unknown[]; count?: number }>();
-    for (const block of (response.data as { name: string; result?: unknown[]; count?: number }[]) ?? []) {
-      blocks.set(block.name, block);
+    for (const block of response.data as ({ name?: unknown; result?: unknown[]; count?: number } | null)[]) {
+      if (typeof block?.name === "string") blocks.set(block.name, block);
     }
     // Each block's share of the response, in characters, scaled to the bytes of the whole response.
     const lengths = new Map<string, number>();
@@ -276,6 +406,20 @@ export class Batcher {
   }
 }
 
+/** The 403 of a proxy made with `igdbProxy({ multiquery: false })`. */
+function multiqueryRefused(error: unknown): boolean {
+  return (
+    error instanceof QueryError &&
+    error.status === 403 &&
+    error.details.some((detail) => detail.cause === MULTIQUERY_REFUSED)
+  );
+}
+
+/** A page whose caller reads it again in halves after this timeout, instead of having it retried. */
+function halved(request: QueryRequest, error: unknown): boolean {
+  return request.halvable !== undefined && pageTimedOut(error, request.halvable);
+}
+
 /** Bytes of `query <path> "q0" { <body> };` and its line break, as a block of a multiquery. */
 function blockBytes(request: QueryRequest): number {
   return new TextEncoder().encode(request.body).length + request.path.length + 18;
@@ -289,21 +433,16 @@ function fail(entry: Entry, error: unknown): void {
   entry.reject(error);
 }
 
-/** Lets one caller stop waiting on a shared request without cancelling it for the others. */
-function withSignal<T>(promise: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return promise;
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
+/** A signal that aborts once all of `signals` have: a multiquery goes on while one of its queries is wanted. */
+function allAborted(signals: AbortSignal[]): AbortSignal {
+  const controller = new AbortController();
+  let left = signals.length;
+  for (const signal of signals) {
+    const onAbort = () => {
+      if (--left === 0) controller.abort(signal.reason);
+    };
+    if (signal.aborted) onAbort();
+    else signal.addEventListener("abort", onAbort, { once: true });
+  }
+  return controller.signal;
 }

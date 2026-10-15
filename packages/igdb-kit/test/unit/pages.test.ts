@@ -1,10 +1,14 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { LocalLimiter, NetworkError, QueryError } from "../../src";
 import { Transport } from "../../src/core/transport";
-import { apicalypseError, type Call, mockFetch, testClient } from "./helpers";
+import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 /** Games 1..n whose names make each row about `bytes` long, answering id lists, cursors and limits. */
-function games(n: number, bytes = 30, refuse?: (call: Call, limit: number) => Response | undefined) {
+function games(
+  n: number,
+  bytes = 30,
+  refuse?: (call: Call, limit: number) => Response | Promise<Response> | undefined,
+) {
   const all = Array.from({ length: n }, (_, i) => ({ id: i + 1, name: "x".repeat(bytes) }));
   return mockFetch((call) => {
     const limit = Number(call.body.match(/limit (\d+);/)?.[1] ?? 10);
@@ -85,21 +89,58 @@ describe("pages sized in bytes", () => {
     expect(sent.slice(4).every((limit) => limit <= 63)).toBe(true);
   });
 
-  test("a page IGDB gave up building after 29 s (504) is halved, other 504s are not", async () => {
+  test("a page IGDB gave up building after 29 s (504) is halved at once, each half alone; other 504s are retried", async () => {
     const timedOut = games(300, 30, (_, limit) =>
       limit > 100 ? Response.json({ message: "Endpoint request timed out" }, { status: 504 }) : undefined,
     );
-    const igdb = testClient(timedOut.fetch, { retryTimeoutMs: 1 });
+    const igdb = testClient(timedOut.fetch);
     expect(await igdb.games.select("name").findByIds(range(1, 300))).toHaveLength(300);
+    // Each page once, with no retry, and no multiquery that would hold two halves.
+    expect(limits(timedOut.calls)).toEqual([300, 150, 150, 75, 75, 75, 75]);
+    expect(timedOut.calls.every((c) => c.url.endsWith("/games"))).toBe(true);
 
-    const outage = games(300, 30, () => new Response("<html>504 Gateway Time-out</html>", { status: 504 }));
-    const down = testClient(outage.fetch, { retryTimeoutMs: 1 });
-    const error = await down.games
-      .select("name")
+    const random = spyOn(Math, "random").mockReturnValue(0); // backoffs of 100 ms
+    try {
+      const outage = games(300, 30, () => new Response("<html>504 Gateway Time-out</html>", { status: 504 }));
+      const down = testClient(outage.fetch, { retryTimeoutMs: 300 });
+      const error = await down.games
+        .select("name")
+        .findByIds(range(1, 300))
+        .catch((e) => e);
+      expect(error).toBeInstanceOf(NetworkError);
+      expect(outage.calls.length).toBeGreaterThan(1);
+      expect(limits(outage.calls).every((limit) => limit === 300)).toBe(true);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  test("a page that gets no answer in time is halved at once, down to pages of 100 rows", async () => {
+    // Pages above 100 rows never get an answer.
+    const slow = games(1000, 30, (call, limit) => (limit > 100 ? noAnswer(call) : undefined));
+    const igdb = testClient(slow.fetch, { attemptTimeoutMs: 50 });
+    expect(await igdb.games.select("name").findByIds(range(1, 300))).toHaveLength(300);
+    expect(limits(slow.calls)).toEqual([300, 150, 150, 75, 75, 75, 75]);
+    expect(slow.calls.every((c) => c.url.endsWith("/games"))).toBe(true);
+
+    const before = slow.calls.length;
+    const seen: number[] = [];
+    for await (const game of igdb.games.select("name").iterate()) seen.push(game.id);
+    expect(seen).toEqual(range(1, 1000));
+    const sent = limits(slow.calls.slice(before));
+    expect(sent.slice(0, 4)).toEqual([500, 250, 125, 63]);
+    expect(sent.slice(4).every((limit) => limit <= 63)).toBe(true);
+
+    // With no answer at all, pages under 100 rows are not halved again.
+    const dead = games(300, 30, noAnswer);
+    const error = await testClient(dead.fetch, { attemptTimeoutMs: 50, retryTimeoutMs: 1 })
+      .games.select("name")
       .findByIds(range(1, 300))
       .catch((e) => e);
     expect(error).toBeInstanceOf(NetworkError);
-    expect(outage.calls).toHaveLength(1);
+    expect(error).toMatchObject({ timedOut: true });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(limits(dead.calls)).toEqual([300, 150, 150, 75, 75, 75, 75]);
   });
 
   test("iterate and sync refuse a sort other than the id", async () => {

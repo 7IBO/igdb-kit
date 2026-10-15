@@ -65,6 +65,54 @@ export function serializeResponse(response: RawResponse): string {
   return JSON.stringify({ data: response.data, total: response.total, bytes: response.bytes });
 }
 
-export function parseResponse(value: string): RawResponse {
-  return JSON.parse(value) as RawResponse;
+/** A cached response, or undefined for a value that is not one (cut short, or written by something else). */
+export function parseResponse(value: string): RawResponse | undefined {
+  try {
+    const response: unknown = JSON.parse(value);
+    return typeof response === "object" && response !== null && "data" in response
+      ? (response as RawResponse)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** How long a read from the cache store may take before the query goes to IGDB. */
+const READ_TIMEOUT_MS = 1_000;
+
+/**
+ * The value cached under `key`, or undefined when the store has none, fails or takes more than a
+ * second: the query then goes to IGDB. Rejects only when `signal` aborts.
+ */
+export function readCache(
+  store: CacheStore,
+  key: string,
+  signal: AbortSignal | undefined,
+): Promise<string | undefined> {
+  if (signal?.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", onAbort);
+    };
+    const onAbort = () => {
+      finish();
+      reject(signal?.reason);
+    };
+    const timer = setTimeout(() => {
+      finish();
+      resolve(undefined);
+    }, READ_TIMEOUT_MS);
+    signal?.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve()
+      .then(() => store.get(key))
+      .then(
+        (value) => (typeof value === "string" ? value : undefined),
+        () => undefined,
+      )
+      .then((value) => {
+        finish();
+        resolve(value);
+      });
+  });
 }
