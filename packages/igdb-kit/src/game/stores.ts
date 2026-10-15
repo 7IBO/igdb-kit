@@ -51,6 +51,9 @@ export interface StoreId {
   id: string;
 }
 
+/** What {@link parseStoreUrl} reads from an address: a store's product, or a game's page on igdb.com. */
+export type StoreUrlId = StoreId | { store: "igdb"; kind: "slug"; id: string };
+
 /** Fields of `websites` that {@link storeLinks} reads when `websites` is selected. */
 export type WebsiteFields = "websites.url" | "websites.trusted";
 /** Fields of `external_games` that {@link storeLinks} reads when `external_games` is selected. */
@@ -173,8 +176,16 @@ const amazonDomains: Record<number, string> = {
   356: "amazon.in",
 };
 
-/** The store a URL belongs to, from its host; null for anything else. */
+/**
+ * The store a URL belongs to, from its host; null for anything else. An address without its
+ * `https://` is read too.
+ */
 export function storeOf(url: string): Store | null {
+  return storeAt(withScheme(url));
+}
+
+// storeOf() for a full URL only: storeLinks() and localizeStoreUrl() leave the others alone.
+function storeAt(url: string): Store | null {
   const host = hostOf(url);
   if (!host) return null;
   for (const [store, def] of Object.entries(stores) as [Store, StoreDef][]) {
@@ -183,12 +194,19 @@ export function storeOf(url: string): Store | null {
   return null;
 }
 
+/** A pasted address with its `https://`, which `new URL()` needs. */
+function withScheme(url: string): string {
+  const trimmed = url.trim();
+  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
 /**
  * The id an address names, for a pasted link or a stored one: a store's product, or a game's page
  * on igdb.com, whose slug `games.slug` holds. Every address of one product gives the same id
- * (locale, slug, trailing slash, case), so it can key stored links. An address without its
- * `https://` is read too. Null for an address without an id (Nintendo, itch.io, a store's home page;
- * `storeOf()` still names its store) and for any other site.
+ * (locale, slug, trailing slash, case). An Amazon id is the ASIN, the same on every country's site,
+ * where `storeLinks()` keeps a link per site. An address without its `https://` is read too. Null
+ * for an address without an id (Nintendo, itch.io, a store's home page; `storeOf()` still names its
+ * store) and for any other site.
  *
  * The id of a Steam app, a Microsoft Store product or a PlayStation Store concept is the uid IGDB
  * stores, which `findByExternalIds()` takes and `externalIds()` reads into the same `storeId`. GOG
@@ -203,14 +221,13 @@ export function storeOf(url: string): Store | null {
  * // { store: "igdb", kind: "slug", id: "the-witcher-3-wild-hunt" }
  * ```
  */
-export function parseStoreUrl(url: string): StoreId | { store: "igdb"; kind: "slug"; id: string } | null {
-  const trimmed = url.trim();
-  const address = /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+export function parseStoreUrl(url: string): StoreUrlId | null {
+  const address = withScheme(url);
   if (/^(www\.)?igdb\.com$/.test(hostOf(address) ?? "")) {
     const slug = /^\/games\/([^/?#]+)/.exec(new URL(address).pathname)?.[1];
     return slug ? { store: "igdb", kind: "slug", id: slug.toLowerCase() } : null;
   }
-  const store = storeOf(address);
+  const store = storeAt(address);
   if (!store) return null;
   const { key, kind } = stores[store];
   const id = key?.exec(address)?.[1];
@@ -234,7 +251,8 @@ export function toStoreId(store: Store, kind: StoreIdKind, id: string): StoreId 
  * Steam, Google Play and single-country Amazon products. Links from `websites` come first, trusted
  * ones before the others (IGDB never marks Xbox, PlayStation and Nintendo links as trusted).
  * Links to the Xbox 360 Marketplace, closed in 2024, are left out (its ids are in `externalIds()`);
- * Kartridge and Utomik links are kept, as IGDB still lists them: `stores` leaves them out.
+ * Kartridge and Utomik links are kept, as IGDB still lists them: to leave them out, list the stores
+ * you want in `stores`.
  *
  * ```ts
  * const game = await igdb.games.select("websites.url", "websites.trusted").findByIdOrThrow(1942);
@@ -278,7 +296,7 @@ export function storeLinks<G extends object>(
   const countryCode = country === null ? undefined : numericCountry(country);
   const links = new Map<string, StoreLink>();
   for (const candidate of candidates) {
-    const store = storeOf(candidate.url);
+    const store = storeAt(candidate.url);
     if (!store || (options.stores && !options.stores.includes(store))) continue;
     if (countryCode !== undefined && candidate.countries && !candidate.countries.includes(countryCode))
       continue;
@@ -327,7 +345,7 @@ const otherLanguages: Record<string, readonly string[]> = {
  * 99.5% of IGDB's PlayStation links and 99.3% of its Xbox links are in `en-us`.
  */
 export function localizeStoreUrl(url: string, locale: Locale): string {
-  const store = storeOf(url);
+  const store = storeAt(url);
   if (store !== "playstation" && store !== "xbox" && store !== "epic" && store !== "gog") return url;
   const { language, script, country } = resolveLocale(locale);
   const parsed = new URL(url);

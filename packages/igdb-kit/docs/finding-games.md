@@ -56,7 +56,7 @@ const id = parseStoreUrl(input); // "store.steampowered.com/app/292030/The_Witch
 if (id?.store === "steam") await igdb.games.select("name").findByExternalIds(ExternalGameSource.Steam, [id.id]);
 ```
 
-A Microsoft Store product (`store: "xbox"`, `kind: "product"`) is a `Microsoft` id, and a PlayStation concept a `PlaystationStoreUS` one. An Xbox 360 game's uuid is under `XboxMarketplace` as it is, and under `Microsoft` after `"xbox360"`: look it up in both, two `findByExternalIds()` in one `batch()`.
+A PlayStation concept is a `PlaystationStoreUS` id; IGDB has no PlayStation product ids. A Microsoft Store product (`store: "xbox"`, `kind: "product"`) is a `Microsoft` id, or for some games, Hollow Knight: Silksong among them, only an `XboxGamePassUltimateCloud` one. An Xbox 360 game's uuid is under `XboxMarketplace` as it is, and under `Microsoft` after `"xbox360"`. Look an Xbox id up in both of its sources, two `findByExternalIds()` in one `batch()`.
 
 ## By title: games.match()
 

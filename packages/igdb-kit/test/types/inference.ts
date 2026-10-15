@@ -583,6 +583,7 @@ import {
   type resolveLocale,
   type Store,
   type StoreId,
+  type StoreUrlId,
   storeLinks,
   type storeOf,
   supportsLanguage,
@@ -628,6 +629,7 @@ releaseDate(page, { statuses: ReleaseDateStatus.FullRelease });
 releaseDate(page, { statuses: ["released"] });
 expectType<Equal<ReturnType<typeof storeOf>, Store | null>>();
 const storeUrl = parseStoreUrl("store.steampowered.com/app/292030");
+expectType<Equal<typeof storeUrl, StoreUrlId | null>>();
 if (storeUrl?.store === "igdb") expectType<Equal<typeof storeUrl.kind, "slug">>();
 else if (storeUrl) expectType<Equal<typeof storeUrl, StoreId>>();
 expectType<Equal<StoreId["kind"], "app" | "product" | "concept" | "xbox360_product" | "slug" | "id">>();

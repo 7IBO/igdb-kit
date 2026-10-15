@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   AgeRatingOrganization,
+  ExternalGameSource,
   GameReleaseFormat,
   Language,
   LanguageSupportType,
@@ -399,6 +400,16 @@ describe("storeLinks()", () => {
     expect(storeOf("https://www.thewitcher.com")).toBeNull();
     expect(storeOf("not a url")).toBeNull();
   });
+
+  test("storeOf() reads a pasted address without its https://, storeLinks() only full URLs", () => {
+    // parseStoreUrl() finds no id in it: storeOf() still names the store.
+    expect(storeOf("www.nintendo.com/us/store/products/hollow-knight-silksong-switch")).toBe("nintendo");
+    expect(storeOf(" store.steampowered.com/app/292030 ")).toBe("steam");
+    expect(storeOf("www.thewitcher.com")).toBeNull();
+    const pasted = "store.playstation.com/en-us/concept/10005908";
+    expect(storeLinks({ websites: [{ url: pasted, trusted: false }] })).toEqual([]);
+    expect(localizeStoreUrl(pasted, "fr-FR")).toBe(pasted);
+  });
 });
 
 describe("parseStoreUrl()", () => {
@@ -455,11 +466,15 @@ describe("parseStoreUrl()", () => {
       kind: "app",
       id: "com.miHoYo.GenshinImpact",
     });
-    expect(parseStoreUrl("https://www.amazon.fr/dp/B09WZ6F8P5?th=1")).toEqual({
-      store: "amazon",
-      kind: "product",
-      id: "B09WZ6F8P5",
-    });
+    // An ASIN is the same on every country's site, where storeLinks() keeps a link per site: GTA V
+    // has one on amazon.fr, amazon.es and amazon.it.
+    const amazon = (gta5.external_games ?? []).flatMap((row) =>
+      row.url?.includes("amazon.") ? [row.url] : [],
+    );
+    expect(storeLinks({ websites: amazon.map((url) => ({ url, trusted: false })) })).toHaveLength(3);
+    expect([...amazon, "https://www.amazon.fr/dp/B09WZ6F8P5?th=1"].map(parseStoreUrl)).toEqual(
+      Array(4).fill({ store: "amazon", kind: "product", id: "B09WZ6F8P5" }),
+    );
     expect(parseStoreUrl("https://www.igdb.com/games/the-witcher-3-wild-hunt/presskit")).toEqual({
       store: "igdb",
       kind: "slug",
@@ -495,6 +510,13 @@ describe("parseStoreUrl()", () => {
     // The Xbox 360 Marketplace is closed: its addresses are not store links.
     for (const e of ids)
       expect(parseStoreUrl(e.url ?? "")).toEqual(e.storeId?.kind === "xbox360_product" ? null : e.storeId);
+    // Silksong's Microsoft Store id is only under XboxGamePassUltimateCloud.
+    expect(externalIds(fixtures.silksong, ExternalGameSource.Microsoft)).toEqual([]);
+    expect(externalIds(fixtures.silksong, ExternalGameSource.XboxGamePassUltimateCloud)[0]?.storeId).toEqual({
+      store: "xbox",
+      kind: "product",
+      id: "9N116V0599HB",
+    });
   });
 });
 

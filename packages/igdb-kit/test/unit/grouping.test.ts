@@ -308,7 +308,8 @@ describe("externalIds() and externalId()", () => {
       { store: "epic", kind: "id", id: "acc319019e974ec9a4af28530141d888" },
       { store: "xbox", kind: "product", id: "9N7TFFRRZCC9" },
       { store: "xbox", kind: "xbox360_product", id: "66acd000-77fe-1000-9115-d8024a5707d2" },
-      { store: "playstation", kind: "product", id: "EP1805-PPSA12544_00-HKSILKSONGPS5000" },
+      // IGDB's PlayStation ids are concept ids, never product ids.
+      null,
       null,
       null,
       null,

@@ -117,6 +117,7 @@ export {
   type StoreIdKind,
   type StoreLink,
   type StoreLinksOptions,
+  type StoreUrlId,
   storeLinks,
   storeOf,
   type WebsiteFields,

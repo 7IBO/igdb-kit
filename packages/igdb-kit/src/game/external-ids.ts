@@ -31,8 +31,8 @@ export interface ExternalId {
    * The store id `uid` holds, written as `parseStoreUrl()` writes it: a Steam app, a GOG product, a
    * Microsoft Store product (also under `XboxGamePassUltimateCloud`), an Xbox 360 Marketplace product
    * (under `XboxMarketplace`, or under `Microsoft` after `"xbox360"`), an Epic id or a PlayStation
-   * Store concept or product. Null for the other sources and for a uid of another form, such as the
-   * dashed uuids of 1,419 Epic ids, which go with its older www.epicgames.com/store links.
+   * Store concept. Null for the other sources and for a uid of another form, such as the dashed
+   * uuids of 1,419 Epic ids, which go with its older www.epicgames.com/store links.
    */
   storeId: StoreId | null;
 }
@@ -50,10 +50,7 @@ const storeIdForms: Record<number, [RegExp, Store, StoreIdKind][]> = {
   [ExternalGameSource.XboxGamePassUltimateCloud]: [[/^([0-9a-z]{12})$/i, "xbox", "product"]],
   [ExternalGameSource.XboxMarketplace]: [[new RegExp(`^(${uuid})$`, "i"), "xbox", "xbox360_product"]],
   [ExternalGameSource.EpicGamesStore]: [[/^([0-9a-f]{32})$/i, "epic", "id"]],
-  [ExternalGameSource.PlaystationStoreUS]: [
-    [/^(\d+)$/, "playstation", "concept"],
-    [/^([a-z]{2}\d{4}-[a-z]{4}\d{5}_\d{2}-[0-9a-z]{16})$/i, "playstation", "product"],
-  ],
+  [ExternalGameSource.PlaystationStoreUS]: [[/^(\d+)$/, "playstation", "concept"]],
 };
 
 function storeIdOf(source: number, uid: string): StoreId | null {
