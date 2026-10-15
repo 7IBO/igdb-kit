@@ -105,8 +105,9 @@ export async function findByGames<R>(
  *
  * Ids are sent 500 per query, and the first pages go out together so batching packs them into
  * multiqueries. Pages hold 500 rows, fewer when the selected rows are heavy. A query that fills its
- * page is counted, then split into smaller id lists sized from the count and read in parallel; a
- * single game with more rows than a page is read with an id cursor. A page IGDB finds too heavy is
+ * page is counted, from IGDB's `x-count` when the page went out alone, else with a count request,
+ * then split into smaller id lists sized from the count and read in parallel; a single game with
+ * more rows than a page is read with an id cursor. A page IGDB finds too heavy is
  * split in two by its ids, or read with smaller pages for a single game.
  */
 export async function findByLink<R>(
@@ -165,12 +166,15 @@ export async function findByLink<R>(
 
   const load = async (chunk: number[]): Promise<void> => {
     let first: Row[];
+    let counted: number | undefined;
     try {
-      first = (await filtered(chunk)
+      const page = await filtered(chunk)
         .where("id > -1")
         .limit(rows)
         .with({ expectedRows: Math.min(rows, chunk.length * 4) })
-        .execute(options)) as Row[];
+        .rowsAndTotal(options);
+      first = page.rows as Row[];
+      counted = page.total;
     } catch (error) {
       if (!tooHeavy(error)) throw error;
       if (chunk.length > 1) {
@@ -185,7 +189,7 @@ export async function findByLink<R>(
     if (first.length < rows) return;
     if (chunk.length > 1) {
       // Too many rows for one page: split the ids so each part should fit in one.
-      const total = await filtered(chunk).count().execute(options);
+      const total = counted ?? (await filtered(chunk).count().execute(options));
       const size = Math.max(1, Math.floor((rows * 0.8 * chunk.length) / Math.max(total, 1)));
       if (size < chunk.length) {
         const parts: number[][] = [];

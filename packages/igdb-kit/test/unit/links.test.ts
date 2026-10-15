@@ -45,6 +45,10 @@ function fakeIgdb(tables: Record<string, Row[]>) {
   });
 }
 
+/** Blocks of each request: a multiquery's, or 1. */
+const blocksOf = (calls: Call[]) =>
+  calls.map((c) => (c.url.endsWith("multiquery") ? c.body.split("\n").length : 1));
+
 const releaseDates: Row[] = [
   { id: 1, game: 10, date: 300, platform: 6 },
   { id: 2, game: 10, date: 100, platform: 48 },
@@ -252,9 +256,34 @@ describe("findByGames()", () => {
     const byGame = await igdb.language_supports.findByGames(ids);
     expect([...byGame.values()].every((group) => group.length === 30)).toBe(true);
     expect(new Set([...byGame.values()].flat().map((r) => r.id)).size).toBe(3000);
-    // First page, count, then 8 parts of 13 games (~390 rows each) read in parallel, in multiqueries.
-    const blocks = mock.calls.map((c) => (c.url.endsWith("multiquery") ? c.body.split("\n").length : 1));
-    expect(blocks).toEqual([1, 1, 8]);
+    // First page, whose x-count gives the count, then 8 parts of 13 games (~390 rows each) read in
+    // parallel, in multiqueries.
+    expect(blocksOf(mock.calls)).toEqual([1, 8]);
+  });
+
+  test("counts with a request when the first page has no x-count", async () => {
+    const rows = Array.from({ length: 3000 }, (_, i) => ({ id: i + 1, game: (i % 100) + 1 }));
+    const fake = fakeIgdb({ language_supports: rows });
+    // A proxy, or a cache entry, without the header.
+    const bare = mockFetch(async (call) => {
+      const response = await fake.fetch(call.url, { method: "POST", body: call.body });
+      return Response.json(await response.json());
+    });
+    const ids = Array.from({ length: 100 }, (_, i) => i + 1);
+    const byGame = await testClient(bare.fetch).language_supports.findByGames(ids);
+    expect(new Set([...byGame.values()].flat().map((r) => r.id)).size).toBe(3000);
+    expect(blocksOf(bare.calls)).toEqual([1, 1, 8]);
+
+    // First pages packed into a multiquery have no x-count either.
+    const mock = fakeIgdb({ language_supports: rows });
+    const igdb = testClient(mock.fetch);
+    const [a, b] = await Promise.all([
+      igdb.language_supports.findByGames(ids.slice(0, 50)),
+      igdb.language_supports.findByGames(ids.slice(50)),
+    ]);
+    expect(new Set([...a.values(), ...b.values()].flat().map((r) => r.id)).size).toBe(3000);
+    expect(mock.calls[0]?.body.split("\n")).toHaveLength(2);
+    expect(mock.calls[1]?.body).toContain("language_supports/count");
   });
 
   test("sends ids 500 per query, together", async () => {

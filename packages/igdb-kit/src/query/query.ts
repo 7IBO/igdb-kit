@@ -511,6 +511,15 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   }
 
   /**
+   * @internal The rows, with the `x-count` total when the response has it: a query sent alone does,
+   * a block of a multiquery does not. Batched like `execute()`, unlike `withCount()`.
+   */
+  async rowsAndTotal(options?: ExecuteOptions): Promise<{ rows: R[]; total: number | undefined }> {
+    const response = await this.runner.run(this.toRequest(), options);
+    return { rows: this.parse(response), total: response.total };
+  }
+
+  /**
    * Iterates over every match with an id cursor (`where id > last; sort id asc`), `pageSize` (1 to
    * 500, default 500) at a time, fewer when the selected rows are heavy. Stable even if entities are
    * added meanwhile, and fast at any depth unlike `offset`.
