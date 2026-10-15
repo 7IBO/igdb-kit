@@ -516,12 +516,19 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    * added meanwhile, and fast at any depth unlike `offset`.
    */
   async *iterate(options: ExecuteOptions & { pageSize?: number } = {}): AsyncGenerator<R, void, undefined> {
+    for await (const page of this.iteratePages(options)) yield* page;
+  }
+
+  /** @internal `iterate()`, a page at a time. */
+  async *iteratePages(
+    options: ExecuteOptions & { pageSize?: number } = {},
+  ): AsyncGenerator<R[], void, undefined> {
     this.idOrder("iterate()");
     const { pageSize = MAX_LIMIT } = options;
     if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_LIMIT) {
       throw new QueryError(`pageSize must be an integer between 1 and ${MAX_LIMIT}, got ${pageSize}`);
     }
-    for await (const page of this.cursorPages(options)) yield* page;
+    yield* this.cursorPages(options);
   }
 
   /**

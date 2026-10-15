@@ -150,4 +150,4 @@ await igdb.games.select("name").catch(() => []);         // a query is a promise
 
 `findByIds()`, `iterate()` and `sync()` size their pages by weight: 500 rows of a light selection, fewer of a heavy one, so that a page stays near `maxBatchBytes` (4 MB). A game with its media, companies, release dates and websites expanded weighs about 20 KB, so such pages hold about 200 games. The weight of a row starts from a cautious guess and is learned from each response. A page IGDB refuses for its size (above 10 MB, or not built within 29 seconds) is asked again in halves.
 
-`iterate({ pageSize })` caps the page at 1 to 500 rows. `iterate()` and `sync()` read in id order and throw on any other `sort()`: sort the rows once read. A query with your own `limit` is never split: lower its `limit` if IGDB answers that the response is too large.
+`iterate({ pageSize })` caps the page at 1 to 500 rows. `iterate()` and `sync()` read in id order and throw on any other `sort()`: sort the rows once read. A [view](linked-data.md#views) has `iterate()` too. A query with your own `limit` is never split: lower its `limit` if IGDB answers that the response is too large.

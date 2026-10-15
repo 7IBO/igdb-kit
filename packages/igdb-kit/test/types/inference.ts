@@ -505,6 +505,8 @@ expectType<Equal<Awaited<ReturnType<typeof gamePage.findById>>, GamePage | null>
 expectType<Equal<Awaited<ReturnType<typeof gamePage.findByIds>>, GamePage[]>>();
 expectType<Equal<Awaited<ReturnType<ReturnType<typeof gamePage.where>["limit"]>>, GamePage[]>>();
 expectType<Equal<ResultOf<typeof gamePage>, GamePage>>();
+for await (const game of gamePage.where((g) => g.rating.gte(90)).iterate({ pageSize: 100 }))
+  expectType<Equal<typeof game, GamePage>>();
 gamePage.where((g) => g.rating.gte(90)).sort("rating", "desc");
 gamePage.search("zelda");
 gamePage.where((g) => g.developedBy("Nintendo"));

@@ -115,6 +115,21 @@ export class View<R, W extends ViewLinks> implements PromiseLike<ViewRow<R, W>[]
     });
   }
 
+  /**
+   * Iterates over every game matching the view's `where` with its linked rows, as `Query.iterate`:
+   * in id order, a page of games (`pageSize`, 1 to 500), then the linked rows of the whole page at
+   * once.
+   */
+  async *iterate(
+    options: ExecuteOptions & { pageSize?: number } = {},
+  ): AsyncGenerator<ViewRow<R, W>, void, undefined> {
+    const { pageSize: _, ...execute } = options;
+    for await (const games of this.base.iteratePages(options)) {
+      const ids = games.map((game) => (game as { id: number }).id);
+      yield* this.attach(games, await this.load(ids, { ...execute, batch: true }));
+    }
+  }
+
   async execute(options?: ExecuteOptions): Promise<ViewRow<R, W>[]> {
     const batched = { ...options, batch: true };
     const games = await this.base.execute(batched);

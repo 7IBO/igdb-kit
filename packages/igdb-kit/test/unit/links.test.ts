@@ -380,6 +380,31 @@ describe("defineView()", () => {
     expect((await view(igdb).first())?.id).toBe(10);
   });
 
+  test("iterate() reads every game in id order, then the links of each page at once", async () => {
+    const mock = fakeIgdb(tables);
+    const igdb = testClient(mock.fetch);
+    const seen: [number, number, number][] = [];
+    for await (const game of view(igdb).iterate({ pageSize: 1 })) {
+      seen.push([game.id, game.timeToBeat.length, game.characters.length]);
+    }
+    expect(seen).toEqual([
+      [10, 1, 2],
+      [20, 0, 1],
+    ]);
+    // A page of games, then its links in one multiquery; the last page comes back empty.
+    expect(mock.calls.map((c) => c.url.split("/").pop())).toEqual([
+      "games",
+      "multiquery",
+      "games",
+      "multiquery",
+      "games",
+    ]);
+    expect(mock.calls[0]?.body).toBe("fields name,id; where id > -1; sort id asc; limit 1;");
+    await expect(view(igdb).sort("name").iterate().next()).rejects.toThrow(/id order/);
+    await expect(view(igdb).search("witcher").iterate().next()).rejects.toThrow(/search/);
+    await expect(view(igdb).iterate({ pageSize: 0 }).next()).rejects.toThrow(QueryError);
+  });
+
   test("count() counts the games, and withCount() adds their links to the page", async () => {
     const mock = fakeIgdb(tables);
     const igdb = testClient(mock.fetch);

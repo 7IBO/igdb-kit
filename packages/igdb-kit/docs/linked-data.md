@@ -87,9 +87,12 @@ const top = await gamePage.where((g) => g.rating.gte(90)).sort("rating", "desc")
 const found = await gamePage.search("zelda").limit(5);
 const { data, total } = await gamePage.where((g) => g.developedBy("Nintendo")).limit(20).withCount();
 const count = await gamePage.where((g) => g.rating.gte(90)).count(); // games only, one request
+for await (const game of gamePage.where((g) => g.rating.gte(90)).iterate()) {
+  // every game, in id order: a page of games, then the links of the whole page at once
+}
 ```
 
-Like a query, a view sends nothing before it is awaited, and neither do `findById()`, `findByIds()`, `first()` and `withCount()`: pass `signal` or `priority` to their `execute()`.
+Like a query, a view sends nothing before it is awaited, and neither do `findById()`, `findByIds()`, `first()` and `withCount()`: pass `signal` or `priority` to their `execute()`. `iterate()` takes them among its options, with `pageSize`, as `Query.iterate()` does.
 
 `findById()` and `findByIds()` send the games and the linked queries together: a game with 6 links costs one multiquery (22 KB for The Witcher 3). `findByIds()` returns each game once, in the order given. A list or a search needs the game ids first, so it takes one more request; a `search` is always sent alone. A key can't hide a game field, so name the link to `collection_memberships` `memberships`, not `collections`.
 
