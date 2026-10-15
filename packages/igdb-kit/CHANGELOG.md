@@ -1,5 +1,78 @@
 # igdb-kit
 
+## 0.8.0
+
+### Minor Changes
+
+- 097ef16: `alternativeTitles()` gives the language each name is written in, for apps that store the titles of every language: `locale` follows the rules of `localizedName()`, so it is null for a romanization, a "Russian title" in Latin letters, kana in a "Chinese title" or a "Portuguese title - translated" in English, and a name marked "original" keeps it ("BIOHAZARD" is `ja`). `inScript` says whether the name has a letter of its language's script (Han without kana for Chinese), null when the comment names no language. The script is only checked for the languages not written in Latin letters (Japanese, Chinese, Korean, the Cyrillic ones, Greek, Hebrew, Arabic, Persian, Thai, Hindi): for the others, `inScript` is true and `locale` follows the comment. `localizedName()` now reads names through this rule, which does not change the names it picks.
+- bdd92a5: `releaseDate()`, `releasesByPlatform()` and `regionalReleases()` leave out Offline and Cancelled release dates, as `releases()` and `g.releasedIn()` do: a game page no longer shows a release date for a game that never came out, nor a platform or region it was cancelled on. `statuses` still picks statuses, and `statuses: "all"`, new in these three helpers, keeps every date, Offline and Cancelled ranked last.
+  
+  Breaking changes:
+  
+  - `releaseDate()` returns `null` for a game, or a platform, whose dates are all cancelled or offline, and `releasesByPlatform()` and `regionalReleases()` leave out such platforms and regions. Pass `statuses: "all"` to get them back.
+  - With a `locale` or `region`, a cancelled or offline date of that region, or a worldwide one, no longer hides a release in another region: `releaseDate()` returns that release with `match: "other_region"` (or `null` with `fallback: false`), where it returned the cancelled or offline date with `match: "exact"` or `"worldwide"`. `releasesByPlatform()` does the same for each platform.
+- 777b766: `findByIds()`, on a query or a view, returns one row per id, where the id first appears in the list. Ids gathered from many rows, such as the covers or websites of a set of games, often repeat, and the repeated rows made an upsert such as PostgreSQL's `INSERT ... ON CONFLICT` fail.
+  
+  `sync({ ids })` reads only the rows with these ids, each once, page by page: for tables without `updated_at`, such as covers, websites and alternative names, it reads the rows the changed games point to without holding them all, where `findByIds()` returns them in one array. The first page goes alone and tells what a row weighs; then up to `concurrency` pages, about 64 MB, are requested or waiting at once.
+  
+  Breaking changes:
+  
+  - `findByIds([7, 7])` returned the row of 7 twice; it now returns it once. Code that matched results to ids by position already failed whenever an id was missing: key the rows by `id`.
+- 53a749a: `formatPlaytime()` is typed as returning `string | null` whatever its input, as it behaves: 0, a negative number and `NaN` give `null`, and IGDB stores 0 for a time not filled in.
+  
+  Breaking changes, in types only:
+  
+  - `formatPlaytime(seconds)` with a `number` was typed `string`. Give a fallback where a string is needed: `formatPlaytime(time.seconds) ?? "—"`.
+- 53a749a: `gameKind(game)` in `igdb-kit/game` says what a game is, for a badge or to sort a list: `"main_game"`, `"bundle"`, `"edition"`, or the relation `parentGame()` names from `game_type` (`"dlc"`, `"expansion"`, `"remake"`, `"port"`…, and `"other"` for a type added to IGDB after this version or a missing `game_type`), main games and bundles included, where `parentGame()` returns null. It reads `game_type` and `version_parent`, which `gameKindFields()` selects. An edition is an `"edition"` whatever its `game_type`, as in `parentGame()`, so the Gold, GOTY and Complete editions IGDB types as bundles are editions.
+- 53a749a: Each helper of `igdb-kit/game` has a list of the fields it reads, to spread into `select()`, as `relatedGameFields()` had: `igdb.games.select("name", ...releaseDateFields(), ...companyFields("name"), ...storeLinkFields())`. A list holds everything its helper reads, where the compile-time check only asks for what the helper cannot do without: `localizedName()` compiles with `name` alone and then always returns it, and `storeLinks()` with `websites` alone misses the store pages of `external_games`.
+  
+  - For games: `releaseDateFields()`, `companyFields(...fields)`, `storeLinkFields()`, `externalIdFields()`, `websiteLinkFields()`, `videoLinkFields()`, `ageRatingFields()`, `localizedNameFields()`, `localizedCoverFields()`, `alternativeNameFields()`, `languageFields(...fields)`, `parentGameFields(...fields)`, `franchiseFields(...fields)`, `multiplayerFields()` and `bestImageFields()`.
+  - `timeToBeatFields()` for `game_time_to_beats`, `eventTimeFields()` for `events` and `platformVersionFields(...fields)` for `platforms`.
+  - The fields you name go on the rows the helper returns as selected: `companyFields("name")` selects `involved_companies.company.name`, `languageFields("native_name")` `language_supports.language.native_name`, and `companyFields()` the companies as ids.
+  - `releaseDateFields()` and `platformVersionFields()` include IGDB's English label, `human`, and `ageRatingFields()` the label of the rating category, for a category added to IGDB after this version.
+  
+  The docs say that `age_ratings.*` alone is not enough for `ageRating()`, which reads the content descriptors as text.
+  
+  Breaking changes, in types only:
+  
+  - `relatedGameFields(...fields)` with a `string[]` that may be empty no longer compiles, as with `companyFields()`, `languageFields()`, `parentGameFields()` and `franchiseFields()`: empty, it selects the related games as ids, where its type said objects with these fields. Call `relatedGameFields()` for ids, or name the fields, one by one or as a tuple.
+- 097ef16: `games.match()` and `searchAll()` keep the voicing marks of kana: "パズルボブル" and "バズルボブル" both scored 1 for either title, and "ポケモン" was read as the two words "ホ ケモン", so "ケモン" ranked it as a word start. Korean titles are now compared by syllable, and Arabic letters with a hamza are no longer split, which moves the scores of titles that only resemble each other.
+- 097ef16: Latin American Spanish follows `resolveLocale()` everywhere: `localizeStoreUrl()` and `storeLinks({ locale })` give Epic's `es-MX` pages to `es-419`, `es-US` and Paraguay, which got Spain's, and Spain's pages to the Canary Islands, Ceuta and Melilla and Equatorial Guinea, which got `es-MX`. `localizedName()` picks a "Latin America title" before a "Spanish title" for `es-MX`, `es-AR`, `es-US` and the other locales of Latin American Spanish, as it did for `es-419`.
+- 53a749a: The docs say what `localization(game, locale)` returns: the game's `game_localizations` row for the locale, as selected, or `null`, without the fallbacks of `localizedName()`. They said it returned `{ name, source, language, variant }`, as `localizedName()` does.
+- 53a749a: The helpers of `igdb-kit/game` take one row and no longer compile with an array, which they read as a row without the fields: `playtimes(byGame.get(1942))` with the rows `findByGames()` or a view's `with` give for a game returned `null`, and `gameKind(games)` with a list of games `"other"`.
+  
+  Breaking changes, in types only:
+  
+  - A helper called with an array, and `Requires<T, P>` with an array `T`, no longer compile. Pass one row: `playtimes(byGame.get(1942)?.[0])`.
+- 53a749a: `playtimes(row)` in `igdb-kit/game` returns the three averages of a `game_time_to_beats` row at once, `{ hastily, normally, completely, count }`, for a game page that shows the main story, with extras and 100% times side by side. A time IGDB has not filled in (missing or 0) is `null`, and a row without any time gives `null`, as with `timeToBeat()`.
+- 777b766: `popular()` and `weightedPopular()` take `incomplete: "throw"`, which throws a `QueryError` when reading stopped at `maxRows` before the page was complete, instead of returning a shorter list, or for `weightedPopular()` a top that a game not read could still enter. For `popular()`, this only happens when the `where` matches more than 10,000 games, and the message says how many games were found. `weightedPopular()` can also stop at `maxRows` without a `where`, when a game ranks high in several types without leading any of them, and the message says how many rows of each type were read. The default, `"partial"`, still returns the best found.
+  
+  A page deeper than `maxRows`, such as `igdb.games.limit(20).offset(5000).popular(type)`, came back empty: the rows up to the page are now read.
+  
+  Breaking changes:
+  
+  - `popular()` took any `maxRows`; it now throws a `QueryError` unless `maxRows` is a positive integer, as `weightedPopular()` does. `maxRows: Infinity`, which read until the page was complete, becomes a number above the rows of the type, such as `1_000_000`. `0`, a negative number or `NaN` returned an empty list.
+- 777b766: `igdb.raw(path, body, { withCount: true })` returns `{ data, total }`, with IGDB's `x-count` header as `total` (`null` when IGDB sends none, as for a count), which `raw()` dropped: the matches of a hand-written query whatever its `limit`, without a second request to `/count`. Without the option, `raw()` still returns the data alone.
+- bdd92a5: `formatReleaseDate()` takes a date stored with its precision, `{ date, precision }`, with `date` as a `Date`, a `"YYYY-MM-DD"` or ISO string, or Unix seconds, such as IGDB's `release_dates.date`. `start` takes them too, so a `releaseDate()` result that went through JSON works. The year and quarter are read from the date when they are missing, where a quarter came out as "Q1 undefined" without them, and as Q1 with `quarter: null`. A locale with an underscore, such as `"pt_BR"`, no longer throws a `RangeError` for a day, month or year.
+  
+  Behavior change: dates are written in the Gregorian calendar, as IGDB's are, whatever the locale's calendar. A Thai page shows "19 พ.ย. 2026" next to "Q4 2026", where days, months and years showed the Buddhist year 2569, and a Persian page shows 2026, where a year-precision release of 2026 came out as 1404.
+- 777b766: `searchAll()` takes `where: { game: (g) => ... }`, which filters game hits with the typed builder of `where()`, on paths relative to the game: `where: { game: (g) => g.platforms.named("Switch") }`. The filter applies to the alternative and localized titles too, and names are looked up as in `where()`.
+- 0c5b22b: Store ids in one form, whether they come from an address or from IGDB:
+  
+  - `parseStoreUrl(url)` in `igdb-kit/game` reads a store or igdb.com address, pasted or stored, into `{ store, kind, id }`: `{ store: "steam", kind: "app", id: "292030" }`, `{ store: "playstation", kind: "concept", id: "204794" }`, `{ store: "igdb", kind: "slug", id: "the-witcher-3-wild-hunt" }`. Every address of one product gives the same id (locale, slug, case), and the `https://` can be left out, as it can now for `storeOf()`. It reads the addresses with the same patterns as `storeLinks()`.
+  - `externalIds()` gives each id a `storeId` in the same form: a Steam app, a GOG product, a Microsoft Store product in capitals, an Xbox 360 Marketplace uuid in lower case, whether IGDB writes it under `XboxMarketplace` or under `Microsoft` after `"xbox360"`, an Epic id, or a PlayStation Store concept. `uid` stays as IGDB writes it, for `findByExternalIds()`.
+  - The docs say that `externalId(game, ExternalGameSource.Microsoft)` can return an Xbox 360 id (`"xbox360…"`, 7% of the Microsoft ids) before the Microsoft Store id, and that `storeLinks()` leaves out the closed Xbox 360 Marketplace and keeps Kartridge and Utomik links. `storeOf()` is now documented.
+- 777b766: When IGDB refuses a query's response as above 10 MB, the `PayloadTooLargeError` says which `limit` should pass, and gives it as `suggestedLimit`: from what a row of the selection weighed in earlier responses, with some margin, or half the refused limit before any. A single row too heavy is told to select fewer fields, and so is `searchAll()` when it ranks, since its `limit` does not set the size of the pages it reads. igdb-kit already split its own pages; a query with its own `limit` only got IGDB's message.
+- 097ef16: `formatPlaytime()`, `eventTime()`, `releaseRegionName()`, `countryName()` and `languageName()` accept underscore locales such as `"pt_BR"`, as the `Locale` type says and as `resolveLocale()` and `igdb-kit/i18n` already did: they threw a `RangeError`, returned null or fell back to English. `languageName("zh_TW", locale)` names Traditional Chinese, as `"zh-TW"` does. IGDB's locales are read in any case: `languageName("es-mx", locale)` names Latin American Spanish and `"zh-cn"` Simplified Chinese, as `"es-MX"` and `"zh-CN"` do, rather than Mexican Spanish and Chinese (China).
+- 777b766: Views gain `iterate()`, which reads every game matching the view with its linked rows, in id order: a page of games, sized as `Query.iterate()` sizes them (`pageSize`, 1 to 500), then the linked rows of the whole page at once.
+
+### Patch Changes
+
+- 777b766: `findByGames()`, `findBy()` and views save a round trip when a list of ids has more rows than a page: the count that splits the ids comes from IGDB's `x-count` header when the first page went out alone, instead of a count request sent after it. A first page packed into a multiquery is still counted with a request.
+- 777b766: `findByGames()`, `findBy()` and the linked queries of a view ignored a `sort()` on a field they did not select: each id's rows stayed in id order, so `limit()` kept the wrong ones, and `igdb.release_dates.select("human").sort("date").limit(1)` gave any release date of a game rather than the first. The sort field is now requested, used to sort, and left out of the rows. The same goes for the field pointing to the games when `exclude()` leaves it out of a `*` selection, which left every list empty.
+- d0a7fba: `redisTokenStore()` and `redisCache()` accept a client that parses JSON replies, as Upstash's REST client does by default: they read the token it gave back as an object as missing, so every request asked Twitch for a new token, and they never found a cached response. `sync({ since })` accepts an undefined `since` under `exactOptionalPropertyTypes`, for a first copy. The docs show token and cache stores for serverless functions (Upstash, Cloudflare Workers KV), and how to keep a local copy current: the 23 tables without `updated_at`, the rows that only point to games and need `removed()`, a margin on `since`, resuming a copy partway through a table and the `since` that follows it, and the display helpers on stored rows.
+- 777b766: `where()` with a string compiles on a query typed over several endpoints, such as `igdb[name]` in a loop that copies tables, where TypeScript stopped with "Expression produces a union type that is too complex to represent" and only a cast got through. The typed builder still needs one endpoint. `docs/local-copy.md` shows such a loop, and how to narrow the names for `since`.
+
 ## 0.7.1
 
 ### Patch Changes
