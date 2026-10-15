@@ -49,7 +49,7 @@ const releaseLabels: Record<string, [tbd: string, quarter: QuarterLabel]> = {
  * calendar release of `releases()`, or a date stored with its precision, `{ date, precision }`.
  * Dates are a `Date`, a `"YYYY-MM-DD"` or ISO string, or Unix seconds.
  */
-export type FormattableRelease =
+export type FormatReleaseDateInput =
   | {
       precision: ReleasePrecision;
       /** First day of the period; `null` for `tbd`. */
@@ -61,8 +61,8 @@ export type FormattableRelease =
     }
   | {
       precision: ReleasePrecision;
-      /** Any day of the period, such as IGDB's `release_dates.date`; `null` for `tbd`. */
-      date: DateInput | null;
+      /** Any day of the period, such as IGDB's `release_dates.date`; `null` or `undefined` for `tbd`. */
+      date: DateInput | null | undefined;
     };
 
 /**
@@ -83,14 +83,17 @@ export type FormattableRelease =
  * formatReleaseDate({ date: "2026-12-31", precision: "quarter" }, { locale: "fr-FR" }); // "T4 2026"
  * ```
  */
-export function formatReleaseDate(release: FormattableRelease, options: FormatReleaseDateOptions): string {
+export function formatReleaseDate(
+  release: FormatReleaseDateInput,
+  options: FormatReleaseDateOptions,
+): string {
   const { locale, dateStyle = "medium", labels } = options;
   const { language, script } = resolveLocale(locale);
   const [tbd, quarter] =
     releaseLabels[language === "zh" && script === "Hant" ? "zh-Hant" : language] ?? englishLabels;
   const { precision } = release;
-  const period: Extract<FormattableRelease, { start: unknown }> =
-    "start" in release ? release : { precision, start: release.date };
+  const period: Extract<FormatReleaseDateInput, { start: unknown }> =
+    "start" in release ? release : { precision, start: release.date ?? null };
   if (precision === "tbd" || period.start == null) return labels?.tbd ?? tbd;
   const date = new Date(dateMillis(period.start, "release date"));
   if (precision === "quarter") {

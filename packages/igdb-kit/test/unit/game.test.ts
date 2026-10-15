@@ -235,12 +235,30 @@ describe("releaseDate()", () => {
     expect(releaseDate({ release_dates: shutDown.release_dates.slice(1) })).toBeNull();
   });
 
-  test("a cancelled date of the requested region does not hide another region's release", () => {
+  test("a cancelled date of the requested region or worldwide does not hide another region's release", () => {
     expect(releaseDate(cancelledInEurope, { locale: "fr-FR" })).toMatchObject({
       region: ReleaseDateRegion.Japan,
       match: "other_region",
     });
     expect(releaseDate(cancelledInEurope, { locale: "fr-FR", fallback: false })).toBeNull();
+    expect(releasesByPlatform(cancelledInEurope, { locale: "fr-FR" }).map((r) => r.match)).toEqual([
+      "other_region",
+    ]);
+    // The same with the European date offline, or with the cancelled date worldwide.
+    const changed = (fields: object) =>
+      cancelledInEurope.release_dates.map((row) =>
+        row.status === ReleaseDateStatus.Cancelled ? { ...row, ...fields } : row,
+      );
+    for (const release_dates of [
+      changed({ status: ReleaseDateStatus.Offline }),
+      changed({ release_region: ReleaseDateRegion.Worldwide }),
+    ]) {
+      expect(releaseDate({ release_dates }, { locale: "fr-FR" })).toMatchObject({
+        region: ReleaseDateRegion.Japan,
+        match: "other_region",
+      });
+      expect(releaseDate({ release_dates }, { locale: "fr-FR", fallback: false })).toBeNull();
+    }
     expect(releaseDate(cancelledInEurope, { locale: "fr-FR", statuses: "all" })).toMatchObject({
       region: ReleaseDateRegion.Europe,
       status: ReleaseDateStatus.Cancelled,
@@ -1117,6 +1135,8 @@ describe("formatReleaseDate()", () => {
     expect(formatReleaseDate({ date: new Date("2026-11-01"), precision: "month" }, fr)).toBe("nov. 2026");
     expect(formatReleaseDate({ date: "2015-05-19", precision: "day" }, fr)).toBe("19 mai 2015");
     expect(formatReleaseDate({ date: null, precision: "tbd" }, fr)).toBe("À déterminer");
+    // IGDB leaves `date` out of TBD rows.
+    expect(formatReleaseDate({ date: undefined, precision: "tbd" }, fr)).toBe("À déterminer");
     // A result of releaseDate() that went through JSON.
     const json = { precision: "quarter", start: "2026-10-01T00:00:00.000Z" } as const;
     expect(formatReleaseDate(json, fr)).toBe("T4 2026");

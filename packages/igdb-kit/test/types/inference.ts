@@ -571,6 +571,7 @@ import {
   alternativeTitles,
   companies,
   eventTime,
+  type FormatReleaseDateInput,
   formatReleaseDate,
   languages,
   localizedCover,
@@ -704,6 +705,11 @@ if (entry) formatReleaseDate(entry.release, { locale: "fr-FR" });
 formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, { locale: "fr-FR" });
 formatReleaseDate({ date: 1_798_675_200, precision: "year" }, { locale: "fr-FR" });
 formatReleaseDate({ precision: "quarter", start: "2026-10-01", quarter: null }, { locale: "fr-FR" });
+// A row's `date`, which IGDB leaves out on TBD rows.
+if (release) {
+  const stored: FormatReleaseDateInput = { date: release.row.date, precision: release.precision };
+  formatReleaseDate(stored, { locale: "fr-FR" });
+}
 // @ts-expect-error not a precision
 formatReleaseDate({ date: "2026-10-01", precision: "soon" }, { locale: "fr-FR" });
 // @ts-expect-error no date
