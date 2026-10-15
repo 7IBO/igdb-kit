@@ -50,8 +50,8 @@ export interface LocalizedName {
   source: "localization" | "alternative_name" | "name";
   /**
    * The language of the name as far as IGDB says: `"ja-JP"` or `"ko-KR"` for a localization, the
-   * language of an alternative name's comment (`"pl"`, `"zh-Hant"`, `"en-GB"`). Null for the European
-   * localization and the game's own name.
+   * language of an alternative name's comment (`"pl"`, `"zh-Hant"`, `"en-GB"`), which is the `locale`
+   * `alternativeTitles()` gives that name. Null for the European localization and the game's own name.
    */
   language: string | null;
   /** The variant an alternative name's comment gives (`"original"`, `"stylized"`), else null. */

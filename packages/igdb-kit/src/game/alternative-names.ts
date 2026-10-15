@@ -68,19 +68,24 @@ export interface AlternativeTitle<R = { name?: string | undefined; comment?: str
   comment: string | null;
   /**
    * BCP 47 tag of the language the name is written in: `language`, by the rules of
-   * `localizedName()`. Null when the comment names no language, and for a romanization, a name
-   * without a letter of its language's script (a "Russian title" in Latin letters, kana in a
-   * "Chinese title") and a translation out of a language written in Latin letters ("Portuguese
-   * title - translated" is in English). A name marked "original" keeps it, as some official titles
-   * are in Latin letters ("BIOHAZARD").
+   * `localizedName()`, whose `language` it is when it picks the name. Null when the comment names no
+   * language, and for a romanization, a name without a letter of its language's script (a "Russian
+   * title" in Latin letters, kana in a "Chinese title") and a translation out of a language written
+   * in Latin letters ("Portuguese title - translated" is in English). A name marked "original" keeps
+   * it, as some official titles are in Latin letters ("BIOHAZARD"). The script is only checked for
+   * the languages listed under `inScript`: a "French title" in kana is `"fr"`. It is a language tag
+   * (`"zh-Hans"`, `"es-419"`), not a user's locale: compare the `language` of `parseLocale()` rather
+   * than the strings.
    */
   locale: string | null;
   /**
    * Whether the name has a letter of its language's script, for the languages not written in Latin
-   * letters: kana or han for Japanese, han without kana for Chinese, hangul, Cyrillic, Greek, Hebrew,
-   * Arabic, Thai, Devanagari. True for the other languages, false when the comment names none.
+   * letters: kana or han for Japanese, han without kana for Chinese, hangul, Cyrillic for Russian,
+   * Ukrainian, Bulgarian, Belarusian and Macedonian, Greek, Hebrew, Arabic for Arabic and Persian,
+   * Thai, Devanagari for Hindi. True for the other languages, which are not checked, and null when
+   * the comment names none.
    */
-  inScript: boolean;
+  inScript: boolean | null;
   /** The `alternative_names` row as selected. */
   row: R;
 }
@@ -260,7 +265,7 @@ export function alternativeTitles<G extends object>(
       comment: row.comment?.trim() || null,
       ...info,
       locale: titleLocale(name, info),
-      inScript: info.language !== null && inScript(name, info.language),
+      inScript: info.language === null ? null : inScript(name, info.language),
       row,
     });
   }

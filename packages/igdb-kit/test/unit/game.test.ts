@@ -832,14 +832,14 @@ describe("alternativeTitles()", () => {
         language: null,
         variant: null,
         locale: null,
-        inScript: false,
+        inScript: null,
         row: { id: 2, name: "X", comment: " " },
       },
     ]);
   });
 
   test("the language each name is written in, by the rules of localizedName()", () => {
-    const cases: [comment: string, name: string, locale: string | null, inScript: boolean][] = [
+    const cases: [comment: string, name: string, locale: string | null, inScript: boolean | null][] = [
       ["Russian title", "Vedmak 3", null, false],
       ["Russian title", "Ведьмак 3", "ru", true],
       ["Greek title", "O Magos", null, false],
@@ -858,11 +858,13 @@ describe("alternativeTitles()", () => {
       ["Portuguese title - translated", "Dragon Quest", null, true],
       ["Brazilian title", "O Bruxo 3", "pt-BR", true],
       ["Serbian title", "Цанди Блитз Делуке", "sr", true],
+      // The script is only checked for the languages not written in Latin letters.
+      ["French title", "ウィッチャー3", "fr", true],
       ["UK title", "Bubble Buster", "en-GB", true],
       ["North American title", "Bust-a-Move", "en-US", true],
-      ["European title", "Monster Rancher", null, false],
-      ["Steam title", "The Witcher 3", null, false],
-      ["Acronym", "TW3", null, false],
+      ["European title", "Monster Rancher", null, null],
+      ["Steam title", "The Witcher 3", null, null],
+      ["Acronym", "TW3", null, null],
     ];
     const rows = cases.map(([comment, name]) => ({ comment, name }));
     expect(
