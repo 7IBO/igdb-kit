@@ -1,6 +1,6 @@
 // Runs against the real IGDB API. Skipped unless TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set.
 // Uses about 90 requests. The webhook test registers webhooks on example.com and removes them.
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   AgeRatingCategory,
   AgeRatingOrganization,
@@ -57,6 +57,10 @@ import {
 } from "../../src/game";
 import { en, type LabelTable } from "../../src/i18n";
 import { igdbProxy } from "../../src/proxy";
+
+// A test sends several requests, each of which IGDB can take seconds to answer when loaded: 5 s, the
+// default, failed tests that pass in 2.
+setDefaultTimeout(30_000);
 
 const clientId = process.env.TWITCH_CLIENT_ID;
 const clientSecret = process.env.TWITCH_CLIENT_SECRET;
@@ -273,7 +277,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(pages).toHaveLength(1);
     expect(new Set(pages[0]?.map((r) => r.game_id)).size).toBe(total);
     expect(pages[0]?.[0]?.rank).toBe(1);
-  }, 15_000); // about 10 pages, in 1 to 5 s depending on IGDB's load
+  });
 
   test("artworkType() converts artwork_type as IGDB does, where image_type is missing", async () => {
     const [missing, both] = await Promise.all([
@@ -573,7 +577,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
       "Ubisoft Entertainment",
       "Ubisoft Montreal",
     ]);
-  }, 15_000); // a name costs one more request the first time: its lookup
+  });
 
   test("game filters match one involved company and one release date for all their conditions", async () => {
     const ids = (q: typeof igdb.games) =>
@@ -1020,7 +1024,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
         ?.map((e) => e.id)
         .sort(),
     );
-  }, 15_000);
+  });
 
   test("removed() finds deleted ids, with the replacement of a duplicate", async () => {
     // Game 422306 was removed as a duplicate of 399156 (IGDB report 1731).
@@ -1059,7 +1063,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
       [22439, 1],
       [1942, 0.95],
     ]);
-  }, 15_000);
+  });
 
   test("expand() caches reference tables and drops ids of deleted rows", async () => {
     const counted = countingClient();
