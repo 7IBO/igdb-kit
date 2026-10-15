@@ -30,7 +30,11 @@ export interface TransportHooks {
    * ignored.
    */
   onRequest?: (info: RequestLog) => void;
-  /** A request is about to be retried after a 429, a 5xx or a network error. */
+  /**
+   * A request is about to be retried after a 429, a 5xx or a network error. Also called with the
+   * path `oauth2/token` when renewing the token ahead of its expiry failed: the token still works,
+   * and the renewal is tried again after `delayMs`.
+   */
   onRetry?: (info: { path: string; attempt: number; delayMs: number; reason: unknown }) => void;
   /** IGDB answered 429. */
   onRateLimited?: (info: { path: string }) => void;
@@ -60,8 +64,8 @@ export interface TransportOptions {
   fetch?: typeof fetch | undefined;
   baseUrl?: string | undefined;
   /**
-   * How long a request is retried, counted from its first failure; time waiting for a request slot
-   * does not count. Default 30 s.
+   * How long a request is retried, counted from its first failure; time waiting for a token or a
+   * request slot does not count. Default 30 s.
    */
   retryTimeoutMs?: number | undefined;
   /**
@@ -112,16 +116,15 @@ export class Transport {
     const { signal, priority, splits } = options;
     const budget = this.options.retryTimeoutMs ?? 30_000;
     const timeoutMs = this.options.attemptTimeoutMs ?? 45_000;
-    // Set at the first failure, and pushed back by the time retries wait for a slot.
+    // Set at the first failure, and pushed back by the time retries wait for a token and a slot.
     let deadline: number | undefined;
     let renewedToken = false;
 
     for (let attempt = 0; ; attempt++) {
       signal?.throwIfAborted();
       const queued = Date.now();
-      const release = await this.options.limiter.acquire({ signal, priority });
-      const started = Date.now();
-      if (deadline !== undefined) deadline += started - queued;
+      let started = queued;
+      let release = () => {};
       const report = (status: number, bytes: number) =>
         reportRequest(this.options.hooks, {
           path,
@@ -140,7 +143,11 @@ export class Transport {
       let token: string | undefined;
       let timeout: AbortSignal | undefined;
       try {
+        // Before taking a request slot, which a slow token request would hold.
         token = await this.options.tokens?.getToken(signal);
+        release = await this.options.limiter.acquire({ signal, priority });
+        started = Date.now();
+        if (deadline !== undefined) deadline += started - queued;
         timeout = AbortSignal.timeout(timeoutMs);
         const res = await this.fetchFn(`${this.baseUrl}/${path}`, {
           method,
@@ -161,9 +168,9 @@ export class Transport {
         text = new TextDecoder().decode(buffer);
       } catch (error) {
         release();
-        if (!(error instanceof IGDBError)) report(0, 0);
+        if (timeout) report(0, 0);
         if (signal?.aborted) throw signal.reason;
-        if (error instanceof IGDBError) throw error; // from the token provider
+        if (error instanceof IGDBError) throw error; // from the token provider or the limiter
         const timedOut = timeout?.aborted === true;
         const failure = new NetworkError(
           timedOut

@@ -3,6 +3,7 @@ import {
   AuthError,
   IGDBError,
   type Limiter,
+  LocalLimiter,
   memoryTokenStore,
   NetworkError,
   PayloadTooLargeError,
@@ -248,23 +249,39 @@ describe("transport", () => {
     expect(big.calls).toHaveLength(1);
   });
 
-  test("an abort signal cancels an in-flight request", async () => {
-    let started = false;
-    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      if (String(input).startsWith("https://id.twitch.tv")) {
-        return Response.json({ access_token: "t", expires_in: 5_000_000 });
-      }
-      started = true;
-      return new Promise<Response>((_, reject) =>
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
-      );
-    }) as typeof globalThis.fetch;
+  test("an abort signal cancels an in-flight request and its retries", async () => {
+    const mock = mockFetch(noAnswer);
     const controller = new AbortController();
-    const pending = testClient(fetch).games.limit(1).execute({ signal: controller.signal });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(started).toBe(true);
+    const pending = testClient(mock.fetch, { attemptTimeoutMs: 50 })
+      .games.limit(1)
+      .execute({ signal: controller.signal });
+    await Bun.sleep(20);
+    expect(mock.calls).toHaveLength(1);
     controller.abort(new Error("stop"));
     await expect(pending).rejects.toThrow("stop");
+    expect(mock.calls[0]?.signal?.aborted).toBe(true);
+    await Bun.sleep(100);
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test("a request waits for its token without holding a request slot", async () => {
+    let answerToken = () => {};
+    const tokenAsked = new Promise<void>((resolve) => {
+      answerToken = resolve;
+    });
+    const mock = mockFetch(() => Response.json([{ id: 1 }]));
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).startsWith("https://id.twitch.tv")) await tokenAsked;
+      return mock.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const limiter = new LocalLimiter({ requestsPerSecond: 1000, maxConcurrent: 8 });
+    const igdb = testClient(fetch, { limiter });
+    const queries = [1, 2, 3].map((id) => igdb.games.where(`id = ${id}`).execute({ batch: false }));
+    await Bun.sleep(20);
+    expect([limiter.inFlight, limiter.queued]).toEqual([0, 0]);
+    answerToken();
+    expect(await Promise.all(queries)).toEqual([[{ id: 1 }], [{ id: 1 }], [{ id: 1 }]]);
+    expect(mock.tokenFetches).toBe(1);
   });
 
   test("bad Twitch credentials fail fast", async () => {

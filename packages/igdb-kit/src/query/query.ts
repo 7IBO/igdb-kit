@@ -88,6 +88,10 @@ export function pageTimedOut(error: unknown, rows: number): boolean {
 }
 
 export interface ExecuteOptions {
+  /**
+   * Aborting stops waiting, takes the request out of the rate limiter's queue, cancels it and stops
+   * its retries, unless an identical query still waits on it.
+   */
   signal?: AbortSignal | undefined;
   /** `background` requests wait behind `interactive` ones. Default `interactive`. */
   priority?: Priority | undefined;

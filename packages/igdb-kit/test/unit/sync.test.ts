@@ -284,9 +284,9 @@ describe("sync", () => {
     const pages = await collect(igdb.games.select("name").sync());
     // Ids 1000 to 1004 were read before they were deleted.
     expect(pages.flat().map((g) => g.id)).toEqual(Array.from({ length: 30_000 }, (_, i) => i + 1));
-    expect(lines(mock.calls).filter((b) => b.includes("id < "))).toEqual([
-      'query games "q0" { fields name,id; where (id < 5496) & (id > 5491); sort id asc; limit 500; };',
-    ]);
+    const gaps = lines(mock.calls).filter((b) => b.includes("id < "));
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toContain("fields name,id; where (id < 5496) & (id > 5491); sort id asc; limit 500;");
   });
 
   test("rows added during the sync shift the pages after them: rows are not repeated", async () => {

@@ -11,8 +11,8 @@
 ## How requests are sent
 
 - **Rate limit.** One limiter per client id, shared by every client in the process (4 requests per second, 8 in flight). After a 429 the whole queue pauses and slows down, because IGDB sends no `Retry-After`. A second client with the same client id and other limiter options gets a console warning, since the first options win.
-- **Automatic multiquery.** Queries started at the same time are grouped into `/multiquery` requests of up to 10 blocks, so 30 `findById` calls cost 3 HTTP requests. Batches are sized by estimated response size to stay under IGDB's 10 MB cap, and their bodies stay under its 32,000-byte limit. An invalid query or an oversized response is isolated by splitting the batch, so only the faulty query fails. Identical queries in flight are sent once.
-- **Auth that recovers.** Tokens are fetched once for all concurrent requests, renewed before they expire, and renewed then replayed once after a 401. A token store can be shared across processes, since Twitch keeps only 25 active tokens per app.
+- **Automatic multiquery.** Queries started at the same time are grouped into `/multiquery` requests of up to 10 blocks, so 30 `findById` calls cost 3 HTTP requests. Batches are sized by estimated response size to stay under IGDB's 10 MB cap, and their bodies stay under its 32,000-byte limit. An invalid query or an oversized response is isolated by splitting the batch, so only the faulty query fails. Identical queries in flight are sent once, and cancelled once all of them are aborted.
+- **Auth that recovers.** Tokens are fetched once for all concurrent requests, renewed before they expire, and renewed then replayed once after a 401. A request waits for its token before taking a request slot, and each try of the token request gives up after 10 s, 4 tries at most. A token store can be shared across processes, since Twitch keeps only 25 active tokens per app.
 - **Field paths checked twice.** TypeScript checks them as you type, and they are checked again at runtime before the request leaves. IGDB rejects a whole multiquery for one bad field and silently ignores an unknown `sort` field.
 
 ## Options
@@ -48,6 +48,8 @@ const igdb = createIGDB({
   hooks: { onRequest: (r) => console.log(`${r.path} ${r.status} ${r.durationMs} ms ${r.bytes} B${r.cached ? " cached" : ""}`) },
 });
 ```
+
+`hooks.onRetry` is called before each retry with `{ path, attempt, delayMs, reason }`. It is also called with the path `oauth2/token` when renewing the token ahead of its expiry fails, in the last 5% of its life (about 3 days): requests keep using the token, and the renewal is tried again after 1 minute, then 2, 4 and so on up to 30. This is the warning that a changed client secret or a Twitch outage will fail every request with an `AuthError` once the token expires.
 
 ## Batching
 
@@ -89,7 +91,7 @@ Some queries are always sent alone: `search` queries (IGDB returns an empty mult
 const genres = await igdb.genres.select("name").limit(500).cache(24 * 3600_000); // kept a day
 ```
 
-`cache(ttlMs)` keeps the response so identical queries skip IGDB and the rate limit. Responses live in memory by default, 1,000 of them and 50 MB at most, the least recently used going first; `cache: memoryCache({ maxEntries, maxBytes })` changes these limits, and a response above a quarter of `maxBytes` is not kept. Pass another `cache` to share responses (see Redis below). Set `cacheTtlMs` to cache every query, and `cache(false)` to opt one out. A failing cache store never fails a query.
+`cache(ttlMs)` keeps the response so identical queries skip IGDB and the rate limit. Responses live in memory by default, 1,000 of them and 50 MB at most, the least recently used going first; `cache: memoryCache({ maxEntries, maxBytes })` changes these limits, and a response above a quarter of `maxBytes` is not kept. Pass another `cache` to share responses (see Redis below). Set `cacheTtlMs` to cache every query, and `cache(false)` to opt one out. A cache store never fails or holds back a query: a read that fails, takes more than a second or returns something that is not a response counts as a miss, the request's `signal` stops it, and the query does not wait for the write.
 
 ## Several processes: Redis
 
@@ -151,7 +153,7 @@ All errors extend `IGDBError` and carry `status`, `endpoint`, `details` (IGDB's 
 | `AuthError` | Bad credentials, or a token still refused after one renewal |
 | `RateLimitError` | Still 429 when the retry budget ran out |
 | `NotFoundError` | `findByIdOrThrow()` or `firstOrThrow()` found nothing, or a name in `named()`, `developedBy()` or `publishedBy()` matches nothing (`suggestions` lists close names) |
-| `NetworkError` | 5xx or network failure that persisted; `timedOut` is true when no answer came within `attemptTimeoutMs` |
-| `IGDBError` | A response that is not JSON, such as a `proxyUrl` answering with an HTML page |
+| `NetworkError` | 5xx or network failure that persisted, or a Twitch token request that failed 4 times; `timedOut` is true when no answer came within `attemptTimeoutMs` |
+| `IGDBError` | A response that is not JSON, such as a `proxyUrl` answering with an HTML page, or a multiquery answered with something else than its blocks |
 
-429, 5xx and network errors are retried with backoff until `retryTimeoutMs` (30 s by default) runs out, counted from the first failure: time waiting for a request slot does not count. An attempt that gets no answer within `attemptTimeoutMs` (45 s by default: IGDB gives up after 29 s, and the rest leaves time to download a large response) is retried the same way. A page of `findByIds()`, `findBy()`, `findByGames()`, `iterate()` or `sync()` that IGDB gives up on (504 "Endpoint request timed out") or that gets no answer in time is not retried but read again in halves (see [Reading results](queries.md#reading-results)). Every request accepts an `AbortSignal`: `query.execute({ signal })`, and `signal: AbortSignal.timeout(ms)` caps its total time.
+429, 5xx and network errors are retried with backoff until `retryTimeoutMs` (30 s by default) runs out, counted from the first failure: time waiting for a token or a request slot does not count. An attempt that gets no answer within `attemptTimeoutMs` (45 s by default: IGDB gives up after 29 s, and the rest leaves time to download a large response) is retried the same way. A page of `findByIds()`, `findBy()`, `findByGames()`, `iterate()` or `sync()` that IGDB gives up on (504 "Endpoint request timed out") or that gets no answer in time is not retried but read again in halves (see [Reading results](queries.md#reading-results)). Every request accepts an `AbortSignal`: `query.execute({ signal })`, and `signal: AbortSignal.timeout(ms)` caps its total time. Aborting takes the request out of the rate limiter's queue, cancels its HTTP request and stops its retries, unless an identical query still waits on it; a multiquery is cancelled once none of its queries is wanted.
