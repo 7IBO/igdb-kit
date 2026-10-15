@@ -7,7 +7,7 @@ IGDB encourages keeping your own copy of its data. Its API is free, for commerci
 - [A loop over table names](#copying-several-endpoints) needs no cast.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
-- [Rows that only point to games](#rows-that-point-to-games) need `removed()` on their own tables.
+- [Rows that point to games](#rows-that-point-to-games): run `removed()` on each table you copy, not only on `games`.
 - [The display helpers](#display-helpers-on-stored-rows) read stored rows as they read query results.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
 
@@ -35,21 +35,23 @@ How it reads:
 
 A day of changes on `games` (about 33,000) takes 8 requests and 3 seconds, all 73,000 companies with `*` 26 requests and about 11 seconds, and the 133,000 rows of one popularity type, crowded into a few stretches of ids, 28 requests and 7 seconds.
 
-A copy stopped partway through a table (a deploy, a crash) can go on from where it was: pages come in id order, so save the last id of each page you wrote, and start again after it with the same `since`.
+A copy stopped partway through a table (a deploy, a crash) can go on from where it was: pages come in id order, so save the last id of each page you wrote, and start again after it with the same `since`. Keep the time the stopped run started too: the next `since` comes from it, not from the restart, or the rows read before the stop that changed while it was stopped never come back.
 
 ```ts
+// Created when a copy starts, and kept until it ends: { since: lastSync, startedAt: new Date() }
 const query = igdb.games.select("*").where((g) => g.id.gt(checkpoint.lastId ?? -1));
 for await (const page of query.sync({ since: checkpoint.since })) {
   await db.upsertGames(page);
   checkpoint.lastId = page[page.length - 1]?.id; // saved with the rows, in one transaction
 }
+lastSync = new Date(checkpoint.startedAt.getTime() - 10 * 60_000);
 ```
 
 ## Tables without updated_at
 
 23 of the 84 endpoints have no `updated_at`, so `since` cannot find what changed in them (the type of `sync()` refuses it, and it throws at run time): `age_rating_content_descriptions`, `age_ratings`, `alternative_names`, `artworks`, `character_mug_shots`, `company_logos`, `company_websites`, `covers`, `executables`, `game_engine_logos`, `game_version_feature_values`, `game_version_features`, `game_videos`, `logos`, `multiplayer_modes`, `platform_families`, `platform_logos`, `platform_version_companies`, `platform_versions`, `platform_websites`, `screenshots`, `search` and `websites`. `endpointSchema(name).fields` says which have it.
 
-Most of them hang off a row that has one. The games that changed point to their rows: read those with `ids`.
+Most of them hang off a row that has one: the games that changed point to their covers, websites and screenshots, the companies to their logos and websites, the platforms to theirs. Read those with `ids`.
 
 ```ts
 const coverIds = changedGames.flatMap((game) => (game.cover === undefined ? [] : [game.cover]));
@@ -138,7 +140,7 @@ const gone = await igdb.games.removed(storedIds);
 
 `gameLink(endpoint)`, from `igdb-kit`, gives the field that links an endpoint's rows to games: `game` for `release_dates`, `websites`, `covers`, `language_supports`…, `game_id` for `game_time_to_beats` and `popularity_primitives`, and `games` for `characters`, `collections`, `events` and `franchises`. It is undefined for the others. `findByGames()` reads by it, and a copy indexes it.
 
-Games list most of these rows in an array of their own (`websites`, `release_dates`, `cover`…), but not those of `characters`, `collection_memberships`, `events`, `game_content_safety_ratings`, `game_time_to_beats`, `game_version_feature_values`, `game_versions`, `logos` and `popularity_primitives`, which only point to games. A deleted row of those leaves no trace on any game: run `removed()` on their tables too, not only on `games`. `endpointSchema(name).linkedFrom` lists every field that points to an endpoint, which is also what a deletion leaves dangling.
+Games list most of these rows in a field of their own (`websites`, `release_dates`, `cover`…), but not those of `characters`, `collection_memberships`, `events`, `game_content_safety_ratings`, `game_time_to_beats`, `game_version_feature_values`, `game_versions`, `logos` and `popularity_primitives`, which only point to games. A deleted row of those leaves no trace on any game, and one that a game lists only drops out of its field, which shows when the game is read again: run `removed()` on every table you copy, not only on `games`. `endpointSchema(name).linkedFrom` lists every relation that points to an endpoint, which is also what a deletion leaves dangling. The `game_id` numbers of `game_time_to_beats` and `popularity_primitives` are not relations: `gameLink()` names them.
 
 ## Display helpers on stored rows
 

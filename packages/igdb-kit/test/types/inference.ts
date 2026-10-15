@@ -212,6 +212,9 @@ for await (const page of igdb.covers.select("image_id").sync({ ids: [1, 2] }))
 igdb.games.sync({ ids: 7, since: "2026-01-01" });
 // @ts-expect-error covers have no updated_at
 igdb.covers.sync({ ids: [1], since: "2026-01-01" });
+// A first copy has no since yet: undefined is accepted.
+declare const firstSince: Date | undefined;
+igdb.games.sync({ since: firstSince });
 
 // Chaining keeps the selection.
 const q5 = q2

@@ -138,13 +138,17 @@ const kvTokenStore = (kv: KVNamespace, key = "igdb-token"): TokenStore => ({
     if ((await kv.get<StoredToken>(key, "json"))?.token === token) await kv.delete(key);
   },
 });
-const kvCache = (kv: KVNamespace): CacheStore => ({
+const kvCache = (kv: KVNamespace, waitUntil: (write: Promise<unknown>) => void): CacheStore => ({
   get: (key) => kv.get(key),
-  set: (key, value, ttlMs) => kv.put(key, value, { expirationTtl: Math.max(60, Math.ceil(ttlMs / 1000)) }),
+  set(key, value, ttlMs) {
+    const write = kv.put(key, value, { expirationTtl: Math.max(60, Math.ceil(ttlMs / 1000)) });
+    waitUntil(write); // the query answers without waiting for it, and the Worker may stop once it answers
+    return write;
+  },
 });
 ```
 
-KV has no lock and takes up to a minute to show a write everywhere, so instances starting together may each fetch a token before they share one; KV also keeps a value 60 s at least.
+KV has no lock and takes up to a minute to show a write everywhere: instances starting together may each fetch a token before they share one, and after a 401 an instance that still reads the old token may delete the new one and fetch another. KV also keeps a value 60 s at least. A function that stops once it answers, as a Worker does without `ctx.waitUntil()`, can lose a cache write, which igdb-kit does not wait for: create the client in the request there, with `(write) => ctx.waitUntil(write)`.
 
 ## In the browser: proxy
 

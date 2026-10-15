@@ -29,7 +29,8 @@ export const endpointNames: readonly EndpointName[] = Object.freeze(
 
 /**
  * An endpoint with its fields, their types and descriptions, and the fields that point to it.
- * Fields IGDB replaced or emptied are left out; those it deprecated but still fills are marked.
+ * Deprecated fields IGDB replaced or stopped filling are left out, and those it still fills are
+ * marked. Fields it never fills but has not deprecated are kept.
  *
  * ```ts
  * import { endpointSchema } from "igdb-kit/schema";
