@@ -374,6 +374,16 @@ igdb.searchAll("ubisoft", { kinds: ["company"] });
 igdb.searchAll("zelda", { gameTypes: GameType.Mod, includeEditions: true });
 igdb.searchAll("zelda", { gameTypes: MAIN_GAME_TYPES });
 igdb.games.where((g) => g.game_type.in(...MAIN_GAME_TYPES));
+// Game hits filtered with the typed builder, on paths relative to the game.
+igdb.searchAll("zelda", {
+  where: { game: (g) => g.platforms.named("Switch").and(g.first_release_date.gte(new Date(2017, 0))) },
+});
+// @ts-expect-error the named filters of games.where() are not available
+igdb.searchAll("zelda", { where: { game: (g) => g.mainGames() } });
+// @ts-expect-error unknown field of a game
+igdb.searchAll("zelda", { where: { game: (g) => g.nope.eq(1) } });
+// @ts-expect-error a filter, not a string
+igdb.searchAll("zelda", { where: { game: "platforms = (130)" } });
 
 // New reference constants.
 expectType<Equal<typeof ReleaseDateStatus.Cancelled, 5>>();

@@ -272,6 +272,56 @@ describe("searchAll", () => {
     expect(calls).toHaveLength(5);
   });
 
+  test("where.game filters game hits and their alternative titles, with names resolved first", async () => {
+    const mock = mockFetch((call: Call) => {
+      if (call.url.endsWith("/platforms")) {
+        return Response.json([
+          { id: 130, name: "Nintendo Switch", abbreviation: "Switch", alternative_name: "NX" },
+        ]);
+      }
+      return Response.json([], { headers: { "x-count": "0" } });
+    });
+    const igdb = testClient(mock.fetch);
+    await igdb.searchAll("witcher", {
+      kinds: ["game", "character"],
+      where: { game: (g) => g.platforms.named("Switch") },
+      alternativeTitles: true,
+    });
+    const filter = "game != null & game.game_type = (0,2,4,8,9,10,11) & game.version_parent = null";
+    const search = mock.calls.find((call) => call.url.endsWith("/search"));
+    expect(search?.body).toContain(`where (${filter} & game.platforms = (130)) | character != null;`);
+    const titles = mock.calls.find((call) => call.url.endsWith("/multiquery"));
+    const titleWhere = `where (name ~ *"witcher"*) & ${filter} & game.platforms = (130); limit 100;`;
+    expect(titles?.body.split(titleWhere)).toHaveLength(3); // in both blocks
+
+    // An or() keeps its parentheses next to the other filters.
+    await igdb.searchAll("witcher", {
+      kinds: ["game"],
+      gameTypes: "all",
+      includeEditions: true,
+      order: "igdb",
+      where: {
+        game: (g) => g.platforms.any(6).or(g.first_release_date.gte(new Date("2020-01-01T00:00:00Z"))),
+      },
+    });
+    expect(mock.calls.at(-1)?.body).toBe(
+      'fields name,alternative_name,game.name; search "witcher"; ' +
+        "where (game != null & (game.platforms = (6) | game.first_release_date >= 1577836800)); limit 10;",
+    );
+
+    await expect(
+      igdb.searchAll("x", { where: { game: "platforms = (6)" as never } }).execute(),
+    ).rejects.toThrow(/where.game must be a function/);
+    await expect(
+      igdb.searchAll("x", { kinds: ["character"], where: { game: (g) => g.platforms.any(6) } }).execute(),
+    ).rejects.toThrow(/add "game" to kinds/);
+    await expect(
+      igdb
+        .searchAll("x", { where: { game: (g) => (g as never as { mainGames(): never }).mainGames() } })
+        .execute(),
+    ).rejects.toThrow(QueryError);
+  });
+
   test("validates its options; an empty term sends nothing", async () => {
     const { igdb, calls } = searchClient([]);
     expect(await igdb.searchAll("  ")).toEqual([]);

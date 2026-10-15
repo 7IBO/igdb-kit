@@ -3,7 +3,7 @@ import type { Character, Collection, Game, Platform, Theme } from "../generated/
 import { type ExecuteOptions, MAX_LIMIT, type Query } from "./query";
 import type { Task } from "./task";
 import type { FieldPath, Prettify, SelectResult } from "./types";
-import { literal, MAIN_GAME_TYPES } from "./where";
+import { Condition, literal, MAIN_GAME_TYPES, type WhereFields, whereProxy } from "./where";
 
 /**
  * Kinds of entity the `search` endpoint indexes. It also has rows for people, an entity the API no
@@ -63,12 +63,19 @@ export interface SearchAllOptions {
   /** Also keep editions of a game (`version_parent` set, such as a "Complete Edition"). Default false. */
   includeEditions?: boolean | undefined;
   /**
+   * Filters game hits with the typed builder, on paths relative to the game, as in `select`:
+   * `{ game: (g) => g.platforms.named("Switch") }`. It applies to the alternative and localized
+   * titles too. The named filters of `igdb.games.where()`, such as `mainGames()`, are not available
+   * here; `gameTypes` and `includeEditions` cover the first.
+   */
+  where?: { game?: ((game: WhereFields<Game>) => Condition) | undefined } | undefined;
+  /**
    * `relevance` (default) reads every match, up to `maxRows`, and ranks it: exact name, then names
    * starting with the term, then names containing its words, then alternative names; ties go to the
    * games with the most ratings, then to shorter names. `igdb` keeps IGDB's own order, in one request:
    * the most recently indexed first (last week's mods before the original), or its own text score once
-   * game hits are filtered by type or edition. Both drop rows whose entity IGDB deleted, so `igdb` can
-   * return fewer than `limit` hits.
+   * game hits are filtered by type, edition or `where`. Both drop rows whose entity IGDB deleted, so
+   * `igdb` can return fewer than `limit` hits.
    */
   order?: "relevance" | "igdb" | undefined;
   /** With `relevance`, read at most this many matches, 500 per request. Default 2000. */
@@ -148,6 +155,7 @@ export async function searchAll(
     order = "relevance",
     maxRows = 2000,
     alternativeTitles = "auto",
+    where,
   } = options;
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     throw new QueryError(`limit must be an integer between 1 and ${MAX_LIMIT}, got ${limit}`);
@@ -162,6 +170,13 @@ export async function searchAll(
   if (!Number.isInteger(maxRows) || maxRows < 1) throw new QueryError(`maxRows must be a positive integer`);
   if (![true, false, "auto"].includes(alternativeTitles))
     throw new QueryError(`alternativeTitles must be true, false or "auto", got ${alternativeTitles}`);
+  if (where?.game !== undefined && typeof where.game !== "function")
+    throw new QueryError(
+      `where.game must be a function: where: { game: (g) => g.platforms.named("Switch") }`,
+    );
+  if (where?.game !== undefined && !kinds.includes("game"))
+    throw new QueryError(`where.game filters game hits: add "game" to kinds`);
+  const gameWhere = where?.game?.(whereProxy("Game", ["game"]) as WhereFields<Game>);
   // IGDB answers an empty term with no rows.
   if (normalize(term) === "") return [];
 
@@ -179,6 +194,9 @@ export async function searchAll(
   const gameParts = ["game != null"];
   if (types !== "all") gameParts.push(`game.game_type = (${types.join(",")})`);
   if (!includeEditions) gameParts.push("game.version_parent = null");
+  if (gameWhere) gameParts.push(gameWhere.operand);
+  // Names in `where.game` (`named()`) are looked up and replaced by ids before each query is sent.
+  const condition = (text: string) => () => new Condition(text, false, gameWhere?.lookups ?? []);
   const filters = kinds.map((kind) => {
     if (kind !== "game") return `${kind} != null`;
     return gameParts.length > 1 ? `(${gameParts.join(" & ")})` : gameParts[0];
@@ -188,17 +206,17 @@ export async function searchAll(
   const titles = relevance && kinds.includes("game") && alternativeTitles !== false;
   const readTitles = (): Promise<TitleRow[][]> => {
     const variants = [...new Set([term.trim(), term.trim().normalize("NFKC")])];
-    const where = `(${variants.map((v) => `name ~ *${literal(v)}*`).join(" | ")}) & ${gameParts.join(" & ")}`;
+    const titleWhere = `(${variants.map((v) => `name ~ *${literal(v)}*`).join(" | ")}) & ${gameParts.join(" & ")}`;
     const titleFields = ["name", ...fields.filter((field) => field.startsWith("game."))] as never[];
     return Promise.all([
       endpoints.alternative_names
         .select(...titleFields)
-        .where(where)
+        .where(condition(titleWhere))
         .limit(100)
         .execute(execute),
       endpoints.game_localizations
         .select(...titleFields)
-        .where(where)
+        .where(condition(titleWhere))
         .limit(100)
         .execute(execute),
     ]) as Promise<TitleRow[][]>;
@@ -210,7 +228,7 @@ export async function searchAll(
   const query = endpoints.search
     .select(...(fields as never[]))
     .search(term)
-    .where(filters.join(" | "));
+    .where(condition(filters.join(" | ")));
 
   let rows: SearchRow[];
   if (relevance) {
