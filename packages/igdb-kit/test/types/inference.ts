@@ -564,6 +564,11 @@ import { igdbProxy } from "../../src/proxy";
 igdbProxy({ igdb, endpoints: ["games", "covers"] });
 // @ts-expect-error unknown endpoint
 igdbProxy({ igdb, endpoints: ["gamez"] });
+// Behind a proxy that refuses multiqueries, the client sends every query alone.
+igdbProxy({ igdb, multiquery: false });
+createIGDB({ proxyUrl: "/api/igdb", multiquery: false });
+// @ts-expect-error a boolean
+createIGDB({ proxyUrl: "/api/igdb", multiquery: "off" });
 
 // igdb-kit/game: helpers require the fields they read and accept any richer selection.
 import {

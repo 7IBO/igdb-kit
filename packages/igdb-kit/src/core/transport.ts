@@ -1,6 +1,13 @@
 import type { ExecuteOptions, RawResponse } from "../query/query";
 import type { TokenProvider } from "./auth";
-import { errorFromResponse, IGDBError, type IGDBErrorOptions, NetworkError, RateLimitError } from "./errors";
+import {
+  AuthError,
+  errorFromResponse,
+  IGDBError,
+  type IGDBErrorOptions,
+  NetworkError,
+  RateLimitError,
+} from "./errors";
 import type { Limiter } from "./limiter";
 import { backoffDelay, sleep } from "./util";
 
@@ -204,7 +211,8 @@ export class Transport {
         this.options.limiter.reportRateLimited();
         this.options.hooks?.onRateLimited?.({ path });
       }
-      if (!RETRYABLE.has(status) || splits?.(error)) throw error;
+      // A proxy's 502 for its own refused credentials is an AuthError: retrying will not help.
+      if (!RETRYABLE.has(status) || error instanceof AuthError || splits?.(error)) throw error;
       deadline ??= Date.now() + budget;
       if (!(await this.backoff(path, attempt, deadline, error, signal))) {
         throw status === 429

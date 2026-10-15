@@ -1,6 +1,7 @@
-import { IGDBError, PayloadTooLargeError, QueryError } from "../core/errors";
+import { IGDBError, PayloadTooLargeError, QueryError, TierError } from "../core/errors";
 import type { Priority } from "../core/limiter";
 import type { SendOptions } from "../core/transport";
+import { MULTIQUERY_REFUSED } from "../core/util";
 import type { EndpointName } from "../generated/schema";
 import {
   type ExecuteOptions,
@@ -32,6 +33,12 @@ export interface BatcherOptions {
    * 16,384 through `proxyUrl`, the default `maxBodyBytes` of `igdbProxy` (raise both together).
    */
   maxBodyBytes?: number | undefined;
+  /**
+   * Send queries together as multiqueries, automatically or through `batch()`. Default true. `false`
+   * sends every query alone, for a proxy made with `igdbProxy({ multiquery: false })`; without it,
+   * the client does so after the proxy's first refusal.
+   */
+  multiquery?: boolean | undefined;
 }
 
 export type Send = (path: string, body: string, options: SendOptions) => Promise<RawResponse>;
@@ -118,10 +125,11 @@ export class SizeEstimator {
  * written one by one cost 3 HTTP requests instead of 30. Also deduplicates identical queries in flight.
  *
  * IGDB fails a whole multiquery when one block is invalid (400, without naming it) and when the
- * response exceeds 10 MB (413). Both are handled by splitting the batch in two and retrying each
- * half, so only the faulty query rejects. When it times out, the pages igdb-kit reads again in
- * halves fail and the other blocks are sent again. Queries using `search` are always sent alone:
- * one search block makes IGDB return an empty multiquery.
+ * response exceeds 10 MB (413). Both, and a 403 for a block outside the API tier, are handled by
+ * splitting the batch in two and retrying each half, so only the faulty query rejects. When it
+ * times out, the pages igdb-kit reads again in halves fail and the other blocks are sent again.
+ * Queries using `search` are always sent alone: one search block makes IGDB return an empty
+ * multiquery. Behind a proxy that refuses multiqueries, every query is sent alone.
  *
  * A request is cancelled once every caller waiting on it has aborted, and a multiquery once none of
  * its queries is wanted.
@@ -132,6 +140,8 @@ export class Batcher {
   private readonly windowMs: number;
   private readonly maxBytes: number;
   private readonly maxBodyBytes: number;
+  /** Turned off by the option, or by the first multiquery a proxy refuses. */
+  private multiquery: boolean;
   private pending: Entry[] = [];
   private readonly pendingByKey = new Map<string, Entry>();
   private readonly inflight = new Map<string, Shared>();
@@ -145,11 +155,12 @@ export class Batcher {
     this.windowMs = options.batchWindowMs ?? 2;
     this.maxBytes = options.maxBatchBytes ?? 4_000_000;
     this.maxBodyBytes = options.maxBodyBytes ?? MAX_BODY_BYTES;
+    this.multiquery = options.multiquery ?? true;
   }
 
   run(request: QueryRequest, options: ExecuteOptions = {}): Promise<RawResponse> {
     if (options.signal?.aborted) return Promise.reject(options.signal.reason);
-    const batchable = (options.batch ?? this.autoBatch) && !request.hasSearch;
+    const batchable = this.multiquery && (options.batch ?? this.autoBatch) && !request.hasSearch;
     const key = `${batchable ? "batch" : "direct"}\n${request.path}\n${request.body}`;
     const pending = this.pendingByKey.get(key);
     if (pending && options.priority !== "background") pending.priority = "interactive";
@@ -269,6 +280,14 @@ export class Batcher {
     return response;
   }
 
+  private async sendAlone(entry: Entry): Promise<void> {
+    try {
+      settle(entry, await this.direct(entry.request, { priority: entry.priority, signal: entry.signal }));
+    } catch (error) {
+      fail(entry, error);
+    }
+  }
+
   /**
    * Splits entries into groups of at most 10 blocks, `maxBatchBytes` of estimated response and
    * `maxBodyBytes` of multiquery body.
@@ -302,16 +321,11 @@ export class Batcher {
     // Queries every caller has aborted are not sent.
     const group = entries.filter((entry) => !entry.signal.aborted);
     if (group.length === 0) return;
-    const priority: Priority = group.some((e) => e.priority === "interactive") ? "interactive" : "background";
-    if (group.length === 1) {
-      const entry = group[0] as Entry;
-      try {
-        settle(entry, await this.direct(entry.request, { priority, signal: entry.signal }));
-      } catch (error) {
-        fail(entry, error);
-      }
+    if (group.length === 1 || !this.multiquery) {
+      await Promise.all(group.map((entry) => this.sendAlone(entry)));
       return;
     }
+    const priority: Priority = group.some((e) => e.priority === "interactive") ? "interactive" : "background";
 
     const names = group.map((_, i) => `q${i}`);
     const body = group
@@ -325,6 +339,12 @@ export class Batcher {
         splits: (error) => group.some((entry) => halved(entry.request, error)),
       });
     } catch (error) {
+      if (multiqueryRefused(error)) {
+        // From now on, every query goes alone.
+        this.multiquery = false;
+        await this.sendGroup(group);
+        return;
+      }
       // Pages that time out are read again in halves by their callers; the other blocks go again.
       const timedOut = group.filter((entry) => halved(entry.request, error));
       if (timedOut.length > 0) {
@@ -334,12 +354,14 @@ export class Batcher {
         return;
       }
       const splittable =
-        error instanceof PayloadTooLargeError || (error instanceof QueryError && error.status === 400);
+        error instanceof PayloadTooLargeError ||
+        error instanceof TierError ||
+        (error instanceof QueryError && error.status === 400);
       if (!splittable) {
         for (const entry of group) fail(entry, error);
         return;
       }
-      // Isolate the faulty block (400) or shrink the response (413): retry each half.
+      // Isolate the faulty block (400, 403 outside the tier) or shrink the response (413): retry each half.
       const middle = Math.ceil(group.length / 2);
       await Promise.all([this.sendGroup(group.slice(0, middle)), this.sendGroup(group.slice(middle))]);
       return;
@@ -382,6 +404,15 @@ export class Batcher {
       settle(entry, { data: result });
     });
   }
+}
+
+/** The 403 of a proxy made with `igdbProxy({ multiquery: false })`. */
+function multiqueryRefused(error: unknown): boolean {
+  return (
+    error instanceof QueryError &&
+    error.status === 403 &&
+    error.details.some((detail) => detail.cause === MULTIQUERY_REFUSED)
+  );
 }
 
 /** A page whose caller reads it again in halves after this timeout, instead of having it retried. */

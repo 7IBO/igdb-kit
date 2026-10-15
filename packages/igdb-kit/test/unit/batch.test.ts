@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createIGDB, IGDBError, LocalLimiter, PayloadTooLargeError, QueryError } from "../../src";
+import { createIGDB, IGDBError, LocalLimiter, PayloadTooLargeError, QueryError, TierError } from "../../src";
 import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 const echoIds = mockFetch((call) => {
@@ -78,6 +78,31 @@ describe("automatic batching", () => {
       "fulfilled",
     ]);
     expect((results[2] as PromiseRejectedResult).reason).toBeInstanceOf(QueryError);
+  });
+
+  test("a query outside the API tier only fails its own query", async () => {
+    const mock = mockFetch((call) =>
+      call.url.endsWith("/game_content_safety_ratings")
+        ? apicalypseError(
+            403,
+            "Forbidden",
+            "Trying to access a forbidden endpoint: This data is not available in your API tier",
+          )
+        : Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]),
+    );
+    const igdb = testClient(mock.fetch);
+    const results = await Promise.allSettled([
+      igdb.games.findById(1).execute(),
+      igdb.platforms.findById(2).execute(),
+      igdb.game_content_safety_ratings.limit(1).execute(),
+    ]);
+    expect(results.slice(0, 2)).toEqual([
+      { status: "fulfilled", value: { id: 1 } },
+      { status: "fulfilled", value: { id: 2 } },
+    ]);
+    const error = (results[2] as PromiseRejectedResult).reason as TierError;
+    expect(error).toBeInstanceOf(TierError);
+    expect(error.endpoint).toBe("game_content_safety_ratings");
   });
 
   test("a too large response is split until it fits", async () => {
@@ -174,6 +199,22 @@ describe("automatic batching", () => {
     expect(mock.calls.map((c) => c.url.split("/").pop())).toEqual(["games", "games"]);
     await igdb.batch({ a: igdb.games.findById(1), b: igdb.games.findById(2) });
     expect(mock.calls[2]?.url).toEndWith("/multiquery");
+  });
+
+  test("multiquery: false sends every query alone, batch() included, and identical ones once", async () => {
+    const mock = mockFetch((call) => Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]));
+    const igdb = testClient(mock.fetch, { multiquery: false });
+    expect(await igdb.batch({ a: igdb.games.findById(1), b: igdb.platforms.findById(2) })).toEqual({
+      a: { id: 1 },
+      b: { id: 2 },
+    });
+    await Promise.all([igdb.games.findById(3), igdb.games.findById(3), igdb.games.findById(4)]);
+    expect(mock.calls.map((c) => c.url.split("/").pop()).sort()).toEqual([
+      "games",
+      "games",
+      "games",
+      "platforms",
+    ]);
   });
 
   test("withCount is never batched (x-count only exists on single requests)", async () => {
