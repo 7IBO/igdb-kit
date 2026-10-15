@@ -49,6 +49,8 @@ igdb.games.where((g) => or(and(g.rating.gte(80), g.hypes.gt(10)), g.total_rating
 igdb.games.where("rating > 80");                                       // raw Apicalypse
 ```
 
+A raw condition also works on a query typed over several endpoints, such as `igdb[name]` in a loop that [copies tables](local-copy.md#copying-several-endpoints); the typed builder needs one endpoint.
+
 Each field only offers the operators that fit its type, and enum fields only accept their values.
 
 ### Relations by name
@@ -136,7 +138,7 @@ Avoid filters three levels deep, such as `involved_companies.company.name`: IGDB
 await igdb.games.select("name").first();                 // R | null
 await igdb.games.select("name").findById(1942);          // R | null
 await igdb.games.select("name").findByIdOrThrow(1942);   // R, or throws NotFoundError (also firstOrThrow())
-await igdb.games.select("name").findByIds(ids);          // R[], in the order given, 500 per request at most
+await igdb.games.select("name").findByIds(ids);          // R[], one per id found, in the order given
 await igdb.games.where((g) => g.rating.gte(90)).count(); // number
 await igdb.games.select("name").limit(20).withCount();   // { data: R[]; total: number }, one request
 for await (const game of igdb.games.select("name").iterate()) {
@@ -146,6 +148,15 @@ await igdb.games.select("name").search("zelda").limit(5); // searchable endpoint
 await igdb.games.select("name").catch(() => []);         // a query is a promise: then, catch, finally
 ```
 
+`findByIds()` returns one row per id, where the id first appears, and skips the ids IGDB does not have: ids gathered from many rows, such as the covers of a set of games, can go to an upsert as they are. It asks for at most 500 ids per query, batched; for a long list, [`sync({ ids })`](local-copy.md#tables-without-updated_at) reads the rows page by page instead of holding them all.
+
 `findByIds()`, `iterate()` and `sync()` size their pages by weight: 500 rows of a light selection, fewer of a heavy one, so that a page stays near `maxBatchBytes` (4 MB). A game with its media, companies, release dates and websites expanded weighs about 20 KB, so such pages hold about 200 games. The weight of a row starts from a cautious guess and is learned from each response. A page IGDB refuses for its size (above 10 MB, or not built within 29 seconds) is not retried but asked again in halves: `findByIds()` and `sync()` send each half alone, and `iterate()` asks again at half the size. So is a page of 100 rows or more that gets no answer within `attemptTimeoutMs` (45 s); a smaller one is retried.
 
-`iterate({ pageSize })` caps the page at 1 to 500 rows. `iterate()` and `sync()` read in id order and throw on any other `sort()`: sort the rows once read. A query with your own `limit` is never split: lower its `limit` if IGDB answers that the response is too large.
+`iterate({ pageSize })` caps the page at 1 to 500 rows. `iterate()` and `sync()` read in id order and throw on any other `sort()`: sort the rows once read. A [view](linked-data.md#views) has `iterate()` too. A query with your own `limit` is never split: when IGDB answers that the response is too large, the `PayloadTooLargeError` says which `limit` should pass, also as `suggestedLimit`, from what a row of the selection weighed in earlier responses, or half the limit before any.
+
+`igdb.raw(path, body)` sends an Apicalypse body as it is, at once, without batching or cache. With `{ withCount: true }` it returns `{ data, total }`, `total` being IGDB's `x-count` header (`null` for a count or a multiquery). On an endpoint of the schema, a query with a raw `where` does the same with typed rows:
+
+```ts
+const { data, total } = await igdb.raw<{ id: number; name?: string }[]>("games", "fields name; where rating > 90; limit 20;", { withCount: true });
+const same = await igdb.games.select("name").where("rating > 90").limit(20).withCount();
+```

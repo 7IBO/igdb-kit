@@ -6,6 +6,7 @@ import {
   artworkType,
   type CalendarRelease,
   type CompanyRole,
+  type Condition,
   createIGDB,
   defineSelection,
   type EndpointName,
@@ -20,6 +21,7 @@ import {
   MAIN_GAME_TYPES,
   NetworkError,
   or,
+  type PayloadTooLargeError,
   Platform,
   PopularityType,
   type Query,
@@ -31,6 +33,7 @@ import {
   type ResultOf,
   type SearchHit,
   type Task,
+  type WhereRoot,
 } from "../../src";
 import type { Prettify } from "../../src/query/types";
 import { type Equal, expectType } from "./helpers";
@@ -135,6 +138,80 @@ expectType<Equal<Awaited<ReturnType<typeof q1.firstOrThrow>>, R1>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
+
+// A raw where works on a query typed over several endpoints, as in a loop that copies tables.
+const copied = [
+  "platforms",
+  "platform_families",
+  "game_types",
+  "game_statuses",
+  "external_game_sources",
+  "release_date_regions",
+  "release_date_statuses",
+  "regions",
+  "date_formats",
+  "genres",
+  "languages",
+  "games",
+  "external_games",
+  "game_localizations",
+  "release_dates",
+  "popularity_primitives",
+  "game_time_to_beats",
+  "alternative_names",
+  "covers",
+  "websites",
+] as const;
+type Copied = (typeof copied)[number];
+type Stored = { id: number; [field: string]: unknown };
+declare const copiedName: Copied;
+const copyQuery = igdb[copiedName].select("*").where("id > 1");
+const copyPages: AsyncIterable<Stored[]> = copyQuery.sync({ concurrency: 4 });
+const copyRows: Promise<Stored[]> = copyQuery.findByIds([1, 2]).execute();
+const copyById: AsyncIterable<Stored[]> = copyQuery.sync({ ids: [1, 2] });
+void [copyPages, copyRows, copyById];
+// @ts-expect-error a typed builder needs one endpoint
+copyQuery.where((r) => r.id.gt(1));
+// @ts-expect-error covers and websites have no updated_at
+copyQuery.sync({ since: "2026-01-01" });
+const tracked = (name: "games" | "release_dates" | "popularity_primitives") =>
+  igdb[name].select("*").where("id > 1").sync({ since: "2026-01-01" });
+void tracked;
+declare const anyName: EndpointName;
+expectType<Equal<Awaited<ReturnType<ReturnType<(typeof igdb)[typeof anyName]["where"]>["count"]>>, number>>();
+const generic = <E extends Copied>(name: E) => igdb[name].select("*").where("id > 1");
+void generic;
+expectType<
+  Equal<Parameters<typeof igdb.games.where>[0], string | ((fields: WhereRoot<"games">) => Condition)>
+>();
+
+// A response too heavy for IGDB says which limit should pass.
+expectType<Equal<PayloadTooLargeError["suggestedLimit"], number | undefined>>();
+
+// raw() returns the data, or the data and IGDB's x-count with withCount.
+const rawData = await igdb.raw<{ id: number }[]>("games", "fields id; limit 5;");
+expectType<Equal<typeof rawData, { id: number }[]>>();
+const rawPage = await igdb.raw<{ id: number }[]>("games", "fields id; limit 5;", { withCount: true });
+expectType<Equal<typeof rawPage, { data: { id: number }[]; total: number | null }>>();
+expectType<Equal<Awaited<ReturnType<typeof igdb.raw>>, unknown>>();
+// An option left undefined, or a boolean known only at run time, works as in the other options.
+const rawRows = await igdb.raw<{ id: number }[]>("games", "fields id;", { withCount: undefined });
+expectType<Equal<typeof rawRows, { id: number }[]>>();
+const rawEither = await igdb.raw<{ id: number }[]>("games", "fields id;", { withCount: Math.random() > 0.5 });
+expectType<Equal<typeof rawEither, { id: number }[] | { data: { id: number }[]; total: number | null }>>();
+
+// popular() and weightedPopular() throw on a cut list only when asked.
+igdb.games.popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });
+igdb.games.weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { incomplete: "partial" });
+// @ts-expect-error "partial" or "throw"
+igdb.games.popular(PopularityType.IGDBVisits, { incomplete: true });
+
+// sync() takes ids on every endpoint, and since only where rows have updated_at.
+for await (const page of igdb.covers.select("image_id").sync({ ids: [1, 2] }))
+  expectType<Equal<typeof page, { id: number; image_id?: string }[]>>();
+igdb.games.sync({ ids: 7, since: "2026-01-01" });
+// @ts-expect-error covers have no updated_at
+igdb.covers.sync({ ids: [1], since: "2026-01-01" });
 
 // Chaining keeps the selection.
 const q5 = q2
@@ -305,6 +382,16 @@ igdb.searchAll("ubisoft", { kinds: ["company"] });
 igdb.searchAll("zelda", { gameTypes: GameType.Mod, includeEditions: true });
 igdb.searchAll("zelda", { gameTypes: MAIN_GAME_TYPES });
 igdb.games.where((g) => g.game_type.in(...MAIN_GAME_TYPES));
+// Game hits filtered with the typed builder, on paths relative to the game.
+igdb.searchAll("zelda", {
+  where: { game: (g) => g.platforms.named("Switch").and(g.first_release_date.gte(new Date(2017, 0))) },
+});
+// @ts-expect-error the named filters of games.where() are not available
+igdb.searchAll("zelda", { where: { game: (g) => g.mainGames() } });
+// @ts-expect-error unknown field of a game
+igdb.searchAll("zelda", { where: { game: (g) => g.nope.eq(1) } });
+// @ts-expect-error a filter, not a string
+igdb.searchAll("zelda", { where: { game: "platforms = (130)" } });
 
 // New reference constants.
 expectType<Equal<typeof ReleaseDateStatus.Cancelled, 5>>();
@@ -494,6 +581,8 @@ expectType<Equal<Awaited<ReturnType<typeof gamePage.findById>>, GamePage | null>
 expectType<Equal<Awaited<ReturnType<typeof gamePage.findByIds>>, GamePage[]>>();
 expectType<Equal<Awaited<ReturnType<ReturnType<typeof gamePage.where>["limit"]>>, GamePage[]>>();
 expectType<Equal<ResultOf<typeof gamePage>, GamePage>>();
+for await (const game of gamePage.where((g) => g.rating.gte(90)).iterate({ pageSize: 100 }))
+  expectType<Equal<typeof game, GamePage>>();
 gamePage.where((g) => g.rating.gte(90)).sort("rating", "desc");
 gamePage.search("zelda");
 gamePage.where((g) => g.developedBy("Nintendo"));

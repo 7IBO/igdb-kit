@@ -74,6 +74,8 @@ interface Shared {
  */
 export class SizeEstimator {
   private readonly perEntity = new Map<string, number>();
+  /** Selections whose weight comes from responses, not only from refusals. */
+  private readonly measured = new Set<string>();
 
   private key(endpoint: EndpointName, fields: readonly string[]): string {
     return `${endpoint}|${[...fields].sort().join(",")}`;
@@ -95,6 +97,37 @@ export class SizeEstimator {
     const sample = bytes / entities;
     const previous = this.perEntity.get(key);
     this.perEntity.set(key, previous === undefined ? sample : previous * 0.7 + sample * 0.3);
+    this.measured.add(key);
+  }
+
+  /**
+   * IGDB refused the response of `request` as above 10 MB: a `limit` that should pass, from the weight
+   * measured for this selection with some margin, else half the one refused, and a sentence saying so.
+   */
+  fitLimit(request: QueryRequest): { limit: number | undefined; text: string } | undefined {
+    const rows = request.maxRows ?? request.limit;
+    if (request.kind === "count" || rows === 0) return undefined;
+    if (rows === 1) return { limit: undefined, text: "One row is above 10 MB: select fewer fields" };
+    const key = this.key(request.endpoint, request.fields);
+    // Each row weighs at least its share of the 10 MB.
+    const floor = RESPONSE_CAP_BYTES / rows;
+    const weight = this.measured.has(key) ? this.perEntity.get(key) : undefined;
+    // iterate() refuses a search.
+    const iterate = !request.hasSearch;
+    if (weight === undefined) {
+      const limit = Math.floor(rows / 2);
+      return {
+        limit,
+        text: `Each row weighs more than ${kilobytes(floor)} KB: try limit(${limit})${iterate ? ", or iterate(), which sizes its pages itself" : ""}`,
+      };
+    }
+    const rowBytes = Math.max(weight, floor);
+    // Popular rows weigh more than the average: aim at 8 MB.
+    const limit = Math.max(1, Math.min(rows - 1, Math.floor((RESPONSE_CAP_BYTES * 0.8) / rowBytes)));
+    return {
+      limit,
+      text: `Rows of this selection weigh about ${kilobytes(rowBytes)} KB: limit(${limit}) should pass${iterate ? ", or iterate() reads them in pages it sizes itself" : ""}`,
+    };
   }
 
   /** IGDB refused the response of `request` as above 10 MB: each row weighs at least its share. */
@@ -270,8 +303,21 @@ export class Batcher {
         splits: (error) => halved(request, error),
       });
     } catch (error) {
-      if (error instanceof PayloadTooLargeError && error.message.startsWith("Response"))
+      if (error instanceof PayloadTooLargeError && error.message.startsWith("Response")) {
+        const fit = this.sizes.fitLimit(request);
         this.sizes.learnTooLarge(request);
+        if (fit) {
+          const { status, details, query, endpoint } = error;
+          throw new PayloadTooLargeError(`${error.message}. ${fit.text}`, {
+            status,
+            details,
+            query,
+            endpoint,
+            cause: error,
+            suggestedLimit: fit.limit,
+          });
+        }
+      }
       throw error;
     }
     if (Array.isArray(response.data) && response.bytes) {
@@ -404,6 +450,10 @@ export class Batcher {
       settle(entry, { data: result });
     });
   }
+}
+
+function kilobytes(bytes: number): number {
+  return Math.round(bytes / 1000);
 }
 
 /** The 403 of a proxy made with `igdbProxy({ multiquery: false })`. */

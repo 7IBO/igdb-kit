@@ -9,7 +9,7 @@
 `popular()` ranks games by one of IGDB's PopScore metrics and returns them in that order with their score. The query's fields and filters apply to the games, and its `limit` (10 by default) and `offset` pick the page of the ranking; `sort` throws, since the ranking sets the order:
 
 ```ts
-import { GameType, PopularityType } from "igdb-kit";
+import { GameType, PopularityType, Theme } from "igdb-kit";
 
 const trending = await igdb.games
   .select("name", "cover.image_id")
@@ -21,7 +21,14 @@ const next = await igdb.games.limit(20).offset(20).popular(PopularityType.IGDBPl
 
 The metrics are `IGDBVisits`, `IGDBWantToPlay`, `IGDBPlaying` and `IGDBPlayed`, plus Steam (`Steam24hrPeakPlayers`, `SteamGlobalTopSellers`, `SteamMostWishlistedUpcoming`…) and `Twitch24hrHoursWatched`.
 
-Popularity rows are read 500 at a time until enough games pass the filter. The games a filter matches are counted along with the first page: if it falls short and they are at most 10,000, their own rows are read instead, which gives the exact ranking in a few requests (the 20 most visited games released only on Switch 2 take 4 requests, where reading rows in value order found 14 of them in 20). Above 10,000 games, reading stops after `maxRows` rows (5000 by default).
+Popularity rows are read 500 at a time until enough games pass the filter. The games a filter matches are counted along with the first page: if it falls short and they are at most 10,000, their own rows are read instead, which gives the exact ranking in a few requests (the 20 most visited games released only on Switch 2 take 4 requests, where reading rows in value order found 14 of them in 20). Above 10,000 games, reading stops after `maxRows` rows (5000 by default, or the rows up to a deeper page), and the list is then shorter than the page if those rows did not hold enough of the games. Pass `incomplete: "throw"` to get a `QueryError` instead, which says how many games it found:
+
+```ts
+const page = await igdb.games
+  .where((g) => g.themes.any(Theme.Horror))
+  .limit(20)
+  .popular(PopularityType.IGDBVisits, { maxRows: 20_000, incomplete: "throw" });
+```
 
 ## weightedPopular()
 
@@ -37,7 +44,7 @@ const top = await igdb.games
 
 `values` holds each metric's raw value, and `null` when IGDB has no row for the game: a third of the 500 most played games have no Steam row, which is not the same as a measured 0. Such a game scores 0 for that metric. Negative weights lower a score (`SteamNegativeReviews: -0.2`).
 
-Each round reads 500 rows per positively weighted metric, then the other metrics and the games of the new ids, in about 2 multiqueries; it stops as soon as no unread game can enter the top, usually after one round. As with `popular()`, the games a filter matches are counted during the first round: if it does not settle the top and they are at most 10,000, their own rows are scored instead.
+Each round reads 500 rows per positively weighted metric, then the other metrics and the games of the new ids, in about 2 multiqueries; it stops as soon as no unread game can enter the top, usually after one round. As with `popular()`, the games a filter matches are counted during the first round: if it does not settle the top and they are at most 10,000, their own rows are scored instead. Otherwise, without a filter too, each metric stops after `maxRows` rows (5000 by default), and a game not read could then still belong in the top, such as one that ranks high in several metrics without leading any of them: `incomplete: "throw"` throws in that case.
 
 ## popularitySnapshot()
 

@@ -1,5 +1,5 @@
 import { describe, expect, spyOn, test } from "bun:test";
-import { LocalLimiter, NetworkError, QueryError } from "../../src";
+import { LocalLimiter, NetworkError, PayloadTooLargeError, QueryError } from "../../src";
 import { Transport } from "../../src/core/transport";
 import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
@@ -170,5 +170,73 @@ describe("pages sized in bytes", () => {
     expect(response.data).toEqual(rows);
     expect(response.bytes).toBe(new TextEncoder().encode(JSON.stringify(rows)).length);
     expect(response.bytes).toBeGreaterThan(JSON.stringify(rows).length);
+  });
+});
+
+describe("a query with its own limit, refused for its size", () => {
+  // Rows of about 25 KB: IGDB refuses more than 400 of them.
+  const heavy = () =>
+    games(1000, 25_000, (_, limit) => (limit * 25_000 > 10_000_000 ? tooLarge() : undefined));
+  const refusal = (query: PromiseLike<unknown>) =>
+    Promise.resolve(query).then(
+      () => undefined,
+      (error) => error as PayloadTooLargeError,
+    );
+
+  test("says which limit should pass: half, before any row of the selection was read", async () => {
+    const mock = heavy();
+    const igdb = testClient(mock.fetch);
+    const error = await refusal(igdb.games.select("name").limit(500));
+    expect(error).toBeInstanceOf(PayloadTooLargeError);
+    expect(error?.message).toBe(
+      "Response too large on games: Payload Too Large: Response size exceeds maximum allowed. Each row weighs more than 20 KB: try limit(250), or iterate(), which sizes its pages itself",
+    );
+    expect(error?.suggestedLimit).toBe(250);
+    expect(error?.cause).toBeInstanceOf(PayloadTooLargeError);
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test("says which limit should pass from the weight measured, and that limit passes", async () => {
+    const mock = heavy();
+    const igdb = testClient(mock.fetch);
+    await igdb.games.select("name").limit(100);
+    const error = await refusal(igdb.games.select("name").limit(500));
+    expect(error?.message).toEndWith(
+      "Rows of this selection weigh about 25 KB: limit(319) should pass, or iterate() reads them in pages it sizes itself",
+    );
+    expect(error?.suggestedLimit).toBe(319);
+    expect(await igdb.games.select("name").limit(319)).toHaveLength(319);
+  });
+
+  test("in a multiquery, only the query refused fails, with the hint", async () => {
+    const igdb = testClient(heavy().fetch);
+    const [big, small] = await Promise.all([
+      refusal(igdb.games.select("name").limit(500)),
+      igdb.games.select("slug").limit(2),
+    ]);
+    expect(big?.suggestedLimit).toBe(250);
+    expect(small).toHaveLength(2);
+  });
+
+  test("a search query is not told to use iterate(), which refuses search", async () => {
+    const igdb = testClient(heavy().fetch);
+    const error = await refusal(igdb.games.search("zelda").select("name").limit(500));
+    expect(error?.message).toEndWith(". Each row weighs more than 20 KB: try limit(250)");
+    expect(error?.suggestedLimit).toBe(250);
+    const measured = testClient(heavy().fetch);
+    await measured.games.select("name").limit(100);
+    const known = await refusal(measured.games.search("zelda").select("name").limit(500));
+    expect(known?.message).toEndWith(". Rows of this selection weigh about 25 KB: limit(319) should pass");
+  });
+
+  test("a single row, or a request body, gets no limit", async () => {
+    const igdb = testClient(games(10, 30, () => tooLarge()).fetch);
+    const one = await refusal(igdb.games.select("name").first());
+    expect(one?.message).toEndWith(". One row is above 10 MB: select fewer fields");
+    expect(one?.suggestedLimit).toBeUndefined();
+    const body = testClient(games(10, 30, () => apicalypseError(413, "Request Too Large")).fetch);
+    const request = await refusal(body.games.select("name").limit(50));
+    expect(request?.message).toBe("Request body too large on games: Request Too Large");
+    expect(request?.suggestedLimit).toBeUndefined();
   });
 });

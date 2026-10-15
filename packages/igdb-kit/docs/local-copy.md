@@ -3,6 +3,8 @@
 IGDB encourages keeping your own copy of its data.
 
 - [`sync()`](#copying-an-endpoint-sync) copies an endpoint, then only what changed since the last run.
+- [`sync({ ids })`](#tables-without-updated_at) reads the rows of tables without `updated_at` that changed games point to.
+- [A loop over table names](#copying-several-endpoints) needs no cast.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
@@ -29,6 +31,52 @@ How it reads:
 - A page IGDB refuses for its size, or of 100 rows or more that gets no answer within `attemptTimeoutMs`, is asked again in halves, and later pages are no larger. 429, 5xx and network errors are retried for `retryTimeoutMs` (see [Errors](client.md#errors)); any other error, or one that persists, ends the sync, and the next run reads again from the same `since`.
 
 A day of changes on `games` (about 33,000) takes 8 requests and 3 seconds, all 73,000 companies with `*` 26 requests and about 11 seconds, and the 133,000 rows of one popularity type, crowded into a few stretches of ids, 28 requests and 7 seconds.
+
+## Tables without updated_at
+
+Covers, websites, alternative names and other tables have no `updated_at`, so `since` cannot find what changed in them. The games that changed point to their rows: read those with `ids`.
+
+```ts
+const coverIds = changedGames.flatMap((game) => (game.cover === undefined ? [] : [game.cover]));
+for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
+  await db.upsertCovers(page); // each cover once, even when games share it
+}
+```
+
+Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies, `cursorThreshold` does not. `findByIds()` returns the same rows in one array, in the order of the ids.
+
+## Copying several endpoints
+
+A copy loops over table names, and `igdb[name]` is then a query typed over every table of the list. `select()`, a `where` written as a string, `sync()`, `findByIds()` and `removed()` work on it without a cast, and each row has the type of one of the tables:
+
+```ts
+import { type EndpointName, WebsiteType } from "igdb-kit";
+
+const tables = ["platforms", "genres", "games", "release_dates", "covers", "websites"] as const;
+/** What the copy keeps of a table, when not every row. */
+const filters: Partial<Record<EndpointName, string>> = {
+  websites: `type = (${WebsiteType.Steam},${WebsiteType.GOG})`,
+};
+
+for (const name of tables) {
+  const all = igdb[name].select("*");
+  const filter = filters[name];
+  for await (const page of (filter ? all.where(filter) : all).sync()) {
+    await db.upsert(name, page); // { id: number; ... }[]
+  }
+}
+```
+
+The typed builder needs the name narrowed to one table (`name === "websites" ? igdb.websites.where((w) => w.type.in(...)) : ...`), and `since` to tables that have `updated_at`, which a type guard on your own list of them does:
+
+```ts
+const tracked = ["games", "release_dates"] as const;
+const isTracked = (name: string): name is (typeof tracked)[number] => (tracked as readonly string[]).includes(name);
+
+const pages = isTracked(name) ? igdb[name].select("*").sync({ since: lastSync }) : igdb[name].select("*").sync();
+```
+
+Narrow the name before `select()`: a helper that selects from a generic name types its query over every table of the list again, and `since` is then refused.
 
 ## Webhooks
 
