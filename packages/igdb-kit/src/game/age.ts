@@ -2,20 +2,27 @@ import type { Selection } from "../links/selection";
 import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
-/** Fields of `age_ratings` that {@link ageRating} reads. */
+/**
+ * Fields of `age_ratings` that {@link ageRating} reads; `age_ratings.rating_category.rating`,
+ * `age_ratings.synopsis` and `age_ratings.rating_content_descriptions.description` too when selected.
+ */
 export type AgeRatingFields = "age_ratings.organization" | "age_ratings.rating_category";
 
 /**
- * The fields {@link ageRating} and {@link ageRatings} read, to spread into `select()`, with the
- * synopsis and the text of the content descriptors.
+ * The fields {@link ageRating} and {@link ageRatings} read, to spread into `select()`: the rating
+ * category with its label, for a category added to IGDB after this version, the synopsis and the
+ * text of the content descriptors.
  */
 export function ageRatingFields(): Selection<
   "games",
-  AgeRatingFields | "age_ratings.synopsis" | "age_ratings.rating_content_descriptions.description"
+  | "age_ratings.organization"
+  | "age_ratings.rating_category.rating"
+  | "age_ratings.synopsis"
+  | "age_ratings.rating_content_descriptions.description"
 > {
   return Object.freeze([
     "age_ratings.organization",
-    "age_ratings.rating_category",
+    "age_ratings.rating_category.rating",
     "age_ratings.synopsis",
     "age_ratings.rating_content_descriptions.description",
   ] as const);

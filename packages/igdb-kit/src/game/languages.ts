@@ -11,18 +11,17 @@ export type LanguageFields = "language_supports.language" | "language_supports.l
  * The fields {@link languages} and {@link supportsLanguage} read, to spread into `select()`: the
  * languages as ids, or with the fields you name (`languageFields("native_name")`).
  */
-export function languageFields<F extends string = never>(
-  ...fields: FieldPath<Language, F>[]
-): Selection<
-  "games",
-  | "language_supports.language_support_type"
-  | ([F] extends [never] ? "language_supports.language" : `language_supports.language.${F}`)
-> {
+export function languageFields(): Selection<"games", LanguageFields>;
+export function languageFields<F extends string>(
+  field: FieldPath<Language, F>,
+  ...more: FieldPath<Language, F>[]
+): Selection<"games", "language_supports.language_support_type" | `language_supports.language.${F}`>;
+export function languageFields(...fields: string[]): readonly string[] {
   const language =
     fields.length === 0
       ? ["language_supports.language"]
       : fields.map((field) => `language_supports.language.${field}`);
-  return Object.freeze([...language, "language_supports.language_support_type"]) as never;
+  return Object.freeze([...language, "language_supports.language_support_type"]);
 }
 
 interface LanguageSupportRow {

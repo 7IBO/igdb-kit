@@ -78,7 +78,7 @@ export interface Playtimes {
   normally: number | null;
   /** 100%, in seconds; `null` when IGDB has no time. */
   completely: number | null;
-  /** Number of submissions behind the averages (1 for 72% of rows). */
+  /** Number of submissions behind the averages (1 for 72% of rows), `null` when IGDB has none. */
   count: number | null;
 }
 

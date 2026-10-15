@@ -856,7 +856,6 @@ platformVersions(versionDates);
 
 // Field lists: everything a helper reads, to spread into select().
 import {
-  type AgeRatingFields,
   type AlternativeNameFields,
   ageRatingFields,
   alternativeNameFields,
@@ -901,7 +900,12 @@ const languageIds = languageFields();
 const parentIds = parentGameFields();
 const franchiseIds = franchiseFields();
 const versionDateFields = platformVersionFields();
-expectType<Equal<ReturnType<typeof releaseDateFields>[number], ReleaseDateFields>>();
+expectType<
+  Equal<
+    ReturnType<typeof releaseDateFields>[number],
+    ReleaseDateFields | "release_dates.human" | "release_dates.y" | "release_dates.m"
+  >
+>();
 expectType<Equal<(typeof companyIds)[number], CompanyFields>>();
 expectType<
   Equal<
@@ -916,7 +920,10 @@ expectType<Equal<ReturnType<typeof videoLinkFields>[number], VideoLinkFields>>()
 expectType<
   Equal<
     ReturnType<typeof ageRatingFields>[number],
-    AgeRatingFields | "age_ratings.synopsis" | "age_ratings.rating_content_descriptions.description"
+    | "age_ratings.organization"
+    | "age_ratings.rating_category.rating"
+    | "age_ratings.synopsis"
+    | "age_ratings.rating_content_descriptions.description"
   >
 >();
 expectType<
@@ -930,7 +937,12 @@ expectType<Equal<(typeof parentIds)[number], ParentGameFields | "version_title">
 expectType<Equal<(typeof franchiseIds)[number], FranchiseFields>>();
 expectType<Equal<ReturnType<typeof timeToBeatFields>[number], TimeToBeatFields>>();
 expectType<Equal<ReturnType<typeof eventTimeFields>[number], EventTimeFields | "end_time">>();
-expectType<Equal<(typeof versionDateFields)[number], PlatformVersionFields>>();
+expectType<
+  Equal<
+    (typeof versionDateFields)[number],
+    PlatformVersionFields | `versions.platform_version_release_dates.${"human" | "y" | "m"}`
+  >
+>();
 
 // The lists of several helpers go into one select(), and each helper accepts the result.
 const shown = await igdb.games
@@ -985,6 +997,19 @@ const versionNames = await igdb.platforms
 platformVersions(versionNames)[0]?.version.name satisfies string | undefined;
 // @ts-expect-error not a field of companies
 companyFields("nam");
+// A list of fields that may be empty would select ids where the type says objects: name at least one.
+const maybeNoFields: "name"[] = [];
+// @ts-expect-error a list that may be empty
+companyFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+languageFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+parentGameFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+franchiseFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+relatedGameFields(...maybeNoFields);
+companyFields(...(["name", "logo.image_id"] as const));
 // @ts-expect-error not a field of platform_versions
 platformVersionFields("nam");
 // @ts-expect-error a list belongs to its endpoint: timeToBeatFields() to game_time_to_beats

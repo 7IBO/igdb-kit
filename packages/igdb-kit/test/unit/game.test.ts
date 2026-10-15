@@ -1036,6 +1036,13 @@ describe("gameKind()", () => {
     expect(gameKind({ game_type: 99, version_parent: undefined })).toBe("other");
   });
 
+  test("a game without game_type is other, as parentGame() names it", () => {
+    expect(gameKind({ game_type: undefined, version_parent: undefined })).toBe("other");
+    const child = { game_type: undefined, parent_game: 5, version_parent: undefined };
+    expect(parentGame(child)?.relation).toBe("other");
+    expect(gameKind(child)).toBe("other");
+  });
+
   test("the relation parentGame() gives a game with a parent", () => {
     for (const type of Object.values(GameType)) {
       if (type === GameType.MainGame || type === GameType.Bundle) continue;
@@ -1327,6 +1334,9 @@ describe("field lists", () => {
       "release_dates.release_region",
       "release_dates.platform",
       "release_dates.status",
+      "release_dates.human",
+      "release_dates.y",
+      "release_dates.m",
     ]);
     expect(storeLinkFields()).toEqual([
       "websites.url",
@@ -1347,7 +1357,7 @@ describe("field lists", () => {
     expect(videoLinkFields()).toEqual(["videos.video_id", "videos.name"]);
     expect(ageRatingFields()).toEqual([
       "age_ratings.organization",
-      "age_ratings.rating_category",
+      "age_ratings.rating_category.rating",
       "age_ratings.synopsis",
       "age_ratings.rating_content_descriptions.description",
     ]);
@@ -1381,6 +1391,19 @@ describe("field lists", () => {
     ]);
     expect(timeToBeatFields()).toEqual(["hastily", "normally", "completely", "count"]);
     expect(eventTimeFields()).toEqual(["start_time", "end_time", "time_zone"]);
+  });
+
+  test("the lists keep IGDB's labels: a release date's human, a new rating category's rating", () => {
+    // The release dates as select(...releaseDateFields()) returns them.
+    const fields = releaseDateFields().map((path) => path.slice("release_dates.".length));
+    const release_dates = fixtures.witcher3.release_dates?.map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key === "id" || fields.includes(key))),
+    );
+    expect(releaseDate({ release_dates } as never)?.human).toBe("May 19, 2015");
+    // A rating category added to IGDB after this version is labeled from rating_category.rating.
+    const rating = { id: 1, organization: 2, rating_category: { id: 99, rating: "New" } };
+    expect(ageRatingFields()).toContain("age_ratings.rating_category.rating");
+    expect(ageRating({ age_ratings: [rating] }, 2)?.label).toBe("New");
   });
 
   test("the fields you name go on the rows a helper returns as selected", () => {
@@ -1418,6 +1441,9 @@ describe("field lists", () => {
       "versions.platform_version_release_dates.date",
       "versions.platform_version_release_dates.date_format",
       "versions.platform_version_release_dates.release_region",
+      "versions.platform_version_release_dates.human",
+      "versions.platform_version_release_dates.y",
+      "versions.platform_version_release_dates.m",
     ] as const;
     expect(platformVersionFields()).toEqual(dates);
     expect(platformVersionFields("name")).toEqual([...dates, "versions.name"]);

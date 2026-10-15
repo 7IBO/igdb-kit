@@ -196,7 +196,7 @@ function displayName(type: "region" | "language", code: string, locale: string):
   }
 }
 
-/** Fields of `events` that {@link eventTime} reads. */
+/** Fields of `events` that {@link eventTime} reads; `end_time` too when selected. */
 export type EventTimeFields = "start_time" | "time_zone";
 
 /** The fields {@link eventTime} reads, `end_time` included, to spread into `igdb.events.select()`. */
