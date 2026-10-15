@@ -15,11 +15,11 @@ const timeToBeat = await igdb.game_time_to_beats.select("normally").findByGames(
 timeToBeat.get(1942); // [{ id: 432, normally: 254778 }]: seconds, about 71 h
 timeToBeat.get(1020); // []: no time to beat, the case for most games
 
-const firstDates = await igdb.release_dates.select("date", "platform").sort("date").limit(1).findByGames(ids);
+const firstDates = await igdb.release_dates.select("human", "platform").sort("date").limit(1).findByGames(ids);
 ```
 
 - Every requested id is in the map, with an empty array when nothing points to the game.
-- The query's `where` applies, and its `sort` and `limit` apply to each game's rows. Every row comes back, not just the first 10. A row linked to several of the games, such as a character, is listed under each of them.
+- The query's `where` applies, and its `sort` and `limit` apply to each game's rows. The sort field does not need to be selected: it is requested to sort, and left out of the rows. Every row comes back, not just the first 10. A row linked to several of the games, such as a character, is listed under each of them.
 - Regional covers have no `game` (their game localization points to them), so `covers.findByGames()` returns the main cover only.
 - Ids are sent 500 per query and pages of 500 rows are read until the end, all batched. A page that comes back full is split using the count, so the 9,000 language rows of 500 games take about 9 requests instead of 18 one after the other.
 

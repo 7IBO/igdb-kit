@@ -437,8 +437,9 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    * games in bundles (`"bundles"`), the subsidiaries of companies (`igdb.companies.findBy("parent",
    * ids)`). Works on any relation or `..._id` field, including the 95 of IGDB's links that have no
    * field back. The fields and `where` of this query apply; `sort` and `limit` apply to each id's
-   * rows, and every row comes back, not just 10. Every requested id is in the map, with an empty
-   * array when nothing points to it; a row pointing to several of them is under each.
+   * rows, and every row comes back, not just 10. The sort field need not be selected. Every requested
+   * id is in the map, with an empty array when nothing points to it; a row pointing to several of
+   * them is under each.
    */
   findBy(field: LinkField<Endpoints[N]>, ids: readonly number[]): Task<Map<number, R[]>> {
     return new Task(async (execute) => {
@@ -1170,6 +1171,8 @@ export class GameLinkedQuery<N extends GameLinkedEndpoint, R = { id: number }> e
    * `release_dates`, `websites`… through their `game` (or `game_id`) field, and `characters`,
    * `events`, `collections`, `franchises` through their `games` array. The fields and `where` of this
    * query apply; `sort` and `limit` apply to each game's rows, and every row comes back, not just 10.
+   * The sort field need not be selected: `select("human").sort("date").limit(1)` gives each game's
+   * first release date.
    *
    * Every requested id is in the map, with an empty array when nothing points to it (most games have
    * no time to beat). A row linked to several of the games is under each of them. Ids are split by

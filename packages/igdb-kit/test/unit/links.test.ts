@@ -33,10 +33,14 @@ function fakeIgdb(tables: Record<string, Row[]>) {
       .match(/fields (.*?);/)?.[1]
       ?.split(",")
       .map((f) => f.split(".")[0]);
+    const exclude = call.body.match(/exclude (.*?);/)?.[1]?.split(",") ?? [];
     const project = (row: Row) =>
-      fields && !fields.includes("*")
-        ? Object.fromEntries(Object.entries(row).filter(([k]) => k === "id" || fields.includes(k)))
-        : row;
+      Object.fromEntries(
+        Object.entries(row).filter(
+          ([k]) =>
+            k === "id" || ((!fields || fields.includes("*") || fields.includes(k)) && !exclude.includes(k)),
+        ),
+      );
     return Response.json(rows.map(project), { headers: { "x-count": String(total) } });
   });
 }
@@ -180,6 +184,56 @@ describe("findByGames()", () => {
     expect(all.get(10)?.map((r) => r.id)).toEqual([1, 2, 5]); // rows without the field last
   });
 
+  test("sorts on a field that is not selected, and leaves it out of the rows", async () => {
+    const mock = fakeIgdb({ release_dates: releaseDates });
+    const igdb = testClient(mock.fetch);
+    const first = await igdb.release_dates.select("platform").sort("date").limit(1).findByGames([10, 20]);
+    expect([...first]).toEqual([
+      [10, [{ id: 2, platform: 48 }]],
+      [20, [{ id: 3, platform: 6 }]],
+    ]);
+    expect(mock.calls[0]?.body).toBe(
+      "fields platform,game,date; where (game = (10,20)) & (id > -1); sort id asc; limit 500;",
+    );
+    const latest = await igdb.release_dates.select("platform").sort("date", "desc").findByGames([10]);
+    expect(latest.get(10)).toEqual([
+      { id: 1, platform: 6 },
+      { id: 2, platform: 48 },
+      { id: 5, platform: 167 }, // no date: last
+    ]);
+    expect(mock.calls[1]?.body).toBe(
+      "fields platform,date; where (game = (10)) & (id > -1); sort id asc; limit 500;",
+    );
+    const bare = await igdb.release_dates.sort("date").findByGames([10]);
+    expect(bare.get(10)).toEqual([{ id: 2 }, { id: 1 }, { id: 5 }]);
+    const excluded = await igdb.release_dates
+      .select("*")
+      .exclude("date")
+      .sort("date")
+      .limit(2)
+      .findByGames([10, 20]);
+    expect(excluded.get(10)).toEqual([
+      { id: 2, game: 10, platform: 48 },
+      { id: 1, game: 10, platform: 6 },
+    ]);
+    expect(mock.calls[3]?.body).not.toContain("exclude");
+    const reversed = await igdb.release_dates.sort("id", "desc").findByGames([10, 20]);
+    expect(reversed.get(10)).toEqual([{ id: 5 }, { id: 2 }, { id: 1 }]);
+    const byField = await igdb.release_dates.select("platform").sort("date").limit(1).findBy("game", [10]);
+    expect(byField.get(10)).toEqual([{ id: 2, platform: 48 }]);
+  });
+
+  test("groups by the link field when it is excluded from a * selection", async () => {
+    const igdb = testClient(fakeIgdb({ release_dates: releaseDates }).fetch);
+    const byGame = await igdb.release_dates.select("*").exclude("game", "date").findByGames([10, 20]);
+    expect(byGame.get(10)).toEqual([
+      { id: 1, platform: 6 },
+      { id: 2, platform: 48 },
+      { id: 5, platform: 167 },
+    ]);
+    expect(byGame.get(20)).toEqual([{ id: 3, platform: 6 }]);
+  });
+
   test("reads past 500 rows of one game with an id cursor", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => ({ id: i + 1, game: 10 }));
     const mock = fakeIgdb({ screenshots: rows });
@@ -282,6 +336,20 @@ describe("defineView()", () => {
     expect(mock.calls[0]?.url).toEndWith("/multiquery");
     expect(mock.calls[0]?.body.split("\n")).toHaveLength(3);
     expect(await view(igdb).findById(404)).toBeNull();
+  });
+
+  test("a linked query sorts on a field it does not select", async () => {
+    const igdb = testClient(fakeIgdb(tables).fetch);
+    const games = igdb.defineView("games", {
+      select: ["name"],
+      with: { firstRelease: igdb.release_dates.select("platform").sort("date").limit(1) },
+    });
+    expect((await games.findById(10))?.firstRelease).toEqual([{ id: 2, platform: 48 }]);
+    const list = await games.where("id != 0").limit(2);
+    expect(list.map((game) => game.firstRelease)).toEqual([
+      [{ id: 2, platform: 48 }],
+      [{ id: 3, platform: 6 }],
+    ]);
   });
 
   test("the same game loaded twice at once has its links both times", async () => {
