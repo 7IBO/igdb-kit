@@ -410,6 +410,25 @@ describe("storeLinks()", () => {
     expect(storeLinks({ websites: [{ url: pasted, trusted: false }] })).toEqual([]);
     expect(localizeStoreUrl(pasted, "fr-FR")).toBe(pasted);
   });
+
+  test("storeOf() reads a mistyped https:// as storeLinks() does, and no address as null", () => {
+    for (const url of [
+      "https:/store.steampowered.com/app/292030",
+      "http:store.steampowered.com/app/292030",
+      "HTTPS:\\\\store.steampowered.com\\app\\292030",
+    ]) {
+      expect(storeLinks({ websites: [{ url, trusted: true }] }).map((l) => l.store)).toEqual(["steam"]);
+      expect(storeOf(url)).toBe("steam");
+    }
+    expect(parseStoreUrl("https:/store.steampowered.com/app/292030")).toEqual({
+      store: "steam",
+      kind: "app",
+      id: "292030",
+    });
+    // A websites row without its url, from JavaScript.
+    expect(storeOf(undefined as never)).toBeNull();
+    expect(parseStoreUrl(null as never)).toBeNull();
+  });
 });
 
 describe("parseStoreUrl()", () => {

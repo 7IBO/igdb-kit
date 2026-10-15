@@ -194,10 +194,13 @@ function storeAt(url: string): Store | null {
   return null;
 }
 
-/** A pasted address with its `https://`, which `new URL()` needs. */
+/**
+ * A pasted address with its `https://`, which `new URL()` needs. One with a mistyped `https:/` is
+ * left to `new URL()`, which reads it as `storeLinks()` does.
+ */
 function withScheme(url: string): string {
-  const trimmed = url.trim();
-  return /^[a-z][a-z\d+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const trimmed = typeof url === "string" ? url.trim() : "";
+  return /^(https?:|[a-z][a-z\d+.-]*:\/\/)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
 /**
