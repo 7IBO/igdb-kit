@@ -36,7 +36,7 @@ const onSwitch = await igdb.searchAll("zelda", {
 });
 ```
 
-The named filters of `games.where()`, such as `mainGames()`, are not available there: `gameTypes` and `includeEditions` cover them.
+The named filters of `games.where()`, such as `mainGames()`, `developedBy()` or `releasedIn()`, are not available there: `gameTypes` and `includeEditions` do part of what `mainGames()` does, and for the others, write conditions on the fields, such as `g.involved_companies.company` or `g.release_dates.date`.
 
 ### Titles in other languages
 

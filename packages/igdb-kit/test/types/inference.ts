@@ -187,10 +187,16 @@ expectType<
 expectType<Equal<PayloadTooLargeError["suggestedLimit"], number | undefined>>();
 
 // raw() returns the data, or the data and IGDB's x-count with withCount.
-expectType<Equal<Awaited<ReturnType<typeof igdb.raw<{ id: number }[]>>>, { id: number }[]>>();
+const rawData = await igdb.raw<{ id: number }[]>("games", "fields id; limit 5;");
+expectType<Equal<typeof rawData, { id: number }[]>>();
 const rawPage = await igdb.raw<{ id: number }[]>("games", "fields id; limit 5;", { withCount: true });
-expectType<Equal<typeof rawPage, { data: { id: number }[]; total: number | undefined }>>();
+expectType<Equal<typeof rawPage, { data: { id: number }[]; total: number | null }>>();
 expectType<Equal<Awaited<ReturnType<typeof igdb.raw>>, unknown>>();
+// An option left undefined, or a boolean known only at run time, works as in the other options.
+const rawRows = await igdb.raw<{ id: number }[]>("games", "fields id;", { withCount: undefined });
+expectType<Equal<typeof rawRows, { id: number }[]>>();
+const rawEither = await igdb.raw<{ id: number }[]>("games", "fields id;", { withCount: Math.random() > 0.5 });
+expectType<Equal<typeof rawEither, { id: number }[] | { data: { id: number }[]; total: number | null }>>();
 
 // popular() and weightedPopular() throw on a cut list only when asked.
 igdb.games.popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });

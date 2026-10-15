@@ -66,7 +66,7 @@ export interface SearchAllOptions {
    * Filters game hits with the typed builder, on paths relative to the game, as in `select`:
    * `{ game: (g) => g.platforms.named("Switch") }`. It applies to the alternative and localized
    * titles too. The named filters of `igdb.games.where()`, such as `mainGames()`, are not available
-   * here; `gameTypes` and `includeEditions` cover the first.
+   * here; `gameTypes` and `includeEditions` do part of what `mainGames()` does.
    */
   where?: { game?: ((game: WhereFields<Game>) => Condition) | undefined } | undefined;
   /**

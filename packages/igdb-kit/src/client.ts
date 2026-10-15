@@ -123,15 +123,24 @@ export type IGDBClient = { readonly [K in EndpointName]: QueryOf<K> } & {
   /**
    * Sends a raw Apicalypse body to a path (`games`, `games/count`, `multiquery`). With `withCount:
    * true`, returns `{ data, total }`: `total` is IGDB's `x-count` header, the matches of the `where`
-   * whatever the `limit` (approximate with `search`), and `undefined` when IGDB sends none, as for a
+   * whatever the `limit` (approximate with `search`), and `null` when IGDB sends none, as for a
    * count or a multiquery.
    */
   raw<T = unknown>(
     path: string,
     body: string,
     options: ExecuteOptions & { withCount: true },
-  ): Promise<{ data: T; total: number | undefined }>;
-  raw<T = unknown>(path: string, body: string, options?: ExecuteOptions & { withCount?: false }): Promise<T>;
+  ): Promise<{ data: T; total: number | null }>;
+  raw<T = unknown>(
+    path: string,
+    body: string,
+    options?: ExecuteOptions & { withCount?: false | undefined },
+  ): Promise<T>;
+  raw<T = unknown>(
+    path: string,
+    body: string,
+    options?: ExecuteOptions & { withCount?: boolean | undefined },
+  ): Promise<T | { data: T; total: number | null }>;
   /**
    * Defines games with data from other endpoints attached, each under its key: time to beat,
    * characters, release dates, websites… (any endpoint that points to games, see `findByGames()`).
@@ -266,10 +275,14 @@ export function createIGDB(options: IGDBClientOptions): IGDBClient {
           : (snapshotOptions.types ?? Object.values(PopularityType)),
         snapshotOptions,
       ),
-    raw: async (path: string, body: string, rawOptions: ExecuteOptions & { withCount?: boolean } = {}) => {
+    raw: async (
+      path: string,
+      body: string,
+      rawOptions: ExecuteOptions & { withCount?: boolean | undefined } = {},
+    ) => {
       const { withCount, ...runOptions } = rawOptions;
       const response = await transport.send(path, body, runOptions);
-      return withCount ? { data: response.data, total: response.total } : response.data;
+      return withCount ? { data: response.data, total: response.total ?? null } : response.data;
     },
     defineView: (endpoint: string, definition: { select?: readonly string[]; with?: ViewLinks }) => {
       if (endpoint !== "games") throw new QueryError(`Views are defined on games, not ${endpoint}`);

@@ -224,6 +224,8 @@ export async function weightedPopular<R>(
   const seen = new Set<number>();
   const results: WeightedPopular<R>[] = [];
   let total: number | undefined;
+  /** Rows read of the type read furthest: `maxRows`, or more for a deep page. */
+  let deepest = 0;
 
   for (let round = 0; offsets.size > 0; round++) {
     const reads = [...offsets.entries()];
@@ -246,6 +248,7 @@ export async function weightedPopular<R>(
           fresh.push(row.game_id);
         }
       }
+      deepest = Math.max(deepest, offset + rows.length);
       const end = rows.length < PAGE;
       if (end) ended.add(type);
       threshold.set(type, end ? 0 : (rows[rows.length - 1]?.value ?? 0));
@@ -300,8 +303,8 @@ export async function weightedPopular<R>(
   // Every type ran out of rows, or one stopped at maxRows before the top was settled.
   if (ended.size < scanned.length && incomplete === "throw") {
     throw new QueryError(
-      `weightedPopular() reached maxRows (${maxRows}) before settling the top ${limit}` +
-        `${total === undefined ? "" : `, among ${total} games matching the where`}: raise maxRows or narrow the where`,
+      `weightedPopular() read up to ${deepest} popularity rows per type without settling the top ${limit}` +
+        `${total === undefined ? "" : `, among ${total} games matching the where`}: raise maxRows above ${deepest} or narrow the where`,
     );
   }
   return results.slice(0, limit);

@@ -42,7 +42,7 @@ for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
 }
 ```
 
-Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies. `findByIds()` returns the same rows in one array, in the order of the ids.
+Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies, `cursorThreshold` does not. `findByIds()` returns the same rows in one array, in the order of the ids.
 
 ## Copying several endpoints
 

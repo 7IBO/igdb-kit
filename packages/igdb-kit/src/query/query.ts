@@ -167,7 +167,8 @@ export interface SyncOptions extends ExecuteOptions {
   cursorThreshold?: number | undefined;
   /**
    * Reads only the rows with these ids, one id or several, such as the covers of the games that
-   * changed: each row once, in id order. The `where` and `since` still apply.
+   * changed: each row once, in id order. The `where`, `since` and `concurrency` still apply,
+   * `cursorThreshold` does not.
    */
   ids?: number | readonly number[] | undefined;
 }

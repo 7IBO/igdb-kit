@@ -4,7 +4,7 @@
 
 `findByIds()`, on a query or a view, returns one row per id, where the id first appears in the list. Ids gathered from many rows, such as the covers or websites of a set of games, often repeat, and the repeated rows made an upsert such as PostgreSQL's `INSERT ... ON CONFLICT` fail.
 
-`sync({ ids })` reads only the rows with these ids, each once, page by page: for tables without `updated_at`, such as covers, websites and alternative names, it reads the rows the changed games point to without holding them all, as `findByIds()` does. The first page goes alone and tells what a row weighs; then up to `concurrency` pages, about 64 MB, are requested or waiting at once.
+`sync({ ids })` reads only the rows with these ids, each once, page by page: for tables without `updated_at`, such as covers, websites and alternative names, it reads the rows the changed games point to without holding them all, where `findByIds()` returns them in one array. The first page goes alone and tells what a row weighs; then up to `concurrency` pages, about 64 MB, are requested or waiting at once.
 
 Breaking changes:
 

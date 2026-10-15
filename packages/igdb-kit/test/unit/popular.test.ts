@@ -201,6 +201,9 @@ describe("popular()", () => {
       /maxRows/,
     );
     await expect(
+      igdb.games.popular(PopularityType.IGDBVisits, { maxRows: Number.POSITIVE_INFINITY }).execute(),
+    ).rejects.toThrow(/maxRows/);
+    await expect(
       // @ts-expect-error "partial" or "throw"
       igdb.games.popular(PopularityType.IGDBVisits, { incomplete: "error" }).execute(),
     ).rejects.toThrow(QueryError);

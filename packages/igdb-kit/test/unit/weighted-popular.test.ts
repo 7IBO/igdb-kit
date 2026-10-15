@@ -132,7 +132,18 @@ describe("weightedPopular()", () => {
         .weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { maxRows: 1000, incomplete: "throw" })
         .execute(),
     ).rejects.toThrow(
-      "weightedPopular() reached maxRows (1000) before settling the top 3, among 18800 games matching the where: raise maxRows or narrow the where",
+      "weightedPopular() read up to 1000 popularity rows per type without settling the top 3, among 18800 games matching the where: raise maxRows above 1000 or narrow the where",
+    );
+    // A deep page reads past maxRows: the message gives the rows read.
+    await expect(
+      testClient(capped.fetch)
+        .games.where((g) => g.game_status.eq(0))
+        .limit(3)
+        .offset(1000)
+        .weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { maxRows: 500, incomplete: "throw" })
+        .execute(),
+    ).rejects.toThrow(
+      "weightedPopular() read up to 1500 popularity rows per type without settling the top 1003, among 18800 games matching the where: raise maxRows above 1500 or narrow the where",
     );
     // Settled within maxRows: no error.
     const settled = await query.weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { incomplete: "throw" });

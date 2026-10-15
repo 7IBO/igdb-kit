@@ -67,7 +67,7 @@ describe("browser client through igdbProxy", () => {
     });
     expect(await server.raw("games/count", "where id = (2);", { withCount: true })).toEqual({
       data: { count: 42 },
-      total: undefined,
+      total: null,
     });
     expect(await browser.raw("games", body, { withCount: true })).toEqual({
       data: [{ id: 2, name: "Game 2" }],
