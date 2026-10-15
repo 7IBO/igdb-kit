@@ -105,7 +105,8 @@ export type IGDBClient = { readonly [K in EndpointName]: QueryOf<K> } & {
    * Runs several queries, views and tasks together, and returns each result under its key with its
    * own type. Requests sent at the same time go as few multiqueries as possible (10 per request), so
    * single queries take one multiquery and tasks such as `findByIds()` or `popular()` share theirs.
-   * Works even when `autoBatch` is off.
+   * Works even when `autoBatch` is off, but not when `multiquery` is false or a proxy refused a
+   * multiquery: every query then goes alone.
    */
   batch<T extends BatchInput>(queries: T, options?: Omit<ExecuteOptions, "batch">): Promise<BatchResult<T>>;
   /**

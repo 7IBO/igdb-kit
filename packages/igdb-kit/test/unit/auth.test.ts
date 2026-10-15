@@ -87,6 +87,32 @@ describe("tokens", () => {
     }
   });
 
+  test("a token request that fails rejects each query with the endpoint and query it comes from", async () => {
+    const random = spyOn(Math, "random").mockReturnValue(0); // no wait between tries
+    try {
+      for (const [answer, type] of [
+        [() => Promise.reject(new TypeError("fetch failed")), NetworkError],
+        [() => Response.json({ message: "unavailable" }, { status: 503 }), NetworkError],
+        [() => Response.json({ message: "invalid client secret" }, { status: 400 }), AuthError],
+      ] as const) {
+        const fetch = (async (input: string | URL | Request) =>
+          String(input).startsWith("https://id.twitch.tv")
+            ? answer()
+            : Response.json([{ id: 1 }])) as typeof globalThis.fetch;
+        const igdb = testClient(fetch, { autoBatch: false });
+        const [games, platforms] = await Promise.all([
+          igdb.games.limit(1).catch((e) => e),
+          igdb.platforms.limit(1).catch((e) => e),
+        ]);
+        expect(games).toBeInstanceOf(type);
+        expect(games).toMatchObject({ endpoint: "games", query: "limit 1;" });
+        expect(platforms).toMatchObject({ endpoint: "platforms", query: "limit 1;" });
+      }
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   test("an error thrown by hooks.onTokenRefresh does not fail the request", async () => {
     const { fetch, calls } = twitch(() => 200);
     const retries: unknown[] = [];

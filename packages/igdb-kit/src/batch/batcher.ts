@@ -417,7 +417,7 @@ function multiqueryRefused(error: unknown): boolean {
 
 /** A page whose caller reads it again in halves after this timeout, instead of having it retried. */
 function halved(request: QueryRequest, error: unknown): boolean {
-  return request.halvable === true && pageTimedOut(error, request.limit);
+  return request.halvable !== undefined && pageTimedOut(error, request.halvable);
 }
 
 /** Bytes of `query <path> "q0" { <body> };` and its line break, as a block of a multiquery. */

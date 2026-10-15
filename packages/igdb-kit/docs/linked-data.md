@@ -21,7 +21,7 @@ const firstDates = await igdb.release_dates.select("date", "platform").sort("dat
 - Every requested id is in the map, with an empty array when nothing points to the game.
 - The query's `where` applies, and its `sort` and `limit` apply to each game's rows. Every row comes back, not just the first 10. A row linked to several of the games, such as a character, is listed under each of them.
 - Regional covers have no `game` (their game localization points to them), so `covers.findByGames()` returns the main cover only.
-- Ids are sent 500 per query and pages of 500 rows are read until the end, all batched. A page that comes back full is split using the count, so the 9,000 language rows of 500 games take about 9 requests instead of 18 one after the other. A page IGDB refuses for its size or that gets no answer in time is asked again in halves, as in [`findByIds()`](queries.md#reading-results).
+- Ids are sent 500 per query and pages of 500 rows are read until the end, all batched. A page that comes back full is split using the count, so the 9,000 language rows of 500 games take about 9 requests instead of 18 one after the other. A page IGDB refuses for its size is asked again in halves, as in [`findByIds()`](queries.md#reading-results), and so is a page of 100 games or more (of 100 rows or more for a single game) that gets no answer in time.
 
 `findBy(field, ids)` does the same through any relation or `..._id` field, on every endpoint. Most of IGDB's links have no field back (95 of 153): a game's editions point to it with `version_parent` while it lists none of them, mods and updates point to it with `parent_game`, and a bundle's content points to it with `bundles`:
 

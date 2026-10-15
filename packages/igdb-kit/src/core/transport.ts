@@ -151,7 +151,9 @@ export class Transport {
       let timeout: AbortSignal | undefined;
       try {
         // Before taking a request slot, which a slow token request would hold.
-        token = await this.options.tokens?.getToken(signal);
+        token = await this.options.tokens?.getToken(signal).catch((error: unknown) => {
+          throw forRequest(error, path, body);
+        });
         release = await this.options.limiter.acquire({ signal, priority });
         started = Date.now();
         if (deadline !== undefined) deadline += started - queued;
@@ -204,7 +206,9 @@ export class Transport {
       const error = errorFromResponse(status, text, { endpoint: path, query: body });
       if (status === 401 && !renewedToken && token && this.options.tokens?.canRefresh) {
         renewedToken = true;
-        await this.options.tokens.invalidate(token, signal);
+        await this.options.tokens.invalidate(token, signal).catch((error: unknown) => {
+          throw forRequest(error, path, body);
+        });
         continue;
       }
       if (status === 429) {
@@ -255,6 +259,15 @@ function parseBody(text: string, headers: Headers, context: IGDBErrorOptions): u
       { ...context, cause: error },
     );
   }
+}
+
+/** A token error, for one of the requests that waited for the token, with that request's endpoint and query. */
+function forRequest(error: unknown, endpoint: string, query: string | undefined): unknown {
+  if (!(error instanceof AuthError || error instanceof NetworkError)) return error;
+  const options = { status: error.status, details: error.details, endpoint, query, cause: error.cause };
+  return error instanceof AuthError
+    ? new AuthError(error.message, options)
+    : new NetworkError(error.message, options);
 }
 
 function errorMessage(error: unknown): string {

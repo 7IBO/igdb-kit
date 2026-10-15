@@ -88,10 +88,13 @@ export class QueryTimeoutError extends IGDBError {
   override name = "QueryTimeoutError";
 }
 
-/** A 5xx or network failure that persisted until the retry budget ran out. */
+/**
+ * A 5xx or network failure that persisted until the retry budget ran out, or a Twitch token request
+ * that failed 4 times.
+ */
 export class NetworkError extends IGDBError {
   override name = "NetworkError";
-  /** No answer came within `attemptTimeoutMs`. */
+  /** The last attempt got no answer within `attemptTimeoutMs`. */
   readonly timedOut: boolean;
 
   constructor(message: string, options: IGDBErrorOptions & { timedOut?: boolean | undefined } = {}) {

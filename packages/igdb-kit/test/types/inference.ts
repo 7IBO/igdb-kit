@@ -24,6 +24,7 @@ import {
   PopularityType,
   type Query,
   type QueryOf,
+  type QueryRequest,
   type ReleaseCalendarEntry,
   ReleaseDateRegion,
   ReleaseDateStatus,
@@ -990,3 +991,7 @@ timedOut.timedOut satisfies boolean;
 // @ts-expect-error read-only
 timedOut.timedOut = false;
 new NetworkError("IGDB server error 502", { status: 502 });
+// One of igdb-kit's own pages carries the number of rows or ids its caller halves when it times out.
+({ halvable: 500 }) satisfies Partial<QueryRequest>;
+// @ts-expect-error a number
+({ halvable: true }) satisfies Partial<QueryRequest>;

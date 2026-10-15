@@ -105,9 +105,9 @@ export async function findByGames<R>(
  * Ids are sent 500 per query, and the first pages go out together so batching packs them into
  * multiqueries. Pages hold 500 rows, fewer when the selected rows are heavy. A query that fills its
  * page is counted, then split into smaller id lists sized from the count and read in parallel; a
- * single game with more rows than a page is read with an id cursor. A page IGDB finds too heavy, or
- * that gets no answer in time, is split in two by its ids, the halves sent alone, or read with
- * smaller pages for a single game.
+ * single game with more rows than a page is read with an id cursor. A page IGDB finds too heavy is
+ * split in two by its ids, the halves sent alone, or read with smaller pages for a single game; so is
+ * a page of 100 ids or more (100 rows for a single game) that gets no answer in time.
  */
 export async function findByLink<R>(
   query: Query<EndpointName, R>,
@@ -151,22 +151,25 @@ export async function findByLink<R>(
       keep(page as Row[]);
   };
 
-  const load = async (chunk: number[], execute: ExecuteOptions = options): Promise<void> => {
-    const expected = Math.min(rows, chunk.length * 4);
+  // The halves of a page that failed go alone: batched together, they would make the same request again.
+  const alone = { ...options, batch: false };
+
+  /** Reads the rows of `chunk`, with its first page alone when it is such a half. */
+  const load = async (chunk: number[], half = false): Promise<void> => {
+    // What a page that fails is halved by: its ids, or the rows of one id's pages.
+    const halvable = chunk.length > 1 ? chunk.length : rows;
     let first: Row[];
     try {
       first = (await filtered(chunk)
         .where("id > -1")
         .limit(rows)
-        .with({ expectedRows: expected, halvable: chunk.length > 1 || rows > 1 })
-        .execute(execute)) as Row[];
+        .with({ expectedRows: Math.min(rows, chunk.length * 4), halvable })
+        .execute(half ? alone : options)) as Row[];
     } catch (error) {
-      if (!tooHeavy(error, expected)) throw error;
-      // Each half goes alone: batched together, they would make the same request again.
-      const alone = { ...execute, batch: false };
+      if (!tooHeavy(error, halvable)) throw error;
       if (chunk.length > 1) {
         const middle = Math.ceil(chunk.length / 2);
-        await Promise.all([load(chunk.slice(0, middle), alone), load(chunk.slice(middle), alone)]);
+        await Promise.all([load(chunk.slice(0, middle), true), load(chunk.slice(middle), true)]);
       } else {
         await readOn(chunk, -1, Math.max(1, Math.ceil(rows / 2)), alone);
       }
@@ -176,16 +179,16 @@ export async function findByLink<R>(
     if (first.length < rows) return;
     if (chunk.length > 1) {
       // Too many rows for one page: split the ids so each part should fit in one.
-      const total = await filtered(chunk).count().execute(execute);
+      const total = await filtered(chunk).count().execute(options);
       const size = Math.max(1, Math.floor((rows * 0.8 * chunk.length) / Math.max(total, 1)));
       if (size < chunk.length) {
         const parts: number[][] = [];
         for (let i = 0; i < chunk.length; i += size) parts.push(chunk.slice(i, i + size));
-        await Promise.all(parts.map((part) => load(part, execute)));
+        await Promise.all(parts.map((part) => load(part)));
         return;
       }
     }
-    await readOn(chunk, (first[first.length - 1] as Row).id, rows, execute);
+    await readOn(chunk, (first[first.length - 1] as Row).id, rows, options);
   };
   const chunks: number[][] = [];
   for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));

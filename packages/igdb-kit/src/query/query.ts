@@ -63,41 +63,45 @@ const SYNC_BYTES_IN_FLIGHT = 64_000_000;
 /** Requests `sync()` sends together, at most: as many as one multiquery holds. */
 const SYNC_WAVE = 10;
 /**
- * Smallest page read again in halves when no answer came within `attemptTimeoutMs`: when the
- * connection answers nothing at all, smaller halves would only multiply the requests.
+ * Smallest page read again in halves when no answer came within `attemptTimeoutMs`, in the rows or
+ * ids its caller halves: when the connection answers nothing at all, smaller halves would only
+ * multiply the requests.
  */
-const TIMEOUT_HALVING_ROWS = 100;
+const TIMEOUT_HALVING_SIZE = 100;
 
 /**
- * @internal IGDB refused a page of `rows` rows for its size: a response above 10 MB (413), or one it
- * gave up building after 29 s (504 "Endpoint request timed out"). The same rows pass in smaller
- * pages. So do those of a page of 100 rows or more that got no answer within `attemptTimeoutMs`.
+ * @internal IGDB refused a page for its size: a response above 10 MB (413), or one it gave up
+ * building after 29 s (504 "Endpoint request timed out"). The same rows pass in smaller pages. So do
+ * those of a page that got no answer within `attemptTimeoutMs`, when its caller halves 100 rows or
+ * ids or more (`size`).
  */
-export function tooHeavy(error: unknown, rows: number): boolean {
-  return error instanceof PayloadTooLargeError || pageTimedOut(error, rows);
+export function tooHeavy(error: unknown, size: number): boolean {
+  return error instanceof PayloadTooLargeError || pageTimedOut(error, size);
 }
 
 /**
  * @internal The timeouts of `tooHeavy()`. A page that its caller reads again in halves after one is
  * not retried.
  */
-export function pageTimedOut(error: unknown, rows: number): boolean {
+export function pageTimedOut(error: unknown, size: number): boolean {
   if (!(error instanceof NetworkError)) return false;
-  if (error.timedOut) return rows >= TIMEOUT_HALVING_ROWS;
+  if (error.timedOut) return size >= TIMEOUT_HALVING_SIZE;
   return error.status === 504 && /timed out/i.test(error.message);
 }
 
 export interface ExecuteOptions {
   /**
    * Aborting stops waiting, takes the request out of the rate limiter's queue, cancels it and stops
-   * its retries, unless an identical query still waits on it.
+   * its retries, unless an identical query still waits on it; a multiquery goes on while one of its
+   * other queries is wanted.
    */
   signal?: AbortSignal | undefined;
   /** `background` requests wait behind `interactive` ones. Default `interactive`. */
   priority?: Priority | undefined;
   /**
    * Group this query with others sent at the same time into one multiquery. Default: the client's
-   * `autoBatch` setting (on). `false` always sends it alone.
+   * `autoBatch` setting (on). `false` always sends it alone, and so does every query when the
+   * client's `multiquery` is false or a proxy refused a multiquery.
    */
   batch?: boolean | undefined;
 }
@@ -121,8 +125,11 @@ export interface QueryRequest {
   cacheTtlMs?: number | undefined;
   /** Company names in `body` that the client turns into ids before sending (`developedBy("Nintendo")`). */
   lookups?: readonly NameLookup[] | undefined;
-  /** One of igdb-kit's own pages, read again in halves rather than retried when it times out. */
-  halvable?: boolean | undefined;
+  /**
+   * One of igdb-kit's own pages, read again in halves rather than retried when it times out: the
+   * rows or ids its caller halves, more than 1.
+   */
+  halvable?: number | undefined;
 }
 
 export interface RawResponse {
@@ -167,8 +174,11 @@ export interface QueryState {
   lookups?: readonly NameLookup[] | undefined;
   /** The field pointing to games that views and `findByGames()` group by, from `linkedBy()`. */
   link?: string | undefined;
-  /** One of igdb-kit's own pages, read again in halves when IGDB or the attempt timeout gives up on it. */
-  halvable?: boolean | undefined;
+  /**
+   * One of igdb-kit's own pages, read again in halves when IGDB or the attempt timeout gives up on it:
+   * the rows or ids its caller halves.
+   */
+  halvable?: number | undefined;
 }
 
 export interface SyncOptions extends ExecuteOptions {
@@ -415,9 +425,9 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   /**
    * The entities with these ids, in the order given (missing ids are skipped). Splits them into
    * chunks of 500, fewer when the selected rows are heavy, which `batch` and automatic batching send
-   * together; a chunk IGDB finds too heavy, or that gets no answer in time, is split in two, and the
-   * halves are sent alone. The query's `offset` and `sort` do not apply. Sends nothing before it is
-   * awaited.
+   * together; a chunk IGDB finds too heavy, or of 100 rows or more that gets no answer in time, is
+   * split in two, and the halves are sent alone. The query's `offset` and `sort` do not apply. Sends
+   * nothing before it is awaited.
    */
   findByIds(ids: readonly number[]): Task<R[]> {
     return new Task((execute) => this.runFindByIds(ids, execute));
@@ -441,7 +451,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
     try {
       return await this.where(`id = (${ids.join(",")})`)
         .limit(ids.length)
-        .with({ halvable: ids.length > 1 })
+        .with({ halvable: ids.length })
         .execute(options);
     } catch (error) {
       if (ids.length === 1 || !tooHeavy(error, ids.length)) throw error;
@@ -611,7 +621,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
           const page = query
             .where(`id > ${segment.anchor.id}`)
             .limit(segment.size)
-            .with({ halvable: segment.size > 1 });
+            .with({ halvable: segment.size });
           const rows = await (skip > 0 ? page.offset(skip) : page).execute(
             segment.split ? { ...executeOptions, batch: false } : executeOptions,
           );
@@ -752,8 +762,8 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   /**
    * @internal Every match after the id `after` (default: all), page by page in id order, with an id
    * cursor. A page holds `pageSize` rows (default 500), fewer when rows are heavy; a page IGDB finds
-   * too heavy, or that gets no answer in time, is asked again at half the size, and later pages stay
-   * at most that size.
+   * too heavy, or of 100 rows or more that gets no answer in time, is asked again at half the size,
+   * and later pages stay at most that size.
    */
   async *cursorPages(
     options: ExecuteOptions & { pageSize?: number | undefined; after?: number | undefined } = {},
@@ -771,11 +781,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
     for (;;) {
       let page: R[];
       try {
-        page = await base
-          .where(`id > ${last}`)
-          .limit(size)
-          .with({ halvable: size > 1 })
-          .execute(execute);
+        page = await base.where(`id > ${last}`).limit(size).with({ halvable: size }).execute(execute);
       } catch (error) {
         if (size === 1 || !tooHeavy(error, size)) throw error;
         cap = Math.ceil(size / 2);
@@ -834,7 +840,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
       maxRows: kind === "count" ? 0 : (limit ?? 10),
       cacheTtlMs,
       ...(lookups?.length ? { lookups } : {}),
-      ...(halvable && kind === "list" ? { halvable } : {}),
+      ...(halvable !== undefined && halvable > 1 && kind === "list" ? { halvable } : {}),
     };
   }
 
