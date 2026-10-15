@@ -22,6 +22,38 @@ export type Store =
   | "kartridge"
   | "focus_entertainment";
 
+/** What a {@link StoreId} is. */
+export type StoreIdKind =
+  /** A Steam appid, an App Store id, a Google Play package name, a Meta Quest app id. */
+  | "app"
+  /**
+   * A GOG product id, a Microsoft Store product id (`9N116V0599HB`), a PlayStation Store product id
+   * (`EP1805-PPSA12544_00-HKSILKSONGPS5000`), an Amazon ASIN, a Luna or Focus Entertainment product.
+   */
+  | "product"
+  /** A PlayStation Store concept id, one page for every edition of a game: IGDB's PlayStation ids. */
+  | "concept"
+  /** An Xbox 360 Marketplace product uuid, from `external_games` only: the store closed in 2024. */
+  | "xbox360_product"
+  /** The name in a GOG, Epic or igdb.com address, which IGDB's uids never hold. */
+  | "slug"
+  /** Another id: Epic's 32 hexadecimal digits, a Game Jolt game id. */
+  | "id";
+
+/**
+ * A product's id in a store, read from an address by {@link parseStoreUrl} or from IGDB's uid by
+ * `externalIds()`. Both give the same id for the same product: Microsoft and PlayStation product ids
+ * in capitals, uuids, Epic ids and slugs in lower case, the others as written.
+ */
+export interface StoreId {
+  store: Store;
+  kind: StoreIdKind;
+  id: string;
+}
+
+/** What {@link parseStoreUrl} reads from an address: a store's product, or a game's page on igdb.com. */
+export type StoreUrlId = StoreId | { store: "igdb"; kind: "slug"; id: string };
+
 /** Fields of `websites` that {@link storeLinks} reads when `websites` is selected. */
 export type WebsiteFields = "websites.url" | "websites.trusted";
 /** Fields of `external_games` that {@link storeLinks} reads when `external_games` is selected. */
@@ -92,32 +124,44 @@ interface StoreDef {
   host: RegExp;
   /** The product id in a URL, so that two addresses of one product count once. */
   key?: RegExp;
+  /** What `key` reads. PlayStation's is a concept id, or a product id when it is not all digits. */
+  kind?: StoreIdKind;
 }
 
 // Hosts verified against IGDB's websites and external_games. Archived copies (web.archive.org),
-// typos and the closed Xbox 360 Marketplace are not store links.
+// typos and the Xbox 360 Marketplace, closed in 2024, are not store links. Kartridge and Utomik,
+// which IGDB still lists, are kept.
 const stores: Record<Store, StoreDef> = {
-  steam: { host: /^store\.steampowered\.com$/, key: /\/app\/(\d+)/ },
-  epic: { host: /^(store\.|www\.)?epicgames\.com$/, key: /\/(?:p|product)\/([^/?#]+)/ },
-  gog: { host: /^(www\.)?gog\.com$/, key: /\/game\/([^/?#]+)/ },
-  playstation: { host: /^store\.playstation\.com$/, key: /\/(?:concept|product)\/([^/?#]+)/ },
-  xbox: { host: /^((www|apps)\.)?(xbox|microsoft)\.com$/, key: /\/((?=[a-z]*\d)[0-9a-z]{12})(?=[/?#]|$)/i },
+  steam: { host: /^store\.steampowered\.com$/, key: /\/app\/(\d+)/, kind: "app" },
+  epic: { host: /^(store\.|www\.)?epicgames\.com$/, key: /\/(?:p|product)\/([^/?#]+)/, kind: "slug" },
+  gog: { host: /^(www\.)?gog\.com$/, key: /\/game\/([^/?#]+)/, kind: "slug" },
+  playstation: {
+    host: /^store\.playstation\.com$/,
+    key: /\/(?:concept|product)\/([^/?#]+)/,
+    kind: "concept",
+  },
+  xbox: {
+    host: /^((www|apps)\.)?(xbox|microsoft)\.com$/,
+    key: /\/((?=[a-z]*\d)[0-9a-z]{12})(?=[/?#]|$)/i,
+    kind: "product",
+  },
   nintendo: {
     host: /^(www\.|store\.|ec\.)?nintendo\.(com|co\.jp|co\.uk|de|fr|es|it|nl|be|ch|at|pt|com\.au|co\.nz|com\.hk|co\.kr)$/,
   },
-  apple: { host: /^(apps|itunes)\.apple\.com$/, key: /\/id(\d+)/ },
-  google_play: { host: /^play\.google\.com$/, key: /[?&]id=([^&#]+)/ },
-  amazon_luna: { host: /^(play|luna)\.amazon\.com$/, key: /[?&]gid=([^&#]+)/ },
+  apple: { host: /^(apps|itunes)\.apple\.com$/, key: /\/id(\d+)/, kind: "app" },
+  google_play: { host: /^play\.google\.com$/, key: /[?&]id=([^&#]+)/, kind: "app" },
+  amazon_luna: { host: /^(play|luna)\.amazon\.com$/, key: /[?&]gid=([^&#]+)/, kind: "product" },
   amazon: {
     host: /^(www\.)?amazon\.(com|co\.uk|fr|de|it|es|jp|co\.jp|in|ca|com\.mx|com\.br|com\.au|nl|se|pl)$/,
     key: /\/dp\/([0-9A-Z]{10})/,
+    kind: "product",
   },
-  meta: { host: /^(www\.)?(meta|oculus)\.com$/, key: /\/(\d{9,})(?=[/?#]|$)/ },
+  meta: { host: /^(www\.)?(meta|oculus)\.com$/, key: /\/(\d{9,})(?=[/?#]|$)/, kind: "app" },
   itch: { host: /^[a-z0-9-]+\.itch\.io$/ },
-  gamejolt: { host: /^(www\.)?gamejolt\.com$/, key: /\/(\d+)\/?(?:[?#]|$)/ },
+  gamejolt: { host: /^(www\.)?gamejolt\.com$/, key: /\/(\d+)\/?(?:[?#]|$)/, kind: "id" },
   utomik: { host: /^(www\.)?utomik\.com$/ },
   kartridge: { host: /^(www\.)?kartridge\.com$/ },
-  focus_entertainment: { host: /^store\.focus-entmt\.com$/, key: /\/product\/(\d+)/ },
+  focus_entertainment: { host: /^store\.focus-entmt\.com$/, key: /\/product\/(\d+)/, kind: "product" },
 };
 
 // Amazon domains seen on IGDB's URLs for products sold in a single country.
@@ -132,8 +176,16 @@ const amazonDomains: Record<number, string> = {
   356: "amazon.in",
 };
 
-/** The store a URL belongs to, from its host; null for anything else. */
+/**
+ * The store a URL belongs to, from its host; null for anything else. An address without its
+ * `https://` is read too.
+ */
 export function storeOf(url: string): Store | null {
+  return storeAt(withScheme(url));
+}
+
+// storeOf() for a full URL only: storeLinks() and localizeStoreUrl() leave the others alone.
+function storeAt(url: string): Store | null {
   const host = hostOf(url);
   if (!host) return null;
   for (const [store, def] of Object.entries(stores) as [Store, StoreDef][]) {
@@ -143,11 +195,67 @@ export function storeOf(url: string): Store | null {
 }
 
 /**
+ * A pasted address with its `https://`, which `new URL()` needs. One with a mistyped `https:/` is
+ * left to `new URL()`, which reads it as `storeLinks()` does.
+ */
+function withScheme(url: string): string {
+  const trimmed = typeof url === "string" ? url.trim() : "";
+  return /^(https?:|[a-z][a-z\d+.-]*:\/\/)/i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+/**
+ * The id an address names, for a pasted link or a stored one: a store's product, or a game's page
+ * on igdb.com, whose slug `games.slug` holds. Every address of one product gives the same id
+ * (locale, slug, trailing slash, case). An Amazon id is the ASIN, the same on every country's site,
+ * where `storeLinks()` keeps a link per site. An address without its `https://` is read too. Null
+ * for an address without an id (Nintendo, itch.io, a store's home page; `storeOf()` still names its
+ * store) and for any other site.
+ *
+ * The id of a Steam app, a Microsoft Store product or a PlayStation Store concept is the uid IGDB
+ * stores, which `findByExternalIds()` takes and `externalIds()` reads into the same `storeId`. GOG
+ * and Epic addresses hold a slug, which IGDB's uids never are.
+ *
+ * ```ts
+ * parseStoreUrl("https://store.steampowered.com/app/292030/The_Witcher_3_Wild_Hunt/");
+ * // { store: "steam", kind: "app", id: "292030" }
+ * parseStoreUrl("www.xbox.com/en-US/games/store/the-witcher-3-wild-hunt/br765873cqjd");
+ * // { store: "xbox", kind: "product", id: "BR765873CQJD" }
+ * parseStoreUrl("https://www.igdb.com/games/the-witcher-3-wild-hunt");
+ * // { store: "igdb", kind: "slug", id: "the-witcher-3-wild-hunt" }
+ * ```
+ */
+export function parseStoreUrl(url: string): StoreUrlId | null {
+  const address = withScheme(url);
+  if (/^(www\.)?igdb\.com$/.test(hostOf(address) ?? "")) {
+    const slug = /^\/games\/([^/?#]+)/.exec(new URL(address).pathname)?.[1];
+    return slug ? { store: "igdb", kind: "slug", id: slug.toLowerCase() } : null;
+  }
+  const store = storeAt(address);
+  if (!store) return null;
+  const { key, kind } = stores[store];
+  const id = key?.exec(address)?.[1];
+  if (!id || !kind) return null;
+  return toStoreId(store, store === "playstation" && !/^\d+$/.test(id) ? "product" : kind, id);
+}
+
+/** A store id written as {@link StoreId} says, so that an address and IGDB's uid give the same. */
+export function toStoreId(store: Store, kind: StoreIdKind, id: string): StoreId {
+  if (kind === "product" && (store === "xbox" || store === "playstation"))
+    return { store, kind, id: id.toUpperCase() };
+  if (kind === "slug" || kind === "xbox360_product" || store === "epic")
+    return { store, kind, id: id.toLowerCase() };
+  return { store, kind, id };
+}
+
+/**
  * Store pages of a game, from `websites` and `external_games`, one per product. The store comes
  * from the link's address, not from its declared type: IGDB has Steam links to web.archive.org and
  * Xbox links typed as Epic. When `external_games` has no URL, it is built from the store id for
  * Steam, Google Play and single-country Amazon products. Links from `websites` come first, trusted
  * ones before the others (IGDB never marks Xbox, PlayStation and Nintendo links as trusted).
+ * Links to the Xbox 360 Marketplace, closed in 2024, are left out (its ids are in `externalIds()`);
+ * Kartridge and Utomik links are kept, as IGDB still lists them: to leave them out, list the stores
+ * you want in `stores`.
  *
  * ```ts
  * const game = await igdb.games.select("websites.url", "websites.trusted").findByIdOrThrow(1942);
@@ -191,7 +299,7 @@ export function storeLinks<G extends object>(
   const countryCode = country === null ? undefined : numericCountry(country);
   const links = new Map<string, StoreLink>();
   for (const candidate of candidates) {
-    const store = storeOf(candidate.url);
+    const store = storeAt(candidate.url);
     if (!store || (options.stores && !options.stores.includes(store))) continue;
     if (countryCode !== undefined && candidate.countries && !candidate.countries.includes(countryCode))
       continue;
@@ -242,7 +350,7 @@ const otherLanguages: Record<string, readonly string[]> = {
  * and 99.3% of its Xbox links are in `en-us`.
  */
 export function localizeStoreUrl(url: string, locale: Locale): string {
-  const store = storeOf(url);
+  const store = storeAt(url);
   if (store !== "playstation" && store !== "xbox" && store !== "epic" && store !== "gog") return url;
   const { language, script, country, languages } = resolveLocale(locale);
   const parsed = new URL(url);
