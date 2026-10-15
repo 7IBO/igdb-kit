@@ -57,6 +57,33 @@ suite.each(clients)("with %s", (name, client) => {
     expect(await cache.get("short")).toBeNull();
   });
 
+  test("token store and cache through a function that parses JSON replies, as Upstash's does", async () => {
+    const raw = redisCommand(client());
+    const parsing: RedisLike = async (args) => {
+      const value = await raw(args);
+      if (typeof value !== "string") return value;
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    };
+    const store = redisTokenStore(parsing, { clientId: "parsing", prefix });
+    expect(await store.get()).toBeNull();
+    await store.set({ token: "t1", expiresAt: Date.now() + 60_000 });
+    expect(await store.get()).toEqual({ token: "t1", expiresAt: expect.any(Number) });
+    await store.delete("t1");
+    expect(await store.get()).toBeNull();
+    const release = await store.lock?.(5_000);
+    expect(release).toBeFunction();
+    await release?.();
+
+    const cache = redisCache(parsing, { prefix: `${prefix}:parsing` });
+    await cache.set("k", '{"data":[1],"bytes":5}', 60_000);
+    expect(JSON.parse((await cache.get("k")) as string)).toEqual({ data: [1], bytes: 5 });
+    expect(await cache.get("missing")).toBeNull();
+  });
+
   test("limiter: caps starts per second across instances", async () => {
     const options = { clientId: "app", prefix, requestsPerSecond: 4, maxConcurrent: 8 };
     const a = redisLimiter(client(), options);
