@@ -16,6 +16,7 @@ import {
   companies,
   countryName,
   eventTime,
+  externalIds,
   formatPlaytime,
   formatReleaseDate,
   languageName,
@@ -27,6 +28,7 @@ import {
   multiplayer,
   parentGame,
   parseAlternativeName,
+  parseStoreUrl,
   regionalReleases,
   releaseDate,
   releaseRegionName,
@@ -38,6 +40,7 @@ import {
   timeToBeat,
 } from "../../src/game";
 import * as fixtures from "./fixtures/games";
+import { gta5 } from "./fixtures/related";
 
 const { externalRows, releaseRows, timeToBeatRows, untrustedWebsites } = fixtures;
 
@@ -395,6 +398,103 @@ describe("storeLinks()", () => {
     expect(storeOf("https://www.nintendo.co.jp/n08/a3uj/index.html")).toBe("nintendo");
     expect(storeOf("https://www.thewitcher.com")).toBeNull();
     expect(storeOf("not a url")).toBeNull();
+  });
+});
+
+describe("parseStoreUrl()", () => {
+  test("one id per product, whatever the address", () => {
+    const ids = (...urls: string[]) => urls.map(parseStoreUrl);
+    expect(
+      ids(
+        "https://store.steampowered.com/app/1030300/Hollow_Knight_Silksong/",
+        "store.steampowered.com/app/1030300",
+        " https://store.steampowered.com/agecheck/app/1030300/ ",
+      ),
+    ).toEqual(Array(3).fill({ store: "steam", kind: "app", id: "1030300" }));
+    expect(
+      ids(
+        "https://www.xbox.com/en-US/games/store/hollow-knight-silksong/9N116V0599HB/0010",
+        "https://www.microsoft.com/en-us/p/-1-/9n116v0599hb",
+      ),
+    ).toEqual(Array(2).fill({ store: "xbox", kind: "product", id: "9N116V0599HB" }));
+    expect(
+      ids(
+        "https://www.gog.com/en/game/the_witcher_3_wild_hunt",
+        "https://www.gog.com/game/The_Witcher_3_Wild_Hunt",
+      ),
+    ).toEqual(Array(2).fill({ store: "gog", kind: "slug", id: "the_witcher_3_wild_hunt" }));
+    expect(
+      ids(
+        "https://store.epicgames.com/en-US/p/genshin-impact",
+        "https://www.epicgames.com/store/p/genshin-impact",
+        "https://www.epicgames.com/p/genshin-impact",
+      ),
+    ).toEqual(Array(3).fill({ store: "epic", kind: "slug", id: "genshin-impact" }));
+    expect(
+      ids("https://apps.apple.com/app/id1517783697", "https://itunes.apple.com/us/app/id1517783697"),
+    ).toEqual(Array(2).fill({ store: "apple", kind: "app", id: "1517783697" }));
+  });
+
+  test("the kind of id, written as IGDB writes it", () => {
+    expect(parseStoreUrl("https://store.playstation.com/en-us/concept/10005908")).toEqual({
+      store: "playstation",
+      kind: "concept",
+      id: "10005908",
+    });
+    expect(
+      parseStoreUrl("https://store.playstation.com/fr-fr/product/ep1805-ppsa12544_00-hksilksongps5000"),
+    ).toEqual({ store: "playstation", kind: "product", id: "EP1805-PPSA12544_00-HKSILKSONGPS5000" });
+    expect(parseStoreUrl(untrustedWebsites.xboxTypedAsEpic.url ?? "")).toEqual({
+      store: "xbox",
+      kind: "product",
+      id: "9NP62V3X54XQ",
+    });
+    // A Google Play package name keeps its case.
+    expect(parseStoreUrl("https://play.google.com/store/apps/details?id=com.miHoYo.GenshinImpact")).toEqual({
+      store: "google_play",
+      kind: "app",
+      id: "com.miHoYo.GenshinImpact",
+    });
+    expect(parseStoreUrl("https://www.amazon.fr/dp/B09WZ6F8P5?th=1")).toEqual({
+      store: "amazon",
+      kind: "product",
+      id: "B09WZ6F8P5",
+    });
+    expect(parseStoreUrl("https://www.igdb.com/games/the-witcher-3-wild-hunt/presskit")).toEqual({
+      store: "igdb",
+      kind: "slug",
+      id: "the-witcher-3-wild-hunt",
+    });
+    expect(parseStoreUrl("igdb.com/games/doom--1")).toEqual({ store: "igdb", kind: "slug", id: "doom--1" });
+  });
+
+  test("null without an id, or outside the stores", () => {
+    for (const url of [
+      "https://www.nintendo.com/us/store/products/hollow-knight-silksong-switch",
+      "https://psytronik.itch.io/im3-c64",
+      "https://store.steampowered.com/",
+      // A slug, not a product id: twelve letters and no digit.
+      "https://www.xbox.com/en-US/games/store/hollowknight",
+      "https://www.igdb.com/platforms/switch",
+      externalRows.xbox360Marketplace.url ?? "",
+      untrustedWebsites.archivedSteam.url ?? "",
+      "https://www.thewitcher.com",
+      "not a url",
+      "",
+    ])
+      expect(parseStoreUrl(url)).toBeNull();
+  });
+
+  test("gives the id externalIds() reads from IGDB's uid", () => {
+    const ids = [fixtures.witcher3, fixtures.silksong, fixtures.genshin, gta5]
+      .flatMap((game) => externalIds(game))
+      .filter((e) => e.url && ["steam", "xbox", "playstation"].includes(e.storeId?.store ?? ""));
+    expect(new Set(ids.map((e) => e.storeId?.kind))).toEqual(
+      new Set(["app", "product", "concept", "xbox360_product"]),
+    );
+    // The Xbox 360 Marketplace is closed: its addresses are not store links.
+    for (const e of ids)
+      expect(parseStoreUrl(e.url ?? "")).toEqual(e.storeId?.kind === "xbox360_product" ? null : e.storeId);
   });
 });
 
