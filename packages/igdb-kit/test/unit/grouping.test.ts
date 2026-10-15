@@ -216,8 +216,18 @@ describe("externalIds() and externalId()", () => {
   test("one per product, in IGDB's order, several per source", () => {
     expect(externalId(witcher3, ExternalGameSource.Steam)).toBe("292030");
     expect(externalIds(witcher3, ExternalGameSource.GOG)).toEqual([
-      { source: 5, uid: "1207664663", url: expect.any(String) },
-      { source: 5, uid: "1207664643", url: expect.any(String) },
+      {
+        source: 5,
+        uid: "1207664663",
+        url: expect.any(String),
+        storeId: { store: "gog", kind: "product", id: "1207664663" },
+      },
+      {
+        source: 5,
+        uid: "1207664643",
+        url: expect.any(String),
+        storeId: { store: "gog", kind: "product", id: "1207664643" },
+      },
     ]);
     expect(externalId(witcher3, ExternalGameSource.EpicGamesStore)).toBeNull();
     // Elden Ring lists one Amazon product twice.
@@ -236,6 +246,7 @@ describe("externalIds() and externalId()", () => {
         source: 10,
         uid: "UCprFOIVpCqQLUMsWBNwt0PQ",
         url: "https://www.youtube.com/channel/UCprFOIVpCqQLUMsWBNwt0PQ",
+        storeId: null,
       },
     ]);
     const game = {
@@ -248,7 +259,61 @@ describe("externalIds() and externalId()", () => {
       ],
     };
     expect(externalIds(game)).toEqual([
-      { source: 1, uid: "10", url: "https://store.steampowered.com/app/10" },
+      {
+        source: 1,
+        uid: "10",
+        url: "https://store.steampowered.com/app/10",
+        storeId: { store: "steam", kind: "app", id: "10" },
+      },
+    ]);
+  });
+
+  test("storeId reads the uid, with Xbox 360 ids from both of their sources as one", () => {
+    const storeIds = (game: typeof gta5, source?: number) => externalIds(game, source).map((e) => e.storeId);
+    expect(storeIds(gta5, ExternalGameSource.Microsoft)).toEqual([
+      { store: "xbox", kind: "xbox360_product", id: "66acd000-77fe-1000-9115-d802545408a7" },
+      { store: "xbox", kind: "product", id: "BPJ686W6S0NH" },
+    ]);
+    expect(storeIds(gta5, ExternalGameSource.XboxMarketplace)).toEqual([
+      { store: "xbox", kind: "xbox360_product", id: "66acd000-77fe-1000-9115-d802545408a7" },
+    ]);
+    // The uid stays as IGDB writes it, for findByExternalIds().
+    expect(externalId(gta5, ExternalGameSource.Microsoft)).toBe(
+      "xbox36066acd000-77fe-1000-9115-d802545408a7",
+    );
+    expect(storeIds(gta5, ExternalGameSource.PlaystationStoreUS)).toEqual([
+      { store: "playstation", kind: "concept", id: "201930" },
+    ]);
+    // GTA V's Epic id is a dashed uuid, the older form.
+    expect(storeIds(gta5, ExternalGameSource.EpicGamesStore)).toEqual([null]);
+    expect(storeIds(gta5, ExternalGameSource.Twitch)).toEqual([null]);
+    expect(storeIds(witcher3, ExternalGameSource.Steam)).toEqual([
+      { store: "steam", kind: "app", id: "292030" },
+    ]);
+
+    const game = {
+      id: 1,
+      external_games: [
+        { id: 1, uid: "acc319019e974ec9a4af28530141d888", external_game_source: 26 },
+        { id: 2, uid: "9n7tffrrzcc9", external_game_source: 54 },
+        { id: 3, uid: "XBOX36066ACD000-77FE-1000-9115-D8024A5707D2", external_game_source: 11 },
+        { id: 4, uid: "EP1805-PPSA12544_00-HKSILKSONGPS5000", external_game_source: 36 },
+        { id: 5, uid: "abc", external_game_source: 1 },
+        { id: 6, uid: "the_witcher_3_wild_hunt", external_game_source: 5 },
+        { id: 7, uid: "9N7TFFRRZCC", external_game_source: 11 },
+        { id: 8, uid: "B00WTI2HV6", external_game_source: 20 },
+      ],
+    };
+    expect(externalIds(game).map((e) => e.storeId)).toEqual([
+      { store: "epic", kind: "id", id: "acc319019e974ec9a4af28530141d888" },
+      { store: "xbox", kind: "product", id: "9N7TFFRRZCC9" },
+      { store: "xbox", kind: "xbox360_product", id: "66acd000-77fe-1000-9115-d8024a5707d2" },
+      // IGDB's PlayStation ids are concept ids, never product ids.
+      null,
+      null,
+      null,
+      null,
+      null,
     ]);
   });
 });
