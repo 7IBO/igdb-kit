@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { GameType, QueryError } from "../../src";
-import { type Call, mockFetch, testClient } from "./helpers";
+import { GameType, PayloadTooLargeError, QueryError } from "../../src";
+import { apicalypseError, type Call, mockFetch, testClient } from "./helpers";
 
 // Rows as the search endpoint returns them for "witcher" (trimmed): the search `name` is IGDB's
 // normalized index text, `alternative_name` is "" when the row comes from the main name, rows of
@@ -296,6 +296,99 @@ describe("searchAll", () => {
     expect(best?.id).toBe(1048); // the oldest row, last page, most rated
     await igdb.searchAll("sonic", { kinds: ["game"], maxRows: 600 });
     expect(calls).toHaveLength(5);
+  });
+
+  test("a page refused for its size asks for fewer fields: its limit does not size the pages it ranks", async () => {
+    // Game rows of about 25 KB: IGDB refuses more than 400 of them.
+    const tooLarge = () => apicalypseError(413, "Payload Too Large", "Response size exceeds maximum allowed");
+    const heavy = mockFetch((call: Call) => {
+      const limit = Number(/limit (\d+);/.exec(call.body)?.[1] ?? 10);
+      if (limit * 25_000 > 10_000_000) return tooLarge();
+      const rows = Array.from({ length: limit }, (_, i) => ({
+        id: i + 1,
+        name: `zelda ${i}`,
+        game: { id: i + 1, name: `zelda ${i}`, summary: "x".repeat(25_000) },
+      }));
+      return Response.json(rows, { headers: { "x-count": "1000" } });
+    });
+    const igdb = testClient(heavy.fetch);
+    const options = { kinds: ["game"], select: { game: ["summary"] }, alternativeTitles: false } as const;
+    const refusal = (task: PromiseLike<unknown>) =>
+      Promise.resolve(task).then(
+        () => undefined,
+        (error) => error as PayloadTooLargeError,
+      );
+    const error = await refusal(igdb.searchAll("zelda", { ...options, limit: 5 }));
+    expect(error).toBeInstanceOf(PayloadTooLargeError);
+    expect(error?.message).toBe(
+      "Response too large on search: Payload Too Large: Response size exceeds maximum allowed. " +
+        "searchAll() reads pages of a fixed size to rank its hits, whatever its limit: select fewer fields",
+    );
+    expect(error?.suggestedLimit).toBeUndefined();
+    // In IGDB's order, it reads `limit` rows: a lower one passes.
+    const ordered = await refusal(igdb.searchAll("zelda", { ...options, order: "igdb", limit: 500 }));
+    expect(ordered?.suggestedLimit).toBe(250);
+    // The alternative titles too, when few matches let the search pass.
+    const titles = mockFetch((call: Call) =>
+      call.url.endsWith("/search") ? Response.json([], { headers: { "x-count": "0" } }) : tooLarge(),
+    );
+    const titleError = await refusal(
+      testClient(titles.fetch).searchAll("zelda", { ...options, alternativeTitles: true }),
+    );
+    expect(titleError?.message).toEndWith(
+      ". searchAll() reads pages of a fixed size to rank its hits, whatever its limit: select fewer fields",
+    );
+    expect(titleError?.suggestedLimit).toBeUndefined();
+  });
+
+  test("where.game filters game hits and their alternative titles, with names resolved first", async () => {
+    const mock = mockFetch((call: Call) => {
+      if (call.url.endsWith("/platforms")) {
+        return Response.json([
+          { id: 130, name: "Nintendo Switch", abbreviation: "Switch", alternative_name: "NX" },
+        ]);
+      }
+      return Response.json([], { headers: { "x-count": "0" } });
+    });
+    const igdb = testClient(mock.fetch);
+    await igdb.searchAll("witcher", {
+      kinds: ["game", "character"],
+      where: { game: (g) => g.platforms.named("Switch") },
+      alternativeTitles: true,
+    });
+    const filter = "game != null & game.game_type = (0,2,4,8,9,10,11) & game.version_parent = null";
+    const search = mock.calls.find((call) => call.url.endsWith("/search"));
+    expect(search?.body).toContain(`where (${filter} & game.platforms = (130)) | character != null;`);
+    const titles = mock.calls.find((call) => call.url.endsWith("/multiquery"));
+    const titleWhere = `where (name ~ *"witcher"*) & ${filter} & game.platforms = (130); limit 100;`;
+    expect(titles?.body.split(titleWhere)).toHaveLength(3); // in both blocks
+
+    // An or() keeps its parentheses next to the other filters.
+    await igdb.searchAll("witcher", {
+      kinds: ["game"],
+      gameTypes: "all",
+      includeEditions: true,
+      order: "igdb",
+      where: {
+        game: (g) => g.platforms.any(6).or(g.first_release_date.gte(new Date("2020-01-01T00:00:00Z"))),
+      },
+    });
+    expect(mock.calls.at(-1)?.body).toBe(
+      'fields name,alternative_name,game.name; search "witcher"; ' +
+        "where (game != null & (game.platforms = (6) | game.first_release_date >= 1577836800)); limit 10;",
+    );
+
+    await expect(
+      igdb.searchAll("x", { where: { game: "platforms = (6)" as never } }).execute(),
+    ).rejects.toThrow(/where.game must be a function/);
+    await expect(
+      igdb.searchAll("x", { kinds: ["character"], where: { game: (g) => g.platforms.any(6) } }).execute(),
+    ).rejects.toThrow(/add "game" to kinds/);
+    await expect(
+      igdb
+        .searchAll("x", { where: { game: (g) => (g as never as { mainGames(): never }).mainGames() } })
+        .execute(),
+    ).rejects.toThrow(QueryError);
   });
 
   test("validates its options; an empty term sends nothing", async () => {

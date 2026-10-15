@@ -1,7 +1,13 @@
+import type { Selection } from "../links/selection";
 import type { ItemOf, Requires } from "./select";
 
 /** Fields of `alternative_names` that {@link alternativeTitles} reads. */
 export type AlternativeNameFields = "alternative_names.name" | "alternative_names.comment";
+
+/** The fields {@link alternativeTitles} reads, to spread into `select()`. */
+export function alternativeNameFields(): Selection<"games", AlternativeNameFields> {
+  return Object.freeze(["alternative_names.name", "alternative_names.comment"] as const);
+}
 
 /** What an alternative name is, read from its free-text `comment`. */
 export type AlternativeNameKind =

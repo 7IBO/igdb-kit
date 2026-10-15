@@ -27,6 +27,17 @@ IGDB returns the most recently indexed matches first, so last week's mods come b
 - It reads every match (500 per request, up to `maxRows`, 2000 by default) and ranks them: exact name, then names starting with the term, then names containing its words, then alternative names; ties go to the most rated games. Accents, punctuation and case do not count, kana voicing marks do ("ポケモン" is not "ボケモン"). `order: "igdb"` keeps IGDB's order in a single request.
 - Companies are not in the search index, and rows pointing to deleted entities or to people are dropped. `alternative_name` holds every alternative name joined into one string.
 
+`where.game` filters game hits further, with the typed builder of `where()` on paths relative to the game. It applies to the alternative titles below too, and names are looked up as in `where()`:
+
+```ts
+const onSwitch = await igdb.searchAll("zelda", {
+  kinds: ["game"],
+  where: { game: (g) => g.platforms.named("Switch").and(g.first_release_date.gte(new Date(2017, 0))) },
+});
+```
+
+The named filters of `games.where()`, such as `mainGames()`, `developedBy()` or `releasedIn()`, are not available there: `gameTypes` and `includeEditions` do part of what `mainGames()` does, and for the others, write conditions on the fields, such as `g.involved_companies.company` or `g.release_dates.date`.
+
 ### Titles in other languages
 
 IGDB's search index misses most titles in other languages: it found 26 of 67 localized titles tested ("Wiedźmin 3", "ウィッチャー", "Pokémon Épée", "Layton und das geheimnisvolle Dorf"). With `alternativeTitles` (`"auto"` by default), `searchAll` also looks for the term inside the games' alternative and localized titles, and found 56. These games come after every name match, an exact title first, with `matched: "alternative_name"` and the title in `alternative_name`.

@@ -1,3 +1,4 @@
+import type { Selection } from "../links/selection";
 import { idOf, positive, type Ref, type Requires } from "./select";
 
 /** Fields of `multiplayer_modes` that {@link multiplayer} reads (`multiplayer_modes.*` covers them). */
@@ -13,6 +14,23 @@ export type MultiplayerFields =
   | "multiplayer_modes.splitscreen"
   | "multiplayer_modes.dropin"
   | "multiplayer_modes.campaigncoop";
+
+/** The fields {@link multiplayer} reads, to spread into `select()`. */
+export function multiplayerFields(): Selection<"games", MultiplayerFields> {
+  return Object.freeze([
+    "multiplayer_modes.platform",
+    "multiplayer_modes.onlinemax",
+    "multiplayer_modes.onlinecoop",
+    "multiplayer_modes.onlinecoopmax",
+    "multiplayer_modes.offlinemax",
+    "multiplayer_modes.offlinecoop",
+    "multiplayer_modes.offlinecoopmax",
+    "multiplayer_modes.lancoop",
+    "multiplayer_modes.splitscreen",
+    "multiplayer_modes.dropin",
+    "multiplayer_modes.campaigncoop",
+  ] as const);
+}
 
 interface MultiplayerModeRow {
   platform?: Ref | undefined;

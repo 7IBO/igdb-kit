@@ -83,7 +83,10 @@ export class View<R, W extends ViewLinks> implements PromiseLike<ViewRow<R, W>[]
     return new Task(async (execute) => (await this.readIds([id], execute))[0] ?? null);
   }
 
-  /** The games with these ids, in the order given (missing ids are skipped), with their linked rows. */
+  /**
+   * The games with these ids, in the order given, with their linked rows: one per id, where it first
+   * appears, and none for an id IGDB does not have.
+   */
   findByIds(ids: readonly number[]): Task<ViewRow<R, W>[]> {
     return new Task((execute) => this.readIds(ids, execute));
   }
@@ -110,6 +113,21 @@ export class View<R, W extends ViewLinks> implements PromiseLike<ViewRow<R, W>[]
       const ids = data.map((game) => (game as { id: number }).id);
       return { data: this.attach(data, await this.load(ids, batched)), total };
     });
+  }
+
+  /**
+   * Iterates over every game matching the view's `where` with its linked rows, as `Query.iterate`:
+   * in id order, a page of games (`pageSize`, 1 to 500), then the linked rows of the whole page at
+   * once.
+   */
+  async *iterate(
+    options: ExecuteOptions & { pageSize?: number } = {},
+  ): AsyncGenerator<ViewRow<R, W>, void, undefined> {
+    const { pageSize: _, ...execute } = options;
+    for await (const games of this.base.iteratePages(options)) {
+      const ids = games.map((game) => (game as { id: number }).id);
+      yield* this.attach(games, await this.load(ids, { ...execute, batch: true }));
+    }
   }
 
   async execute(options?: ExecuteOptions): Promise<ViewRow<R, W>[]> {

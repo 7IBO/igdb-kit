@@ -33,13 +33,21 @@ function fakeIgdb(tables: Record<string, Row[]>) {
       .match(/fields (.*?);/)?.[1]
       ?.split(",")
       .map((f) => f.split(".")[0]);
+    const exclude = call.body.match(/exclude (.*?);/)?.[1]?.split(",") ?? [];
     const project = (row: Row) =>
-      fields && !fields.includes("*")
-        ? Object.fromEntries(Object.entries(row).filter(([k]) => k === "id" || fields.includes(k)))
-        : row;
+      Object.fromEntries(
+        Object.entries(row).filter(
+          ([k]) =>
+            k === "id" || ((!fields || fields.includes("*") || fields.includes(k)) && !exclude.includes(k)),
+        ),
+      );
     return Response.json(rows.map(project), { headers: { "x-count": String(total) } });
   });
 }
+
+/** Blocks of each request: a multiquery's, or 1. */
+const blocksOf = (calls: Call[]) =>
+  calls.map((c) => (c.url.endsWith("multiquery") ? c.body.split("\n").length : 1));
 
 const releaseDates: Row[] = [
   { id: 1, game: 10, date: 300, platform: 6 },
@@ -183,6 +191,56 @@ describe("findByGames()", () => {
     expect(all.get(10)?.map((r) => r.id)).toEqual([1, 2, 5]); // rows without the field last
   });
 
+  test("sorts on a field that is not selected, and leaves it out of the rows", async () => {
+    const mock = fakeIgdb({ release_dates: releaseDates });
+    const igdb = testClient(mock.fetch);
+    const first = await igdb.release_dates.select("platform").sort("date").limit(1).findByGames([10, 20]);
+    expect([...first]).toEqual([
+      [10, [{ id: 2, platform: 48 }]],
+      [20, [{ id: 3, platform: 6 }]],
+    ]);
+    expect(mock.calls[0]?.body).toBe(
+      "fields platform,game,date; where (game = (10,20)) & (id > -1); sort id asc; limit 500;",
+    );
+    const latest = await igdb.release_dates.select("platform").sort("date", "desc").findByGames([10]);
+    expect(latest.get(10)).toEqual([
+      { id: 1, platform: 6 },
+      { id: 2, platform: 48 },
+      { id: 5, platform: 167 }, // no date: last
+    ]);
+    expect(mock.calls[1]?.body).toBe(
+      "fields platform,date; where (game = (10)) & (id > -1); sort id asc; limit 500;",
+    );
+    const bare = await igdb.release_dates.sort("date").findByGames([10]);
+    expect(bare.get(10)).toEqual([{ id: 2 }, { id: 1 }, { id: 5 }]);
+    const excluded = await igdb.release_dates
+      .select("*")
+      .exclude("date")
+      .sort("date")
+      .limit(2)
+      .findByGames([10, 20]);
+    expect(excluded.get(10)).toEqual([
+      { id: 2, game: 10, platform: 48 },
+      { id: 1, game: 10, platform: 6 },
+    ]);
+    expect(mock.calls[3]?.body).not.toContain("exclude");
+    const reversed = await igdb.release_dates.sort("id", "desc").findByGames([10, 20]);
+    expect(reversed.get(10)).toEqual([{ id: 5 }, { id: 2 }, { id: 1 }]);
+    const byField = await igdb.release_dates.select("platform").sort("date").limit(1).findBy("game", [10]);
+    expect(byField.get(10)).toEqual([{ id: 2, platform: 48 }]);
+  });
+
+  test("groups by the link field when it is excluded from a * selection", async () => {
+    const igdb = testClient(fakeIgdb({ release_dates: releaseDates }).fetch);
+    const byGame = await igdb.release_dates.select("*").exclude("game", "date").findByGames([10, 20]);
+    expect(byGame.get(10)).toEqual([
+      { id: 1, platform: 6 },
+      { id: 2, platform: 48 },
+      { id: 5, platform: 167 },
+    ]);
+    expect(byGame.get(20)).toEqual([{ id: 3, platform: 6 }]);
+  });
+
   test("reads past 500 rows of one game with an id cursor", async () => {
     const rows = Array.from({ length: 1200 }, (_, i) => ({ id: i + 1, game: 10 }));
     const mock = fakeIgdb({ screenshots: rows });
@@ -201,9 +259,34 @@ describe("findByGames()", () => {
     const byGame = await igdb.language_supports.findByGames(ids);
     expect([...byGame.values()].every((group) => group.length === 30)).toBe(true);
     expect(new Set([...byGame.values()].flat().map((r) => r.id)).size).toBe(3000);
-    // First page, count, then 8 parts of 13 games (~390 rows each) read in parallel, in multiqueries.
-    const blocks = mock.calls.map((c) => (c.url.endsWith("multiquery") ? c.body.split("\n").length : 1));
-    expect(blocks).toEqual([1, 1, 8]);
+    // First page, whose x-count gives the count, then 8 parts of 13 games (~390 rows each) read in
+    // parallel, in multiqueries.
+    expect(blocksOf(mock.calls)).toEqual([1, 8]);
+  });
+
+  test("counts with a request when the first page has no x-count", async () => {
+    const rows = Array.from({ length: 3000 }, (_, i) => ({ id: i + 1, game: (i % 100) + 1 }));
+    const fake = fakeIgdb({ language_supports: rows });
+    // A proxy, or a cache entry, without the header.
+    const bare = mockFetch(async (call) => {
+      const response = await fake.fetch(call.url, { method: "POST", body: call.body });
+      return Response.json(await response.json());
+    });
+    const ids = Array.from({ length: 100 }, (_, i) => i + 1);
+    const byGame = await testClient(bare.fetch).language_supports.findByGames(ids);
+    expect(new Set([...byGame.values()].flat().map((r) => r.id)).size).toBe(3000);
+    expect(blocksOf(bare.calls)).toEqual([1, 1, 8]);
+
+    // First pages packed into a multiquery have no x-count either.
+    const mock = fakeIgdb({ language_supports: rows });
+    const igdb = testClient(mock.fetch);
+    const [a, b] = await Promise.all([
+      igdb.language_supports.findByGames(ids.slice(0, 50)),
+      igdb.language_supports.findByGames(ids.slice(50)),
+    ]);
+    expect(new Set([...a.values(), ...b.values()].flat().map((r) => r.id)).size).toBe(3000);
+    expect(mock.calls[0]?.body.split("\n")).toHaveLength(2);
+    expect(mock.calls[1]?.body).toContain("language_supports/count");
   });
 
   test("sends ids 500 per query, together", async () => {
@@ -289,14 +372,14 @@ describe("findByGames()", () => {
     const igdb = testClient(mock.fetch);
     const byGame = await igdb.release_dates.findByGames(Array.from({ length: 500 }, (_, i) => i + 1));
     expect([...byGame.values()].every((group) => group.length === 10)).toBe(true);
-    // The page of 500 games and its two halves alone, then the halves' counts in one multiquery, and
-    // their 14 parts of 40 games or fewer in two.
+    // The page of 500 games and its two halves alone, whose x-count sizes their 14 parts of 40 games
+    // or fewer, read in two multiqueries: no count request.
     const alone = mock.calls.filter((c) => !c.url.endsWith("multiquery"));
     expect(alone.map((c) => gamesIn(c.body))).toEqual([500, 250, 250]);
     const blocks = mock.calls
       .filter((c) => c.url.endsWith("multiquery"))
       .map((c) => c.body.split("\n").length);
-    expect(blocks).toEqual([2, 10, 4]);
+    expect(blocks).toEqual([10, 4]);
   });
 
   test("rejects what it cannot do", async () => {
@@ -346,6 +429,20 @@ describe("defineView()", () => {
     expect(await view(igdb).findById(404)).toBeNull();
   });
 
+  test("a linked query sorts on a field it does not select", async () => {
+    const igdb = testClient(fakeIgdb(tables).fetch);
+    const games = igdb.defineView("games", {
+      select: ["name"],
+      with: { firstRelease: igdb.release_dates.select("platform").sort("date").limit(1) },
+    });
+    expect((await games.findById(10))?.firstRelease).toEqual([{ id: 2, platform: 48 }]);
+    const list = await games.where("id != 0").limit(2);
+    expect(list.map((game) => game.firstRelease)).toEqual([
+      [{ id: 2, platform: 48 }],
+      [{ id: 3, platform: 6 }],
+    ]);
+  });
+
   test("the same game loaded twice at once has its links both times", async () => {
     const mock = fakeIgdb(tables);
     const igdb = testClient(mock.fetch);
@@ -357,7 +454,7 @@ describe("defineView()", () => {
 
   test("findByIds keeps the order and gives every game its links, empty or not", async () => {
     const igdb = testClient(fakeIgdb(tables).fetch);
-    const rows = await view(igdb).findByIds([20, 404, 10]);
+    const rows = await view(igdb).findByIds([20, 404, 10, 20]);
     expect(rows.map((r) => [r.id, r.timeToBeat.length, r.characters.length])).toEqual([
       [20, 0, 1],
       [10, 1, 2],
@@ -372,6 +469,31 @@ describe("defineView()", () => {
     expect(mock.calls.map((c) => c.url.split("/").pop())).toEqual(["games", "multiquery"]);
     expect(mock.calls[0]?.body).toBe("fields name; where id != 0; limit 2;");
     expect((await view(igdb).first())?.id).toBe(10);
+  });
+
+  test("iterate() reads every game in id order, then the links of each page at once", async () => {
+    const mock = fakeIgdb(tables);
+    const igdb = testClient(mock.fetch);
+    const seen: [number, number, number][] = [];
+    for await (const game of view(igdb).iterate({ pageSize: 1 })) {
+      seen.push([game.id, game.timeToBeat.length, game.characters.length]);
+    }
+    expect(seen).toEqual([
+      [10, 1, 2],
+      [20, 0, 1],
+    ]);
+    // A page of games, then its links in one multiquery; the last page comes back empty.
+    expect(mock.calls.map((c) => c.url.split("/").pop())).toEqual([
+      "games",
+      "multiquery",
+      "games",
+      "multiquery",
+      "games",
+    ]);
+    expect(mock.calls[0]?.body).toBe("fields name,id; where id > -1; sort id asc; limit 1;");
+    await expect(view(igdb).sort("name").iterate().next()).rejects.toThrow(/id order/);
+    await expect(view(igdb).search("witcher").iterate().next()).rejects.toThrow(/search/);
+    await expect(view(igdb).iterate({ pageSize: 0 }).next()).rejects.toThrow(QueryError);
   });
 
   test("count() counts the games, and withCount() adds their links to the page", async () => {

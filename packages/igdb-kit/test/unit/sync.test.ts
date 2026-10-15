@@ -12,6 +12,11 @@ function dataset(ids: number[], updatedAt: (id: number) => number = () => 1000, 
     if (below) rows = rows.filter((r) => r.id < Number(below[1]));
     const after = call.body.match(/id > (-?\d+)/);
     if (after) rows = rows.filter((r) => r.id > Number(after[1]));
+    const list = call.body
+      .match(/id = \(([\d,]+)\)/)?.[1]
+      ?.split(",")
+      .map(Number);
+    if (list) rows = rows.filter((r) => list.includes(r.id));
     if (call.url.endsWith("/count")) return Response.json({ count: rows.length });
     if (call.body.includes("sort id desc")) rows = rows.sort((a, b) => b.id - a.id);
     const limit = Number(call.body.match(/limit (\d+)/)?.[1] ?? 10);
@@ -27,6 +32,7 @@ async function collect<T>(pages: AsyncIterable<T[]>): Promise<T[][]> {
 }
 
 const blocksOf = (calls: Call[]) => calls.map((c) => c.body.split("\n").length);
+const range = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, i) => from + i);
 const lines = (calls: Call[]) => calls.flatMap((c) => c.body.split("\n"));
 
 describe("sync", () => {
@@ -343,6 +349,51 @@ describe("sync", () => {
     // 10 pages requested or waiting, 3 more read on while the reader waits on the first, and the
     // page it waits on.
     expect(most).toBeLessThanOrEqual(14);
+  });
+
+  test("ids reads those rows only, each once, in id order: the first page alone, then the others", async () => {
+    const mock = mockFetch(dataset(range(1, 5000)));
+    const igdb = testClient(mock.fetch);
+    const wanted = [...range(1, 1200).reverse(), 7, 7, 9999];
+    const pages = await collect(igdb.games.select("name").sync({ ids: wanted }));
+    expect(pages.flat().map((g) => g.id)).toEqual(range(1, 1200));
+    expect(pages.map((page) => page.length)).toEqual([500, 500, 200]);
+    // The first page tells what a row weighs, then the two others leave together.
+    expect(blocksOf(mock.calls)).toEqual([1, 2]);
+    expect(mock.calls[0]?.body).toBe(
+      `fields name,id; where id = (${range(1, 500).join(",")}); sort id asc; limit 500;`,
+    );
+  });
+
+  test("ids keeps the where and since, and takes a single id", async () => {
+    const mock = mockFetch(dataset([1, 2, 3, 4], (id) => id * 1000));
+    const igdb = testClient(mock.fetch);
+    const changed = await collect(igdb.games.sync({ ids: [4, 1, 3], since: 2000 }));
+    expect(changed.flat().map((g) => g.id)).toEqual([3, 4]);
+    expect(mock.calls[0]?.body).toBe("where (updated_at >= 2000) & (id = (1,3,4)); sort id asc; limit 3;");
+    expect((await collect(igdb.covers.sync({ ids: 2 }))).flat().map((c) => c.id)).toEqual([2]);
+    expect(await collect(igdb.covers.sync({ ids: [] }))).toEqual([]);
+    expect(mock.calls).toHaveLength(2);
+  });
+
+  test("ids keeps at most concurrency pages requested or waiting", async () => {
+    const handler = dataset(range(1, 5000));
+    let sent = 0;
+    let read = 0;
+    let most = 0;
+    const mock = mockFetch((call) => {
+      most = Math.max(most, ++sent - read);
+      return handler(call);
+    });
+    const igdb = testClient(mock.fetch);
+    for await (const page of igdb.games.select("name").sync({ ids: range(1, 5000), concurrency: 3 })) {
+      read++;
+      expect(page).toHaveLength(500);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    expect(read).toBe(10);
+    // 3 pages requested or waiting, and the page being read.
+    expect(most).toBeLessThanOrEqual(4);
   });
 
   test("stopping early sends no more requests", async () => {

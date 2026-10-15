@@ -59,10 +59,22 @@ export class NotFoundError extends IGDBError {
 
 /**
  * IGDB refused a size (413): the response would exceed its 10 MB cap (lower `limit` or select fewer
- * fields), or the request body exceeds 32,000 bytes (send fewer ids). The message says which.
+ * fields), or the request body exceeds 32,000 bytes (send fewer ids). The message says which, and for
+ * the response of a query, which `limit` should pass; `raw()` keeps IGDB's message.
  */
 export class PayloadTooLargeError extends IGDBError {
   override name = "PayloadTooLargeError";
+  /**
+   * For a response above 10 MB, a `limit` that should pass: from the weight of the rows of this
+   * selection read so far, else half the one refused. Undefined for a request body, a single row, or
+   * a page `searchAll()` reads to rank, whose size its `limit` does not set.
+   */
+  readonly suggestedLimit: number | undefined;
+
+  constructor(message: string, options: IGDBErrorOptions & { suggestedLimit?: number | undefined } = {}) {
+    super(message, options);
+    this.suggestedLimit = options.suggestedLimit;
+  }
 }
 
 /**

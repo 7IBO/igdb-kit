@@ -1,3 +1,4 @@
+import type { Selection } from "../links/selection";
 import { type DateInput, dateMillis } from "../query/dates";
 import type { ReleasePrecision } from "../query/release-period";
 import { alpha2 } from "./countries";
@@ -233,8 +234,13 @@ function displayName(type: "region" | "language", code: string, locale: string):
   }
 }
 
-/** Fields of `events` that {@link eventTime} reads. */
+/** Fields of `events` that {@link eventTime} reads; `end_time` too when selected. */
 export type EventTimeFields = "start_time" | "time_zone";
+
+/** The fields {@link eventTime} reads, `end_time` included, to spread into `igdb.events.select()`. */
+export function eventTimeFields(): Selection<"events", EventTimeFields | "end_time"> {
+  return Object.freeze(["start_time", "end_time", "time_zone"] as const);
+}
 
 // The zones IGDB's events use, as abbreviations: Bun rejects PST, JST and CST, and EST, GMT and CET
 // are fixed offsets without summer time. "CST" is ambiguous (China or US Central): US Central here.

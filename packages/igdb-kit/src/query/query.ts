@@ -27,6 +27,7 @@ import {
   gameIds,
   type PopularityRow,
   type PopularityWeights,
+  validateRanking,
   type WeightedPopular,
   type WeightedPopularOptions,
   weightedPopular,
@@ -153,9 +154,15 @@ export interface QueryRunner {
 export interface PopularOptions {
   /**
    * Stop after reading this many popularity rows when a `where` filters most games out. Defaults to
-   * 5000. Does not apply when the `where` matches at most 10,000 games: their own rows are read instead.
+   * 5000; a deeper page reads at least the rows up to it. Does not apply when the `where` matches at
+   * most 10,000 games: their own rows are read instead.
    */
   maxRows?: number;
+  /**
+   * When reading stops at `maxRows` with fewer games than the page needs: `"partial"` (default)
+   * returns the games found, `"throw"` throws a `QueryError` that says how many it found.
+   */
+  incomplete?: "partial" | "throw";
 }
 
 /** @internal */
@@ -189,6 +196,12 @@ export interface SyncOptions extends ExecuteOptions {
   concurrency?: number | undefined;
   /** Up to this many matches, pages are read one after another with an id cursor. Default 0. */
   cursorThreshold?: number | undefined;
+  /**
+   * Reads only the rows with these ids, one id or several, such as the covers of the games that
+   * changed: each row once, in id order. The `where`, `since` and `concurrency` still apply,
+   * `cursorThreshold` does not.
+   */
+  ids?: number | readonly number[] | undefined;
 }
 
 /** Base of everything that can be awaited or put in a `batch()`. */
@@ -335,7 +348,11 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   /**
    * Filters with a typed builder (`g => g.rating.gte(80)`) or a raw Apicalypse condition. On `games`,
    * the builder also has named filters: `g.developedBy(908)`, `g.publishedBy(50)`, `g.releasedIn({...})`.
+   * A raw condition also works on a query typed over several endpoints, such as `igdb[name]` in a loop.
    */
+  where(condition: string): this;
+  where(condition: (fields: WhereRoot<N>) => Condition): this;
+  where(condition: string | ((fields: WhereRoot<N>) => Condition)): this;
   where(condition: string | ((fields: WhereRoot<N>) => Condition)): this {
     const built =
       typeof condition === "string" ? undefined : condition(whereProxy(this.entity) as WhereRoot<N>);
@@ -423,11 +440,13 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   }
 
   /**
-   * The entities with these ids, in the order given (missing ids are skipped). Splits them into
+   * The entities with these ids, in the order given: one row per id, where it first appears (a
+   * repeated id is asked and returned once), and none for an id IGDB does not have. Splits them into
    * chunks of 500, fewer when the selected rows are heavy, which `batch` and automatic batching send
    * together; a chunk IGDB finds too heavy, or of 100 rows or more that gets no answer in time, is
    * split in two, and the halves are sent alone. The query's `offset` and `sort` do not apply. Sends
-   * nothing before it is awaited.
+   * nothing before it is awaited. For a long list, `sync({ ids })` reads the rows page by page instead
+   * of holding them all.
    */
   findByIds(ids: readonly number[]): Task<R[]> {
     return new Task((execute) => this.runFindByIds(ids, execute));
@@ -443,7 +462,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
     const pages = await Promise.all(chunks.map((chunk) => query.readIds(chunk, options)));
     const byId = new Map<number, R>();
     for (const page of pages) for (const item of page) byId.set((item as { id: number }).id, item);
-    return ids.flatMap((id) => (byId.has(id) ? [byId.get(id) as R] : []));
+    return unique.flatMap((id) => (byId.has(id) ? [byId.get(id) as R] : []));
   }
 
   /** The rows with these ids, read in halves when IGDB finds the response too heavy. */
@@ -472,8 +491,9 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    * games in bundles (`"bundles"`), the subsidiaries of companies (`igdb.companies.findBy("parent",
    * ids)`). Works on any relation or `..._id` field, including the 95 of IGDB's links that have no
    * field back. The fields and `where` of this query apply; `sort` and `limit` apply to each id's
-   * rows, and every row comes back, not just 10. Every requested id is in the map, with an empty
-   * array when nothing points to it; a row pointing to several of them is under each.
+   * rows, and every row comes back, not just 10. The sort field need not be selected. Every requested
+   * id is in the map, with an empty array when nothing points to it; a row pointing to several of
+   * them is under each.
    */
   findBy(field: LinkField<Endpoints[N]>, ids: readonly number[]): Task<Map<number, R[]>> {
     return new Task(async (execute) => {
@@ -531,17 +551,33 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   }
 
   /**
+   * @internal The rows, with the `x-count` total when the response has it: a query sent alone does,
+   * a block of a multiquery does not. Batched like `execute()`, unlike `withCount()`.
+   */
+  async rowsAndTotal(options?: ExecuteOptions): Promise<{ rows: R[]; total: number | undefined }> {
+    const response = await this.runner.run(this.toRequest(), options);
+    return { rows: this.parse(response), total: response.total };
+  }
+
+  /**
    * Iterates over every match with an id cursor (`where id > last; sort id asc`), `pageSize` (1 to
    * 500, default 500) at a time, fewer when the selected rows are heavy. Stable even if entities are
    * added meanwhile, and fast at any depth unlike `offset`.
    */
   async *iterate(options: ExecuteOptions & { pageSize?: number } = {}): AsyncGenerator<R, void, undefined> {
+    for await (const page of this.iteratePages(options)) yield* page;
+  }
+
+  /** @internal `iterate()`, a page at a time. */
+  async *iteratePages(
+    options: ExecuteOptions & { pageSize?: number } = {},
+  ): AsyncGenerator<R[], void, undefined> {
     this.idOrder("iterate()");
     const { pageSize = MAX_LIMIT } = options;
     if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > MAX_LIMIT) {
       throw new QueryError(`pageSize must be an integer between 1 and ${MAX_LIMIT}, got ${pageSize}`);
     }
-    for await (const page of this.cursorPages(options)) yield* page;
+    yield* this.cursorPages(options);
   }
 
   /**
@@ -554,7 +590,8 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    * page starts on the last row of the previous one: when matches change during the sync and a page
    * starts further, the rows in between are read again with an id cursor, so none is missed. At most
    * `concurrency` pages are requested or waiting at once, about 64 MB. Requests default to
-   * `background` priority so they wait behind interactive ones. Pages arrive in id order.
+   * `background` priority so they wait behind interactive ones. Pages arrive in id order. With `ids`,
+   * a page asks for its rows by id instead: the first alone, then up to `concurrency` at once.
    */
   async *sync(
     options: SyncOptions &
@@ -562,7 +599,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   ): AsyncGenerator<R[], void, undefined> {
     if (this.state.search) throw new QueryError("sync() cannot be combined with search");
     this.idOrder("sync()");
-    const { concurrency = 40, cursorThreshold = 0, since: _, ...execute } = options;
+    const { concurrency = 40, cursorThreshold = 0, since: _, ids, ...execute } = options;
     const executeOptions: ExecuteOptions = { ...execute, priority: execute.priority ?? "background" };
     let query: Query<N, R> = this.with({
       fields: this.fieldsWithId(),
@@ -575,6 +612,10 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
         throw new QueryError(`${this.endpoint} has no updated_at field: sync it without since`);
       }
       query = query.where(`updated_at >= ${dateSeconds(options.since, "since")}`);
+    }
+    if (ids !== undefined) {
+      yield* query.idPages(typeof ids === "number" ? [ids] : ids, concurrency, executeOptions);
+      return;
     }
 
     // Pages are segments of the matches in id order. Each starts on the last row of the previous one
@@ -748,6 +789,42 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
     }
   }
 
+  /**
+   * `sync({ ids })`: the rows with these ids, in id order, a page of ids at a time. The first page
+   * goes alone and tells what a row of this selection weighs; up to `concurrency` pages, about 64 MB,
+   * are then requested or waiting at once.
+   */
+  private async *idPages(
+    ids: readonly number[],
+    concurrency: number,
+    options: ExecuteOptions,
+  ): AsyncGenerator<R[], void, undefined> {
+    const sorted = [...new Set(ids.map(toId))].sort((a, b) => a - b);
+    const pages: Promise<R[]>[] = [];
+    let next = 0;
+    const read = () => {
+      const chunk = sorted.slice(next, next + this.pageRows());
+      next += chunk.length;
+      const page = this.readIds(chunk, options);
+      page.catch(() => {}); // awaited in order below
+      pages.push(page);
+    };
+    if (sorted.length > 0) read();
+    let window: number | undefined;
+    while (pages.length > 0) {
+      const rows = await (pages.shift() as Promise<R[]>);
+      if (window === undefined) {
+        const pageBytes = this.runner.pageSize?.(this.endpoint, this.state.fields).bytes ?? 0;
+        window = Math.max(
+          1,
+          Math.min(concurrency, Math.floor(SYNC_BYTES_IN_FLIGHT / Math.max(pageBytes, 1))),
+        );
+      }
+      while (next < sorted.length && pages.length < window) read();
+      if (rows.length > 0) yield rows;
+    }
+  }
+
   /** Throws when the query sorts on anything but the id: the method reads in id order. */
   private idOrder(method: string): void {
     const { sort } = this.state;
@@ -905,7 +982,8 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
    * `offset` pick the page of the ranking; `sort` throws. Popularity rows are read 500 at a time until
    * enough games match, or `maxRows` rows were read. The games a `where` matches are counted along with
    * the first page: if it is not enough and they are at most 10,000, their own rows are read instead,
-   * which is exact and takes a few requests.
+   * which is exact and takes a few requests. Above, the list is shorter than the page when `maxRows`
+   * rows did not hold enough games, unless `incomplete: "throw"` makes it throw.
    */
   popular(type: number, options: PopularOptions = {}): Task<{ game: R; value: number }[]> {
     return new Task((execute) => this.runPopular(type, options, execute));
@@ -918,13 +996,16 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
     execute: ExecuteOptions,
   ): Promise<{ game: R; value: number }[]> {
     if (this.state.search) throw new QueryError("popular() cannot be combined with search");
-    const { maxRows = 5000 } = options;
+    const { maxRows = 5000, incomplete = "partial" } = options;
+    validateRanking(maxRows, incomplete);
     const page = this.rankingPage("popular()");
     if (page.limit === 0) return [];
     // The games before the page are ranked too.
     const limit = page.offset + page.limit;
     // Without a filter almost every row matches; a few spare rows cover deleted games.
     const pageSize = this.state.where ? MAX_LIMIT : Math.min(MAX_LIMIT, limit + 10);
+    // A deep page needs at least the rows up to it.
+    const budget = Math.max(maxRows, this.state.where ? limit : limit + 10);
     const rows = new Query<EndpointName, { game_id?: number; value?: number }>(
       this.runner,
       "popularity_primitives",
@@ -937,13 +1018,18 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
     const matching = this.state.where ? gameIds(this as never) : undefined;
     const results: { game: R; value: number }[] = [];
     const seen = new Set<number>();
-    for (let offset = 0; offset < maxRows && results.length < limit; offset += pageSize) {
+    let scanned = 0;
+    let total: number | undefined;
+    let ended = false;
+    for (let offset = 0; offset < budget && results.length < limit; offset += pageSize) {
       // The count and first ids of the matches go with the first page.
       const [read, matches] = await Promise.all([
         rows.limit(pageSize).offset(offset).execute(execute),
         offset === 0 && matching !== undefined ? firstIds(matching, execute) : undefined,
       ]);
       if (matches?.total === 0) return [];
+      if (matches !== undefined) total = matches.total;
+      scanned += read.length;
       const ranked: { id: number; value: number }[] = [];
       for (const row of read) {
         if (row.game_id === undefined || seen.has(row.game_id)) continue;
@@ -956,7 +1042,8 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
         const game = byId.get(id);
         if (game !== undefined && results.length < limit) results.push({ game, value });
       }
-      if (read.length < pageSize) break;
+      ended = read.length < pageSize;
+      if (ended) break;
       if (
         results.length < limit &&
         matching !== undefined &&
@@ -972,6 +1059,12 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
         );
         return top.slice(page.offset);
       }
+    }
+    if (results.length < limit && !ended && incomplete === "throw") {
+      throw new QueryError(
+        `popular() read ${scanned} popularity rows and found ${results.length} of the ${limit} games the page needs` +
+          `${total === undefined ? "" : `, among ${total} games matching the where`}: raise maxRows or narrow the where`,
+      );
     }
     // Equal values in id order, as when the rows of few games are read.
     return results
@@ -1036,7 +1129,8 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
    * positively weighted type, then the other types and the games of the new ids (about 2 multiqueries
    * per round); it stops once no unread game can enter the page. The games a `where` matches
    * are counted during the first round: if it does not settle the top and they are at most 10,000,
-   * their own rows are scored instead.
+   * their own rows are scored instead. Otherwise, without a `where` too, a type stops after `maxRows`
+   * rows, and the top may not be settled then, unless `incomplete: "throw"` makes it throw.
    */
   weightedPopular(
     weights: PopularityWeights,
@@ -1224,6 +1318,8 @@ export class GameLinkedQuery<N extends GameLinkedEndpoint, R = { id: number }> e
    * `release_dates`, `websites`… through their `game` (or `game_id`) field, and `characters`,
    * `events`, `collections`, `franchises` through their `games` array. The fields and `where` of this
    * query apply; `sort` and `limit` apply to each game's rows, and every row comes back, not just 10.
+   * The sort field need not be selected: `select("human").sort("date").limit(1)` gives each game's
+   * first release date.
    *
    * Every requested id is in the map, with an empty array when nothing points to it (most games have
    * no time to beat). A row linked to several of the games is under each of them. Ids are split by

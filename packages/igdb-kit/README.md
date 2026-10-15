@@ -81,13 +81,12 @@ const october = await igdb.games.select("name").releases({ from: "2026-10-01", t
 **Show a game in the user's language** with helpers that send no request: title, release date, age rating, store links, and IGDB's labels in 9 languages ([Displaying a game](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/display.md), [Languages](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/languages.md)):
 
 ```ts
-import { formatReleaseDate, localizedName, releaseDate } from "igdb-kit/game";
+import { formatReleaseDate, localizedName, localizedNameFields, releaseDate, releaseDateFields } from "igdb-kit/game";
 import { createLabels } from "igdb-kit/i18n";
 import { fr } from "igdb-kit/i18n/fr";
 
 const game = await igdb.games
-  .select("name", "genres", "release_dates.*", "game_localizations.name", "game_localizations.region",
-    "alternative_names.name", "alternative_names.comment")
+  .select("genres", ...localizedNameFields(), ...releaseDateFields()) // the fields the helpers read
   .findByIdOrThrow(1942);
 
 localizedName(game, "ja-JP")?.name;                           // "ウィッチャー3 ワイルドハント"

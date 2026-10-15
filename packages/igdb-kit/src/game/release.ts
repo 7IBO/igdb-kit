@@ -1,4 +1,5 @@
 import { ReleaseDateRegion, ReleaseDateStatus } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import {
   NOT_RELEASED_STATUSES,
   type ReleaseDetails,
@@ -8,13 +9,36 @@ import {
 import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
-/** Fields of `release_dates` that {@link releaseDate} reads. */
+/**
+ * Fields of `release_dates` that {@link releaseDate} reads; `release_dates.human`, `release_dates.y`
+ * and `release_dates.m` too when selected.
+ */
 export type ReleaseDateFields =
   | "release_dates.date"
   | "release_dates.date_format"
   | "release_dates.release_region"
   | "release_dates.platform"
   | "release_dates.status";
+
+/**
+ * The fields {@link releaseDate}, {@link releasesByPlatform} and {@link regionalReleases} read, to
+ * spread into `select()`, IGDB's English label (`human`) included.
+ */
+export function releaseDateFields(): Selection<
+  "games",
+  ReleaseDateFields | "release_dates.human" | "release_dates.y" | "release_dates.m"
+> {
+  return Object.freeze([
+    "release_dates.date",
+    "release_dates.date_format",
+    "release_dates.release_region",
+    "release_dates.platform",
+    "release_dates.status",
+    "release_dates.human",
+    "release_dates.y",
+    "release_dates.m",
+  ] as const);
+}
 
 interface ReleaseDateRow {
   date?: number | undefined;

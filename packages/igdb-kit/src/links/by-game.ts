@@ -99,15 +99,17 @@ export async function findByGames<R>(
  * Rows of `query` whose field `link` points to each of `ids`, with the query's fields and `where`.
  * Every requested id is in the map, with an empty array when nothing points to it. A row linked to
  * several of the ids (a character in two games) is the same object under each. The query's `sort`
- * and `limit` apply to each id's rows; without `sort`, rows are in id order. With a single id, `link`
- * can be a nested path (`collection.games`): every row is that id's.
+ * and `limit` apply to each id's rows; without `sort`, rows are in id order. The link and sort
+ * fields are requested when not selected, and left out of the rows. With a single id, `link` can be
+ * a nested path (`collection.games`): every row is that id's.
  *
  * Ids are sent 500 per query, and the first pages go out together so batching packs them into
  * multiqueries. Pages hold 500 rows, fewer when the selected rows are heavy. A query that fills its
- * page is counted, then split into smaller id lists sized from the count and read in parallel; a
- * single game with more rows than a page is read with an id cursor. A page IGDB finds too heavy is
- * split in two by its ids, the halves sent alone, or read with smaller pages for a single game; so is
- * a page of 100 ids or more (100 rows for a single game) that gets no answer in time.
+ * page is counted, from IGDB's `x-count` when the page went out alone, else with a count request,
+ * then split into smaller id lists sized from the count and read in parallel; a single game with
+ * more rows than a page is read with an id cursor. A page IGDB finds too heavy is split in two by
+ * its ids, the halves sent alone, or read with smaller pages for a single game; so is a page of 100
+ * ids or more (100 rows for a single game) that gets no answer in time.
  */
 export async function findByLink<R>(
   query: Query<EndpointName, R>,
@@ -129,11 +131,23 @@ export async function findByLink<R>(
   /** Ids per query: the filter on 500 ids stays far under IGDB's body limit. */
   const chunkSize = 500;
 
-  // The link field is needed to group rows of several ids; it is removed again unless selected.
-  const selectsLink =
-    fields.length > 0 && fields.some((f) => f === "*" || f === link || f.startsWith(`${link}.`));
+  // The link field is needed to group rows of several ids, and the sort field to sort them; each is
+  // removed again unless selected.
+  const covers = (field: string) => fields.some((f) => f === "*" || f === field || f.startsWith(`${field}.`));
+  const selects = (field: string) => covers(field) && !query.state.exclude?.includes(field);
+  const selectsLink = selects(link);
+  // Rows always have their id: a sort on it needs nothing more.
+  const sortField = sort && sort.field !== "id" ? sort.field : undefined;
+  const selectsSort = sortField === undefined || selects(sortField);
+  const added = [
+    ...(selectsLink || single ? [] : [link]),
+    ...(sortField === undefined || selectsSort ? [] : [sortField]),
+  ];
   const base = query.with({
-    fields: selectsLink || single ? fields : [...new Set([...(fields.length ? fields : ["id"]), link])],
+    fields: added.length
+      ? [...new Set([...(fields.length ? fields : ["id"]), ...added.filter((f) => !covers(f))])]
+      : fields,
+    exclude: query.state.exclude?.filter((f) => !added.includes(f)),
     sort: { field: "id", direction: "asc" },
     limit: undefined,
     offset: undefined,
@@ -159,12 +173,15 @@ export async function findByLink<R>(
     // What a page that fails is halved by: its ids, or the rows of one id's pages.
     const halvable = chunk.length > 1 ? chunk.length : rows;
     let first: Row[];
+    let counted: number | undefined;
     try {
-      first = (await filtered(chunk)
+      const page = await filtered(chunk)
         .where("id > -1")
         .limit(rows)
         .with({ expectedRows: Math.min(rows, chunk.length * 4), halvable })
-        .execute(half ? alone : options)) as Row[];
+        .rowsAndTotal(half ? alone : options);
+      first = page.rows as Row[];
+      counted = page.total;
     } catch (error) {
       if (!tooHeavy(error, halvable)) throw error;
       if (chunk.length > 1) {
@@ -179,7 +196,7 @@ export async function findByLink<R>(
     if (first.length < rows) return;
     if (chunk.length > 1) {
       // Too many rows for one page: split the ids so each part should fit in one.
-      const total = await filtered(chunk).count().execute(options);
+      const total = counted ?? (await filtered(chunk).count().execute(options));
       const size = Math.max(1, Math.floor((rows * 0.8 * chunk.length) / Math.max(total, 1)));
       if (size < chunk.length) {
         const parts: number[][] = [];
@@ -194,18 +211,21 @@ export async function findByLink<R>(
   for (let i = 0; i < ids.length; i += chunkSize) chunks.push(ids.slice(i, i + chunkSize));
   await Promise.all(chunks.map((chunk) => load(chunk)));
 
-  for (const row of [...found.values()].sort((a, b) => a.id - b.id)) {
-    // A copy without the link: an identical call in flight shares these rows and still needs it.
+  // Sorted once, in id order where the sort field is equal: each id's rows keep that order.
+  const ordered = [...found.values()].sort((a, b) => a.id - b.id);
+  if (sort) ordered.sort(compareBy(sort.field, sort.direction));
+  for (const row of ordered) {
+    // A copy without the fields added: an identical call in flight shares these rows and still needs them.
     let shown = row;
-    if (!selectsLink) {
+    if (!selectsLink || !selectsSort) {
       shown = { ...row };
-      delete shown[link];
+      if (!selectsLink) delete shown[link];
+      if (!selectsSort) delete shown[sortField as string];
     }
     for (const id of single ? ids : linkedIds(row[link])) result.get(id)?.push(shown as R);
   }
-  for (const [id, group] of result) {
-    if (sort) group.sort(compareBy(sort.field, sort.direction));
-    if (limit !== undefined && group.length > limit) result.set(id, group.slice(0, limit));
+  if (limit !== undefined) {
+    for (const [id, group] of result) if (group.length > limit) result.set(id, group.slice(0, limit));
   }
   return result;
 }

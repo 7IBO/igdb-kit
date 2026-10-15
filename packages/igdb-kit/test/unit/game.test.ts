@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   AgeRatingOrganization,
+  defineSelection,
+  type EndpointName,
   ExternalGameSource,
   GameReleaseFormat,
+  GameType,
   Language,
   LanguageSupportType,
   Platform,
@@ -13,33 +16,55 @@ import {
 } from "../../src";
 import {
   ageRating,
+  ageRatingFields,
   ageRatings,
+  alternativeNameFields,
   alternativeTitles,
+  bestImageFields,
   companies,
+  companyFields,
   countryName,
   eventTime,
+  eventTimeFields,
+  externalIdFields,
   externalIds,
   formatPlaytime,
   formatReleaseDate,
+  franchiseFields,
+  gameKind,
+  gameKindFields,
+  languageFields,
   languageName,
   languages,
   localization,
   localizedCover,
+  localizedCoverFields,
   localizedName,
+  localizedNameFields,
   localizeStoreUrl,
   multiplayer,
+  multiplayerFields,
   parentGame,
+  parentGameFields,
   parseAlternativeName,
   parseStoreUrl,
+  platformVersionFields,
+  playtimes,
   regionalReleases,
+  relatedGameFields,
   releaseDate,
+  releaseDateFields,
   releaseRegionName,
   releasesByPlatform,
   resolveLocale,
+  storeLinkFields,
   storeLinks,
   storeOf,
   supportsLanguage,
   timeToBeat,
+  timeToBeatFields,
+  videoLinkFields,
+  websiteLinkFields,
 } from "../../src/game";
 import * as fixtures from "./fixtures/games";
 import { gta5 } from "./fixtures/related";
@@ -1206,7 +1231,7 @@ describe("languages()", () => {
   });
 });
 
-describe("timeToBeat() and formatPlaytime()", () => {
+describe("timeToBeat(), playtimes() and formatPlaytime()", () => {
   test("picks normally, then hastily, then completely", () => {
     expect(timeToBeat(timeToBeatRows.witcher3)).toEqual({ seconds: 254778, kind: "normally", count: 41 });
     expect(timeToBeat(timeToBeatRows.hastilyOnly)).toEqual({ seconds: 154920, kind: "hastily", count: 1 });
@@ -1218,10 +1243,31 @@ describe("timeToBeat() and formatPlaytime()", () => {
     expect(timeToBeat(undefined)).toBeNull();
   });
 
+  test("playtimes() gives the three averages, null for a missing or zero one", () => {
+    expect(playtimes(timeToBeatRows.witcher3)).toEqual({
+      hastily: 134552,
+      normally: 254778,
+      completely: 581483,
+      count: 41,
+    });
+    expect(playtimes(timeToBeatRows.hastilyOnly)).toEqual({
+      hastily: 154920,
+      normally: null,
+      completely: null,
+      count: 1,
+    });
+    const row = { hastily: 186000, normally: 254778, completely: 0, count: undefined };
+    expect(playtimes(row)).toEqual({ hastily: 186000, normally: 254778, completely: null, count: null });
+    expect(playtimes(timeToBeatRows.empty)).toBeNull();
+    expect(playtimes(null)).toBeNull();
+    expect(playtimes(undefined)).toBeNull();
+  });
+
   test("keeps IGDB's averages as they are", () => {
     expect(timeToBeat(timeToBeatRows.fortnite, { prefer: ["hastily"] })?.seconds).toBeGreaterThan(
       timeToBeat(timeToBeatRows.fortnite)?.seconds ?? 0,
     );
+    expect(playtimes(timeToBeatRows.fortnite)).toMatchObject({ hastily: 13821428, normally: 1072800 });
   });
 
   test("formats minutes, half hours and hours", () => {
@@ -1233,7 +1279,10 @@ describe("timeToBeat() and formatPlaytime()", () => {
     expect(formatPlaytime(254778, { locale: "en-US", unitDisplay: "long" })).toBe("71 hours");
     expect(formatPlaytime(254778, { locale: "fr-FR" })).toMatch(/^71\sh$/); // narrow no-break space
     expect(formatPlaytime(undefined)).toBeNull();
+    expect(formatPlaytime(null)).toBeNull();
     expect(formatPlaytime(0)).toBeNull();
+    expect(formatPlaytime(-60)).toBeNull();
+    expect(formatPlaytime(Number.NaN)).toBeNull();
   });
 });
 
@@ -1291,6 +1340,47 @@ describe("parentGame()", () => {
 
   test("standalone games", () => {
     expect(parentGame(fixtures.witcher3)).toBeNull();
+  });
+});
+
+describe("gameKind()", () => {
+  test("from game_type, editions first", () => {
+    expect(gameKind(fixtures.witcher3)).toBe("main_game");
+    // Bundles (game_type 3) that are editions of the main game, as parentGame() reads them.
+    expect(gameKind(fixtures.witcher3Complete)).toBe("edition");
+    expect(gameKind(fixtures.codGhostsGold)).toBe("edition");
+    expect(gameKind(fixtures.shadowOfTheErdtree)).toBe("expansion");
+    expect(gameKind(fixtures.persona5Royal)).toBe("expanded_game");
+    expect(gameKind(fixtures.scalebound)).toBe("remake");
+  });
+
+  test("bundles, games without a parent, expanded and unknown types", () => {
+    expect(gameKind({ game_type: GameType.Bundle, version_parent: undefined })).toBe("bundle");
+    expect(gameKind({ game_type: GameType.DLC, version_parent: undefined })).toBe("dlc");
+    expect(gameKind({ game_type: { id: GameType.Port, type: "Port" }, version_parent: undefined })).toBe(
+      "port",
+    );
+    expect(gameKind({ game_type: 99, version_parent: undefined })).toBe("other");
+  });
+
+  test("a game without game_type is other, as parentGame() names it", () => {
+    expect(gameKind({ game_type: undefined, version_parent: undefined })).toBe("other");
+    const child = { game_type: undefined, parent_game: 5, version_parent: undefined };
+    expect(parentGame(child)?.relation).toBe("other");
+    expect(gameKind(child)).toBe("other");
+  });
+
+  test("the relation parentGame() gives a game with a parent", () => {
+    for (const type of Object.values(GameType)) {
+      if (type === GameType.MainGame || type === GameType.Bundle) continue;
+      const game = { game_type: type, parent_game: 1, version_parent: undefined };
+      expect(parentGame(game)).toMatchObject({ relation: gameKind(game) });
+    }
+  });
+
+  test("gameKindFields() selects what it reads", () => {
+    expect(gameKindFields()).toEqual(["game_type", "version_parent"]);
+    expect(Object.isFrozen(gameKindFields())).toBe(true);
   });
 });
 
@@ -1615,5 +1705,165 @@ describe("storeLinks() with a locale", () => {
     const apple = "https://apps.apple.com/us/app/hades/id1234567890";
     expect(localizeStoreUrl(apple, "fr-FR")).toBe(apple);
     expect(localizeStoreUrl("not a url", "fr-FR")).toBe("not a url");
+  });
+});
+
+describe("field lists", () => {
+  test("every path is valid on its endpoint, once, and the lists are frozen", () => {
+    const lists: [EndpointName, readonly string[]][] = [
+      ["games", releaseDateFields()],
+      ["games", companyFields()],
+      ["games", companyFields("name", "logo.image_id")],
+      ["games", storeLinkFields()],
+      ["games", externalIdFields()],
+      ["games", websiteLinkFields()],
+      ["games", videoLinkFields()],
+      ["games", ageRatingFields()],
+      ["games", localizedNameFields()],
+      ["games", localizedCoverFields()],
+      ["games", alternativeNameFields()],
+      ["games", languageFields()],
+      ["games", languageFields("native_name", "locale")],
+      ["games", multiplayerFields()],
+      ["games", parentGameFields()],
+      ["games", parentGameFields("name")],
+      ["games", relatedGameFields("name")],
+      ["games", gameKindFields()],
+      ["games", franchiseFields()],
+      ["games", franchiseFields("name")],
+      ["games", bestImageFields()],
+      ["game_time_to_beats", timeToBeatFields()],
+      ["events", eventTimeFields()],
+      ["platforms", platformVersionFields()],
+      ["platforms", platformVersionFields("name")],
+    ];
+    for (const [endpoint, fields] of lists) {
+      expect(Object.isFrozen(fields)).toBe(true);
+      // defineSelection() checks each path against the schema, as select() does, and drops repeats.
+      const checked: readonly string[] = defineSelection(endpoint, ...(fields as never[]));
+      expect(checked).toEqual(fields);
+    }
+  });
+
+  test("everything the helper reads", () => {
+    expect(releaseDateFields()).toEqual([
+      "release_dates.date",
+      "release_dates.date_format",
+      "release_dates.release_region",
+      "release_dates.platform",
+      "release_dates.status",
+      "release_dates.human",
+      "release_dates.y",
+      "release_dates.m",
+    ]);
+    expect(storeLinkFields()).toEqual([
+      "websites.url",
+      "websites.trusted",
+      "external_games.uid",
+      "external_games.url",
+      "external_games.external_game_source",
+      "external_games.platform",
+      "external_games.countries",
+      "external_games.game_release_format",
+    ]);
+    expect(externalIdFields()).toEqual([
+      "external_games.external_game_source",
+      "external_games.uid",
+      "external_games.url",
+    ]);
+    expect(websiteLinkFields()).toEqual(["websites.type", "websites.url", "websites.trusted"]);
+    expect(videoLinkFields()).toEqual(["videos.video_id", "videos.name"]);
+    expect(ageRatingFields()).toEqual([
+      "age_ratings.organization",
+      "age_ratings.rating_category.rating",
+      "age_ratings.synopsis",
+      "age_ratings.rating_content_descriptions.description",
+    ]);
+    expect(localizedNameFields()).toEqual([
+      "name",
+      "game_localizations.name",
+      "game_localizations.region",
+      "alternative_names.name",
+      "alternative_names.comment",
+    ]);
+    expect(localizedCoverFields()).toEqual([
+      "cover.image_id",
+      "game_localizations.region",
+      "game_localizations.cover.image_id",
+    ]);
+    expect(alternativeNameFields()).toEqual(["alternative_names.name", "alternative_names.comment"]);
+    expect(multiplayerFields()).toHaveLength(11);
+    expect(multiplayerFields()).toContain("multiplayer_modes.campaigncoop");
+    expect(bestImageFields()).toEqual([
+      "cover.image_id",
+      "cover.width",
+      "cover.height",
+      "artworks.image_id",
+      "artworks.image_type",
+      "artworks.artwork_type",
+      "artworks.width",
+      "artworks.height",
+      "screenshots.image_id",
+      "screenshots.width",
+      "screenshots.height",
+    ]);
+    expect(timeToBeatFields()).toEqual(["hastily", "normally", "completely", "count"]);
+    expect(eventTimeFields()).toEqual(["start_time", "end_time", "time_zone"]);
+  });
+
+  test("the lists keep IGDB's labels: a release date's human, a new rating category's rating", () => {
+    // The release dates as select(...releaseDateFields()) returns them.
+    const fields = releaseDateFields().map((path) => path.slice("release_dates.".length));
+    const release_dates = fixtures.witcher3.release_dates?.map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key === "id" || fields.includes(key))),
+    );
+    expect(releaseDate({ release_dates } as never)?.human).toBe("May 19, 2015");
+    // A rating category added to IGDB after this version is labeled from rating_category.rating.
+    const rating = { id: 1, organization: 2, rating_category: { id: 99, rating: "New" } };
+    expect(ageRatingFields()).toContain("age_ratings.rating_category.rating");
+    expect(ageRating({ age_ratings: [rating] }, 2)?.label).toBe("New");
+  });
+
+  test("the fields you name go on the rows a helper returns as selected", () => {
+    const roles = [
+      "involved_companies.developer",
+      "involved_companies.publisher",
+      "involved_companies.porting",
+      "involved_companies.supporting",
+    ] as const;
+    expect(companyFields()).toEqual(["involved_companies.company", ...roles]);
+    expect(companyFields("name")).toEqual(["involved_companies.company.name", ...roles]);
+    expect(languageFields()).toEqual([
+      "language_supports.language",
+      "language_supports.language_support_type",
+    ]);
+    expect(languageFields("native_name")).toEqual([
+      "language_supports.language.native_name",
+      "language_supports.language_support_type",
+    ]);
+    expect(parentGameFields()).toEqual(["game_type", "version_title", "parent_game", "version_parent"]);
+    expect(parentGameFields("name")).toEqual([
+      "game_type",
+      "version_title",
+      "parent_game.name",
+      "version_parent.name",
+    ]);
+    expect(franchiseFields()).toEqual(["franchise", "franchises"]);
+    expect(franchiseFields("name", "slug")).toEqual([
+      "franchise.name",
+      "franchise.slug",
+      "franchises.name",
+      "franchises.slug",
+    ]);
+    const dates = [
+      "versions.platform_version_release_dates.date",
+      "versions.platform_version_release_dates.date_format",
+      "versions.platform_version_release_dates.release_region",
+      "versions.platform_version_release_dates.human",
+      "versions.platform_version_release_dates.y",
+      "versions.platform_version_release_dates.m",
+    ] as const;
+    expect(platformVersionFields()).toEqual(dates);
+    expect(platformVersionFields("name")).toEqual([...dates, "versions.name"]);
   });
 });

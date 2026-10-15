@@ -3,9 +3,11 @@
 IGDB encourages keeping your own copy of its data. Its API is free, for commercial use too through a free partnership that asks for a visible credit to IGDB; IGDB's partners can also download data dumps, which igdb-kit does not read. The [API docs](https://api-docs.igdb.com) have the current terms.
 
 - [`sync()`](#copying-an-endpoint-sync) copies an endpoint, then only what changed since the last run.
+- [`sync({ ids })`](#tables-without-updated_at) reads the rows of tables without `updated_at` that changed games point to.
+- [A loop over table names](#copying-several-endpoints) needs no cast.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
-- [Tables without `updated_at`](#tables-without-updated_at) and [rows that only point to games](#rows-that-point-to-games) need a little more.
+- [Rows that only point to games](#rows-that-point-to-games) need `removed()` on their own tables.
 - [The display helpers](#display-helpers-on-stored-rows) read stored rows as they read query results.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
 
@@ -42,6 +44,56 @@ for await (const page of query.sync({ since: checkpoint.since })) {
   checkpoint.lastId = page[page.length - 1]?.id; // saved with the rows, in one transaction
 }
 ```
+
+## Tables without updated_at
+
+23 of the 84 endpoints have no `updated_at`, so `since` cannot find what changed in them (the type of `sync()` refuses it, and it throws at run time): `age_rating_content_descriptions`, `age_ratings`, `alternative_names`, `artworks`, `character_mug_shots`, `company_logos`, `company_websites`, `covers`, `executables`, `game_engine_logos`, `game_version_feature_values`, `game_version_features`, `game_videos`, `logos`, `multiplayer_modes`, `platform_families`, `platform_logos`, `platform_version_companies`, `platform_versions`, `platform_websites`, `screenshots`, `search` and `websites`. `endpointSchema(name).fields` says which have it.
+
+Most of them hang off a row that has one. The games that changed point to their rows: read those with `ids`.
+
+```ts
+const coverIds = changedGames.flatMap((game) => (game.cover === undefined ? [] : [game.cover]));
+for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
+  await db.upsertCovers(page); // each cover once, even when games share it
+}
+```
+
+Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies, `cursorThreshold` does not. `findByIds()` returns the same rows in one array, in the order of the ids.
+
+Read the whole table now and then too (weekly, say): nothing says that editing a cover or a website changes its game's `updated_at`.
+
+## Copying several endpoints
+
+A copy loops over table names, and `igdb[name]` is then a query typed over every table of the list. `select()`, a `where` written as a string, `sync()`, `findByIds()` and `removed()` work on it without a cast, and each row has the type of one of the tables:
+
+```ts
+import { type EndpointName, WebsiteType } from "igdb-kit";
+
+const tables = ["platforms", "genres", "games", "release_dates", "covers", "websites"] as const;
+/** What the copy keeps of a table, when not every row. */
+const filters: Partial<Record<EndpointName, string>> = {
+  websites: `type = (${WebsiteType.Steam},${WebsiteType.GOG})`,
+};
+
+for (const name of tables) {
+  const all = igdb[name].select("*");
+  const filter = filters[name];
+  for await (const page of (filter ? all.where(filter) : all).sync()) {
+    await db.upsert(name, page); // { id: number; ... }[]
+  }
+}
+```
+
+The typed builder needs the name narrowed to one table (`name === "websites" ? igdb.websites.where((w) => w.type.in(...)) : ...`), and `since` to tables that have `updated_at`, which a type guard on your own list of them does:
+
+```ts
+const tracked = ["games", "release_dates"] as const;
+const isTracked = (name: string): name is (typeof tracked)[number] => (tracked as readonly string[]).includes(name);
+
+const pages = isTracked(name) ? igdb[name].select("*").sync({ since: lastSync }) : igdb[name].select("*").sync();
+```
+
+Narrow the name before `select()`: a helper that selects from a generic name types its query over every table of the list again, and `since` is then refused.
 
 ## Webhooks
 
@@ -80,20 +132,6 @@ It checks the secret before reading the body, and answers 401 when it is wrong, 
 ```ts
 const gone = await igdb.games.removed(storedIds);
 // [{ id: 422306, reason: "Duplicate", replacement: 399156 }, { id: 202354, reason: "Invalid", replacement: null }]
-```
-
-## Tables without updated_at
-
-23 of the 84 endpoints have no `updated_at`, so `sync({ since })` cannot read their changes (its type refuses `since`, and it throws at run time): `age_rating_content_descriptions`, `age_ratings`, `alternative_names`, `artworks`, `character_mug_shots`, `company_logos`, `company_websites`, `covers`, `executables`, `game_engine_logos`, `game_version_feature_values`, `game_version_features`, `game_videos`, `logos`, `multiplayer_modes`, `platform_families`, `platform_logos`, `platform_version_companies`, `platform_versions`, `platform_websites`, `screenshots`, `search` and `websites`. `endpointSchema(name).fields` says which have it.
-
-Most of them hang off a row that has one: read again the rows that the changed games point to, and the whole table now and then (weekly, say) for the changes that left the game as it was.
-
-```ts
-for await (const page of igdb.games.select("*").sync({ since: lastSync })) {
-  await db.upsertGames(page);
-  // websites, covers and alternative_names have no updated_at: read those the changed games point to
-  await db.upsertWebsites(await igdb.websites.select("*").findByIds(page.flatMap((g) => g.websites ?? [])));
-}
 ```
 
 ## Rows that point to games

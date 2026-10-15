@@ -14,11 +14,14 @@ type Tail<P extends string, H extends string> = P extends `${H}.${infer R}` ? R 
 
 /**
  * The shape `T` must have so that every field path `P` (`"release_dates.date"`, `"name"`) was
- * selected. Arrays are checked element by element; a relation left as an id fails when one of its
- * fields is required.
+ * selected. `T` is one row: an array fails, such as the rows `findByGames()` and a view's `with` give
+ * for a game. Arrays inside it are checked element by element; a relation left as an id fails when
+ * one of its fields is required.
  */
 export type Requires<T, P extends string, Prefix extends string = ""> = T extends readonly (infer U)[]
-  ? readonly Requires<U, P, Prefix>[]
+  ? Prefix extends ""
+    ? readonly "pass one row, not an array"[]
+    : readonly Requires<U, P, Prefix>[]
   : {
       [K in Head<P> & keyof T]?:
         | ([Tail<P, K & string>] extends [never]

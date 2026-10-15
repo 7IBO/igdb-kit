@@ -15,13 +15,13 @@ const timeToBeat = await igdb.game_time_to_beats.select("normally").findByGames(
 timeToBeat.get(1942); // [{ id: 432, normally: 254778 }]: seconds, about 71 h
 timeToBeat.get(1020); // []: no time to beat, the case for most games
 
-const firstDates = await igdb.release_dates.select("date", "platform").sort("date").limit(1).findByGames(ids);
+const firstDates = await igdb.release_dates.select("human", "platform").sort("date").limit(1).findByGames(ids);
 ```
 
 - Every requested id is in the map, with an empty array when nothing points to the game.
-- The query's `where` applies, and its `sort` and `limit` apply to each game's rows. Every row comes back, not just the first 10. A row linked to several of the games, such as a character, is listed under each of them.
+- The query's `where` applies, and its `sort` and `limit` apply to each game's rows. The sort field does not need to be selected: it is requested to sort, and left out of the rows. Every row comes back, not just the first 10. A row linked to several of the games, such as a character, is listed under each of them.
 - Regional covers have no `game` (their game localization points to them), so `covers.findByGames()` returns the main cover only.
-- Ids are sent 500 per query and pages of 500 rows are read until the end, all batched. A page that comes back full is split using the count, so the 9,000 language rows of 500 games take about 9 requests instead of 18 one after the other. A page IGDB refuses for its size is asked again in halves, as in [`findByIds()`](queries.md#reading-results), and so is a page of 100 games or more (of 100 rows or more for a single game) that gets no answer in time.
+- Ids are sent 500 per query and pages of 500 rows are read until the end, all batched. A page that comes back full is split using the count, which IGDB sends with a page that went out alone (a count request follows a page packed into a multiquery), so the 9,000 language rows of 500 games take two rounds of requests instead of 18 one after the other. A page IGDB refuses for its size is asked again in halves, as in [`findByIds()`](queries.md#reading-results), and so is a page of 100 games or more (of 100 rows or more for a single game) that gets no answer in time.
 
 `findBy(field, ids)` does the same through any relation or `..._id` field, on every endpoint. Most of IGDB's links have no field back (95 of 153): a game's editions point to it with `version_parent` while it lists none of them, mods and updates point to it with `parent_game`, and a bundle's content points to it with `bundles`:
 
@@ -87,11 +87,14 @@ const top = await gamePage.where((g) => g.rating.gte(90)).sort("rating", "desc")
 const found = await gamePage.search("zelda").limit(5);
 const { data, total } = await gamePage.where((g) => g.developedBy("Nintendo")).limit(20).withCount();
 const count = await gamePage.where((g) => g.rating.gte(90)).count(); // games only, one request
+for await (const game of gamePage.where((g) => g.rating.gte(90)).iterate()) {
+  // every game, in id order: a page of games, then the links of the whole page at once
+}
 ```
 
-Like a query, a view sends nothing before it is awaited, and neither do `findById()`, `findByIds()`, `first()` and `withCount()`: pass `signal` or `priority` to their `execute()`.
+Like a query, a view sends nothing before it is awaited, and neither do `findById()`, `findByIds()`, `first()` and `withCount()`: pass `signal` or `priority` to their `execute()`. `iterate()` takes them among its options, with `pageSize`, as `Query.iterate()` does.
 
-`findById()` and `findByIds()` send the games and the linked queries together: a game with 6 links costs one multiquery (22 KB for The Witcher 3). A list or a search needs the game ids first, so it takes one more request; a `search` is always sent alone. A key can't hide a game field, so name the link to `collection_memberships` `memberships`, not `collections`.
+`findById()` and `findByIds()` send the games and the linked queries together: a game with 6 links costs one multiquery (22 KB for The Witcher 3). `findByIds()` returns each game once, in the order given. A list or a search needs the game ids first, so it takes one more request; a `search` is always sent alone. A key can't hide a game field, so name the link to `collection_memberships` `memberships`, not `collections`.
 
 ## Expanding ids later: expand()
 
