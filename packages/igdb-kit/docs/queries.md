@@ -49,6 +49,8 @@ igdb.games.where((g) => or(and(g.rating.gte(80), g.hypes.gt(10)), g.total_rating
 igdb.games.where("rating > 80");                                       // raw Apicalypse
 ```
 
+A raw condition also works on a query typed over several endpoints, such as `igdb[name]` in a loop that [copies tables](local-copy.md#copying-several-endpoints); the typed builder needs one endpoint.
+
 Each field only offers the operators that fit its type, and enum fields only accept their values.
 
 ### Relations by name

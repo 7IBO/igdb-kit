@@ -316,7 +316,11 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   /**
    * Filters with a typed builder (`g => g.rating.gte(80)`) or a raw Apicalypse condition. On `games`,
    * the builder also has named filters: `g.developedBy(908)`, `g.publishedBy(50)`, `g.releasedIn({...})`.
+   * A raw condition also works on a query typed over several endpoints, such as `igdb[name]` in a loop.
    */
+  where(condition: string): this;
+  where(condition: (fields: WhereRoot<N>) => Condition): this;
+  where(condition: string | ((fields: WhereRoot<N>) => Condition)): this;
   where(condition: string | ((fields: WhereRoot<N>) => Condition)): this {
     const built =
       typeof condition === "string" ? undefined : condition(whereProxy(this.entity) as WhereRoot<N>);

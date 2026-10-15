@@ -6,6 +6,7 @@ import {
   artworkType,
   type CalendarRelease,
   type CompanyRole,
+  type Condition,
   createIGDB,
   defineSelection,
   type EndpointName,
@@ -30,6 +31,7 @@ import {
   type ResultOf,
   type SearchHit,
   type Task,
+  type WhereRoot,
 } from "../../src";
 import type { Prettify } from "../../src/query/types";
 import { type Equal, expectType } from "./helpers";
@@ -134,6 +136,52 @@ expectType<Equal<Awaited<ReturnType<typeof q1.firstOrThrow>>, R1>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
+
+// A raw where works on a query typed over several endpoints, as in a loop that copies tables.
+const copied = [
+  "platforms",
+  "platform_families",
+  "game_types",
+  "game_statuses",
+  "external_game_sources",
+  "release_date_regions",
+  "release_date_statuses",
+  "regions",
+  "date_formats",
+  "genres",
+  "languages",
+  "games",
+  "external_games",
+  "game_localizations",
+  "release_dates",
+  "popularity_primitives",
+  "game_time_to_beats",
+  "alternative_names",
+  "covers",
+  "websites",
+] as const;
+type Copied = (typeof copied)[number];
+type Stored = { id: number; [field: string]: unknown };
+declare const copiedName: Copied;
+const copyQuery = igdb[copiedName].select("*").where("id > 1");
+const copyPages: AsyncIterable<Stored[]> = copyQuery.sync({ concurrency: 4 });
+const copyRows: Promise<Stored[]> = copyQuery.findByIds([1, 2]).execute();
+const copyById: AsyncIterable<Stored[]> = copyQuery.sync({ ids: [1, 2] });
+void [copyPages, copyRows, copyById];
+// @ts-expect-error a typed builder needs one endpoint
+copyQuery.where((r) => r.id.gt(1));
+// @ts-expect-error covers and websites have no updated_at
+copyQuery.sync({ since: "2026-01-01" });
+const tracked = (name: "games" | "release_dates" | "popularity_primitives") =>
+  igdb[name].select("*").where("id > 1").sync({ since: "2026-01-01" });
+void tracked;
+declare const anyName: EndpointName;
+expectType<Equal<Awaited<ReturnType<ReturnType<(typeof igdb)[typeof anyName]["where"]>["count"]>>, number>>();
+const generic = <E extends Copied>(name: E) => igdb[name].select("*").where("id > 1");
+void generic;
+expectType<
+  Equal<Parameters<typeof igdb.games.where>[0], string | ((fields: WhereRoot<"games">) => Condition)>
+>();
 
 // A response too heavy for IGDB says which limit should pass.
 expectType<Equal<PayloadTooLargeError["suggestedLimit"], number | undefined>>();

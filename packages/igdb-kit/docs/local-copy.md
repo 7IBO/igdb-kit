@@ -4,6 +4,7 @@ IGDB encourages keeping your own copy of its data.
 
 - [`sync()`](#copying-an-endpoint-sync) copies an endpoint, then only what changed since the last run.
 - [`sync({ ids })`](#tables-without-updated_at) reads the rows of tables without `updated_at` that changed games point to.
+- [A loop over table names](#copying-several-endpoints) needs no cast.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
@@ -42,6 +43,39 @@ for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
 ```
 
 Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies. `findByIds()` returns the same rows in one array, in the order of the ids.
+
+## Copying several endpoints
+
+A copy loops over table names, and `igdb[name]` is then a query typed over every table of the list. `select()`, a `where` written as a string, `sync()`, `findByIds()` and `removed()` work on it without a cast, and each row has the type of one of the tables:
+
+```ts
+import { type EndpointName, WebsiteType } from "igdb-kit";
+
+const tables = ["platforms", "genres", "games", "release_dates", "covers", "websites"] as const;
+/** What the copy keeps of a table, when not every row. */
+const filters: Partial<Record<EndpointName, string>> = {
+  websites: `type = (${WebsiteType.Steam},${WebsiteType.GOG})`,
+};
+
+for (const name of tables) {
+  const all = igdb[name].select("*");
+  const filter = filters[name];
+  for await (const page of (filter ? all.where(filter) : all).sync()) {
+    await db.upsert(name, page); // { id: number; ... }[]
+  }
+}
+```
+
+The typed builder needs the name narrowed to one table (`name === "websites" ? igdb.websites.where((w) => w.type.in(...)) : ...`), and `since` to tables that have `updated_at`, which a type guard on your own list of them does:
+
+```ts
+const tracked = ["games", "release_dates"] as const;
+const isTracked = (name: string): name is (typeof tracked)[number] => (tracked as readonly string[]).includes(name);
+
+const pages = isTracked(name) ? igdb[name].select("*").sync({ since: lastSync }) : igdb[name].select("*").sync();
+```
+
+Narrow the name before `select()`: a helper that selects from a generic name types its query over every table of the list again, and `since` is then refused.
 
 ## Webhooks
 
