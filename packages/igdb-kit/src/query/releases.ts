@@ -2,7 +2,12 @@ import { QueryError } from "../core/errors";
 import type { EndpointName } from "../generated/schema";
 import { type DateInput, dateMillis } from "./dates";
 import type { ExecuteOptions, Query } from "./query";
-import { type ReleaseDetails, type ReleasePrecision, releaseDetails } from "./release-period";
+import {
+  NOT_RELEASED_STATUSES,
+  type ReleaseDetails,
+  type ReleasePrecision,
+  releaseDetails,
+} from "./release-period";
 
 export type { ReleaseDetails, ReleasePrecision };
 
@@ -111,8 +116,6 @@ const FORMATS: Record<ReleasePrecision, number[]> = {
 };
 const ORDER: Record<ReleasePrecision, number> = { day: 0, month: 1, quarter: 2, year: 3, tbd: 4 };
 const DEFAULT_PRECISION: readonly ReleasePrecision[] = ["day", "month", "quarter", "year"];
-/** Offline (4) and Cancelled (5) dates are not releases. */
-const EXCLUDED_STATUSES = [4, 5];
 const WORLDWIDE = 8;
 
 /**
@@ -226,7 +229,7 @@ export function calendarWhere(
   if (tbd) branches.push("date = null");
   const parts = [branches.length === 1 ? (branches[0] as string) : branches.map((b) => `(${b})`).join(" | ")];
   // `!=` keeps the dates without a status, unlike `=`.
-  parts.push(...releaseFilterParts(options, "", `status != (${EXCLUDED_STATUSES.join(",")})`));
+  parts.push(...releaseFilterParts(options, "", `status != (${NOT_RELEASED_STATUSES.join(",")})`));
   return parts.length === 1 ? (parts[0] as string) : parts.map((p) => `(${p})`).join(" & ");
 }
 

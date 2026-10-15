@@ -578,6 +578,7 @@ import {
   alternativeTitles,
   companies,
   eventTime,
+  type FormatReleaseDateInput,
   formatReleaseDate,
   languages,
   localizedCover,
@@ -586,6 +587,7 @@ import {
   parentGame,
   regionalReleases,
   releaseDate,
+  releasesByPlatform,
   type resolveLocale,
   type Store,
   storeLinks,
@@ -629,8 +631,13 @@ if (release) {
 }
 releaseDate(page, { locale: "fr-FR", statuses: [ReleaseDateStatus.FullRelease, null] });
 releaseDate(page, { statuses: ReleaseDateStatus.FullRelease });
+releaseDate(page, { statuses: "all" });
+releasesByPlatform(page, { statuses: "all" });
+regionalReleases(page, { statuses: "all" });
 // @ts-expect-error not a status
 releaseDate(page, { statuses: ["released"] });
+// @ts-expect-error "all" stands for the whole list, not for one status
+releaseDate(page, { statuses: [ReleaseDateStatus.FullRelease, "all"] });
 expectType<Equal<ReturnType<typeof storeOf>, Store | null>>();
 expectType<Equal<ReturnType<typeof companies<typeof page>>["developers"], { id: number; name?: string }[]>>();
 storeLinks(page);
@@ -701,6 +708,19 @@ expectType<Equal<ReturnType<typeof resolveLocale>["languages"], number[]>>();
 if (release) formatReleaseDate(release, { locale: "fr-FR", dateStyle: "long" });
 const entry = calendar[0];
 if (entry) formatReleaseDate(entry.release, { locale: "fr-FR" });
+// A date stored with its precision: year and quarter are read from it.
+formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, { locale: "fr-FR" });
+formatReleaseDate({ date: 1_798_675_200, precision: "year" }, { locale: "fr-FR" });
+formatReleaseDate({ precision: "quarter", start: "2026-10-01", quarter: null }, { locale: "fr-FR" });
+// A row's `date`, which IGDB leaves out on TBD rows.
+if (release) {
+  const stored: FormatReleaseDateInput = { date: release.row.date, precision: release.precision };
+  formatReleaseDate(stored, { locale: "fr-FR" });
+}
+// @ts-expect-error not a precision
+formatReleaseDate({ date: "2026-10-01", precision: "soon" }, { locale: "fr-FR" });
+// @ts-expect-error no date
+formatReleaseDate({ precision: "day" }, { locale: "fr-FR" });
 regionalReleases(page, { platform: 6 })[0]?.row.human;
 languages(page, { locale: "fr-FR" });
 supportsLanguage(page, "fr-FR").audio satisfies boolean | null;

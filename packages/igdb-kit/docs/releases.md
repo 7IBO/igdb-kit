@@ -30,7 +30,7 @@ A month, quarter or year is in the window when its whole period is, so `Q4 2026`
 
 Release dates are calendar days at 00:00 UTC, so the window is in UTC days: pass `"YYYY-MM-DD"` strings rather than local midnights. The query's `limit` and `offset`, when set, page the entries.
 
-By default Offline and Cancelled dates are left out, and dates without a status, more than half of them, are kept. `statuses: [ReleaseDateStatus.FullRelease, null]` picks statuses, `null` standing for "no status".
+By default Offline and Cancelled dates are left out, and dates without a status, more than half of them, are kept. `statuses: [ReleaseDateStatus.FullRelease, null]` picks statuses, `null` standing for "no status". `releaseDate()`, `releasesByPlatform()` and `regionalReleases()` in `igdb-kit/game` leave out the same dates, and also take `statuses: "all"` to keep every date; `releases()` and `g.releasedIn()` keep Offline and Cancelled dates only when `statuses` lists them.
 
 ## Cost
 
