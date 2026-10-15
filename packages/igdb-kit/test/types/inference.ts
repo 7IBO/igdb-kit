@@ -571,6 +571,7 @@ import {
   alternativeTitles,
   companies,
   eventTime,
+  formatPlaytime,
   formatReleaseDate,
   languages,
   localizedCover,
@@ -717,6 +718,12 @@ expectType<Equal<ReturnType<typeof playtimes>, Playtimes | null>>();
 playtimes(ttb)?.completely satisfies number | null | undefined;
 // @ts-expect-error completely is not selected
 playtimes(await igdb.game_time_to_beats.select("hastily", "normally", "count").first());
+// formatPlaytime() returns null for 0, a negative number or NaN, whatever the type of its input.
+const playtimeText = formatPlaytime(254778);
+expectType<Equal<typeof playtimeText, string | null>>();
+// @ts-expect-error a number can be 0, which formats to null
+formatPlaytime(0) satisfies string;
+formatPlaytime(timeToBeat(ttb)?.seconds, { locale: "fr-FR" }) satisfies string | null;
 
 // artworkType() reads image_type and artwork_type, ids or expanded.
 const artworks = await igdb.artworks

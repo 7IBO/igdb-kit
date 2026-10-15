@@ -107,14 +107,10 @@ export interface FormatPlaytimeOptions {
 
 /**
  * A playtime in seconds as a localized duration: minutes under an hour ("45 min"), hours with
- * half-hour steps under ten hours ("2.5 hr"), whole hours above ("71 hr"). Null for a missing or
- * non-positive value.
+ * half-hour steps under ten hours ("2.5 hr"), whole hours above ("71 hr"). Null for a missing, zero,
+ * negative or NaN value (IGDB stores 0 for a time not filled in), so give a fallback where a string
+ * is needed: `formatPlaytime(time.seconds) ?? "—"`.
  */
-export function formatPlaytime(seconds: number, options?: FormatPlaytimeOptions): string;
-export function formatPlaytime(
-  seconds: number | undefined | null,
-  options?: FormatPlaytimeOptions,
-): string | null;
 export function formatPlaytime(
   seconds: number | undefined | null,
   options: FormatPlaytimeOptions = {},

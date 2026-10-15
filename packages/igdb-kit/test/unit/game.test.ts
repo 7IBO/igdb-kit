@@ -928,7 +928,10 @@ describe("timeToBeat(), playtimes() and formatPlaytime()", () => {
     expect(formatPlaytime(254778, { locale: "en-US", unitDisplay: "long" })).toBe("71 hours");
     expect(formatPlaytime(254778, { locale: "fr-FR" })).toMatch(/^71\sh$/); // narrow no-break space
     expect(formatPlaytime(undefined)).toBeNull();
+    expect(formatPlaytime(null)).toBeNull();
     expect(formatPlaytime(0)).toBeNull();
+    expect(formatPlaytime(-60)).toBeNull();
+    expect(formatPlaytime(Number.NaN)).toBeNull();
   });
 });
 
