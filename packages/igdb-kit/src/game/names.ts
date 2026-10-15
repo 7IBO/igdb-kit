@@ -4,6 +4,7 @@ import {
   type AlternativeNameFields,
   type AlternativeNameVariant,
   parseAlternativeName,
+  titleLocale,
 } from "./alternative-names";
 import { type Locale, parseLocale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Requires, type RequiresIfSelected } from "./select";
@@ -76,8 +77,8 @@ export interface LocalizedName {
   source: "localization" | "alternative_name" | "name";
   /**
    * The language of the name as far as IGDB says: `"ja-JP"` or `"ko-KR"` for a localization, the
-   * language of an alternative name's comment (`"pl"`, `"zh-Hant"`, `"en-GB"`). Null for the European
-   * localization and the game's own name.
+   * language of an alternative name's comment (`"pl"`, `"zh-Hant"`, `"en-GB"`), which is the `locale`
+   * `alternativeTitles()` gives that name. Null for the European localization and the game's own name.
    */
   language: string | null;
   /** The variant an alternative name's comment gives (`"original"`, `"stylized"`), else null. */
@@ -115,7 +116,8 @@ export function localization<G extends object>(
  * "original" is trusted as is, since some official titles are in Latin letters ("BIOHAZARD").
  * Romanizations, abbreviations, unofficial, working and former titles are skipped, and so are
  * translations, unless written in the language's own script ("Korean title - translated" is usually
- * in hangul, "Japanese title - translated" in English).
+ * in hangul, "Japanese title - translated" in English). A "Latin America title" comes before a
+ * "Spanish title" where `resolveLocale()` picks Latin American Spanish (`es-419`, `es-MX`, `es-US`).
  *
  * ```ts
  * const game = await igdb.games.select("name", "game_localizations.name", "game_localizations.region",
@@ -193,26 +195,6 @@ function imageIdOf(cover: LocalizationRow["cover"]): string | undefined {
   return typeof cover === "object" ? cover.image_id || undefined : undefined;
 }
 
-// Scripts of the languages that are not written in Latin letters. A name is only taken for these
-// languages when it has at least one letter of the script.
-const scripts: Record<string, RegExp> = {
-  ja: /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,
-  zh: /\p{Script=Han}/u,
-  ko: /\p{Script=Hangul}/u,
-  ru: /\p{Script=Cyrillic}/u,
-  uk: /\p{Script=Cyrillic}/u,
-  bg: /\p{Script=Cyrillic}/u,
-  be: /\p{Script=Cyrillic}/u,
-  mk: /\p{Script=Cyrillic}/u,
-  el: /\p{Script=Greek}/u,
-  he: /\p{Script=Hebrew}/u,
-  ar: /\p{Script=Arabic}/u,
-  fa: /\p{Script=Arabic}/u,
-  th: /\p{Script=Thai}/u,
-  hi: /\p{Script=Devanagari}/u,
-};
-const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
-
 /** Lower is better; undefined for names that are not titles in the language. */
 const variantRanks: Partial<Record<AlternativeNameVariant | "none", number>> = {
   original: 0,
@@ -234,16 +216,15 @@ function alternativeName(
   for (const row of rows) {
     const name = row.name?.trim();
     if (!name) continue;
-    const { kind, language, variant } = parseAlternativeName(row.comment);
-    if ((kind !== "language" && kind !== "regional") || language === null) continue;
+    const info = parseAlternativeName(row.comment);
+    const { kind, variant } = info;
+    // Only names written in their language: not a "Japanese title" in Latin letters.
+    const language = titleLocale(name, info);
+    if (language === null) continue;
     const tag = parseLocale(language);
     if (tag.language !== locale.language) continue;
     let rank = variantRanks[variant ?? "none"];
     if (rank === undefined) continue;
-    const script = scripts[tag.language];
-    if (script && variant !== "original") {
-      if (!script.test(name) || (tag.language === "zh" && kana.test(name))) continue;
-    } else if (variant === "translated") continue;
     if (tag.language === "zh") {
       // Chinese is told apart by script: "zh-TW" (Taiwanese) is Traditional, for Hong Kong too.
       if (!/-(?:Hans|Hant|TW)$/.test(language)) rank += 0.5;
@@ -252,8 +233,11 @@ function alternativeName(
       // A market's title only in that market: "North American title" for the US and Canada.
       if (resolveLocale(language).releaseRegion !== locale.releaseRegion) continue;
     } else if (/-(?:[A-Z]{2}|\d{3})$/.test(language)) {
-      // A country's title first in that country, then for others that speak its language.
-      if (tag.country !== locale.country) rank += 2;
+      // A country's title first in that country, then for others that speak its language. A
+      // region's title ("Latin America title", es-419) first where its IGDB language comes first.
+      const region = /\d{3}$/.test(language) ? resolveLocale(language).languages[0] : undefined;
+      if (tag.country !== locale.country && (region === undefined || region !== locale.languages[0]))
+        rank += 2;
     } else rank += 0.25; // "Brazilian title" over "Portuguese title" in Brazil.
     if (!best || rank < best.rank) best = { name, language, variant, rank };
   }

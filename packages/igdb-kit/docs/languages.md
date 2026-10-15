@@ -2,7 +2,7 @@
 
 IGDB's data is mostly in English, with the other languages spread over localizations, alternative names and language supports. igdb-kit gathers them so a page can follow the user's locale (`"fr-FR"`, `"ja"`, `"pt-BR"`).
 
-Every function that takes a locale types it as `Locale`: editors suggest the locales of IGDB's languages (`"fr-FR"`, `"es-MX"`, `"zh-TW"`) and their language codes (`"fr"`), and any other string is accepted, since a locale usually comes from `navigator.language` or a request.
+Every function that takes a locale types it as `Locale`: editors suggest the locales of IGDB's languages (`"fr-FR"`, `"es-MX"`, `"zh-TW"`) and their language codes (`"fr"`), and any other string is accepted, since a locale usually comes from `navigator.language` or a request. Underscore tags, as Java and Android write them (`"pt_BR"`), read as `"pt-BR"`.
 
 | To | Use | In |
 |---|---|---|
@@ -18,6 +18,7 @@ Every function that takes a locale types it as `Locale`: editors suggest the loc
 | Show an event's time in the user's zone | `eventTime(event, { locale, timeZone })` | [`igdb-kit/game`](display.md#names-and-languages) |
 | Find games by a title in another language | `searchAll("ウィッチャー")`, `games.match({ name: "Pokémon Épée" })` | [Finding games](finding-games.md#titles-in-other-languages) |
 | Read IGDB's alternative names | `alternativeTitles(game)`, `parseAlternativeName(comment)` | [`igdb-kit/game`](display.md#names-and-languages) |
+| Store every title of a game with the language it is written in, as its comment and script say | `alternativeTitles(game)`, with `locale` | [`igdb-kit/game`](display.md#names-and-languages) |
 
 ## What a locale picks
 

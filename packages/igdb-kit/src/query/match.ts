@@ -254,13 +254,15 @@ const ROMAN: Record<string, string> = Object.fromEntries(
 
 /**
  * The form titles are compared in: lower case, without accents, trademark signs, apostrophes or
- * punctuation, with sequel numerals as digits and "GOTY" spelled out.
+ * punctuation, with sequel numerals as digits and "GOTY" spelled out. Kana keep their voicing
+ * marks: ガ is not カ.
  */
 function titleKey(title: string): string {
   return title
     .replace(/[™®©℠]/g, "")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
+    .normalize("NFC") // puts back the kana voicing marks (ｶﾞ is ガ) and the hangul syllables
     .toLowerCase()
     .replace(/['’`´]/g, "")
     .replace(/&/g, " and ")

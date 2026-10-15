@@ -916,6 +916,20 @@ describe("localizedName()", () => {
     expect(localizedName(game, "en-GB")?.source).toBe("name");
     expect(localizedName(game, "en-CA")?.name).toBe("Bust-a-Move");
   });
+
+  test("a Latin American title for Spanish in the Americas, as resolveLocale() picks", () => {
+    const game = {
+      name: "The Witcher 3: Wild Hunt",
+      alternative_names: [
+        { comment: "Spanish title", name: "The Witcher 3: Caza Salvaje" },
+        { comment: "Latin America title", name: "El Brujo 3: Cacería Salvaje" },
+      ],
+    };
+    for (const locale of ["es-419", "es-MX", "es-AR", "es-US", "es_419"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "El Brujo 3: Cacería Salvaje"]);
+    for (const locale of ["es-ES", "es", "es-IC"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "The Witcher 3: Caza Salvaje"]);
+  });
 });
 
 describe("resolveLocale()", () => {
@@ -1108,9 +1122,56 @@ describe("alternativeTitles()", () => {
         kind: "other",
         language: null,
         variant: null,
+        locale: null,
+        inScript: null,
         row: { id: 2, name: "X", comment: " " },
       },
     ]);
+  });
+
+  test("the language each name is written in, by the rules of localizedName()", () => {
+    const cases: [comment: string, name: string, locale: string | null, inScript: boolean | null][] = [
+      ["Russian title", "Vedmak 3", null, false],
+      ["Russian title", "Ведьмак 3", "ru", true],
+      ["Greek title", "O Magos", null, false],
+      ["Chinese title - simplified", "巫师3", "zh-Hans", true],
+      ["Chinese title - traditional", "マリオ博士64", null, false],
+      ["Japanese title", "Uitcha 3", null, false],
+      ["Japanese title", "위쳐 3", null, false],
+      ["Japanese title - original", "BIOHAZARD", "ja", false],
+      ["Japanese title - translated", "Dragon Warrior", null, false],
+      ["Japanese title - translated", "ラストウィンドウ 真夜中の約束", "ja", true],
+      ["Japanese title - romanization", "Mazā Surī", null, false],
+      // Still written in Japanese: localizedName() leaves out former titles by their variant.
+      ["Former Japanese title", "バイオハザード", "ja", true],
+      ["Korean title - translated", "드래곤 퀘스트", "ko", true],
+      ["Korean title - romanization", "Deuraegon Kweseuteu", null, false],
+      ["Portuguese title - translated", "Dragon Quest", null, true],
+      ["Brazilian title", "O Bruxo 3", "pt-BR", true],
+      ["Serbian title", "Цанди Блитз Делуке", "sr", true],
+      // The script is only checked for the languages not written in Latin letters.
+      ["French title", "ウィッチャー3", "fr", true],
+      ["UK title", "Bubble Buster", "en-GB", true],
+      ["North American title", "Bust-a-Move", "en-US", true],
+      ["European title", "Monster Rancher", null, null],
+      ["Steam title", "The Witcher 3", null, null],
+      ["Acronym", "TW3", null, null],
+    ];
+    const rows = cases.map(([comment, name]) => ({ comment, name }));
+    expect(
+      alternativeTitles({ alternative_names: rows }).map((t) => [t.comment, t.name, t.locale, t.inScript]),
+    ).toEqual(cases);
+    // localizedName() takes a name in its language exactly when it has a locale and is a current title.
+    const notCurrent = new Set(["abbreviation", "unofficial", "working", "former"]);
+    const games = [fixtures.witcher3, fixtures.mother3, fixtures.persona5Royal, { alternative_names: rows }];
+    for (const t of games.flatMap((game) => alternativeTitles(game))) {
+      if (t.language === null) continue;
+      const taken = localizedName({ name: "Game", alternative_names: [t.row] }, t.language);
+      expect([t.name, taken?.source === "alternative_name"]).toEqual([
+        t.name,
+        t.locale !== null && !notCurrent.has(t.variant ?? ""),
+      ]);
+    }
   });
 });
 
@@ -1427,9 +1488,30 @@ describe("names of regions, countries and languages", () => {
     expect(languageName(Language.EnglishUK, "en")).toBe("British English");
     expect(languageName("es-MX", "en")).toBe("Latin American Spanish");
     expect(languageName("zh-TW", "en")).toBe("Traditional Chinese");
+    expect(languageName("zh-cn", "en")).toBe("Simplified Chinese");
     expect(languageName(Language.German, "fr", { native: true })).toBe("Deutsch");
     expect(languageName(Language.Japanese, "en", { native: true })).toBe("日本語");
     expect(languageName(99, "en")).toBeNull();
+  });
+});
+
+describe("underscore locales", () => {
+  test("pt_BR is pt-BR in every display helper", () => {
+    const release = {
+      precision: "day",
+      start: new Date(Date.UTC(2026, 10, 19)),
+      year: 2026,
+      quarter: null,
+    } as const;
+    expect(formatReleaseDate(release, { locale: "pt_BR" })).toBe("19 de nov. de 2026");
+    expect(formatPlaytime(7200, { locale: "pt_BR" })).toBe("2 h");
+    expect(formatPlaytime(7200, { locale: ["pt_BR", "en"] })).toBe("2 h");
+    const event = { id: 1, start_time: 1781110800, time_zone: "PST" };
+    expect(eventTime(event, { locale: "pt_BR" }).text).toBe(eventTime(event, { locale: "pt-BR" }).text);
+    expect(releaseRegionName(ReleaseDateRegion.Europe, "pt_BR")).toBe("Europa");
+    expect(countryName(250, "pt_BR")).toBe("França");
+    expect(languageName(Language.French, "pt_BR")).toBe(languageName(Language.French, "pt-BR"));
+    expect(languageName("zh_TW", "en")).toBe("Traditional Chinese");
   });
 });
 
@@ -1573,6 +1655,9 @@ describe("storeLinks() with a locale", () => {
       "https://amazon.co.jp/dp/B00T3SPV36",
     ]);
     expect(urls("en-US").filter((url) => url.includes("amazon"))).toHaveLength(2);
+    expect(urls("es-419")[0]).toBe(
+      "https://www.epicgames.com/store/es-MX/product/the-witcher-3-wild-hunt/home",
+    );
   });
 
   test("localizeStoreUrl()", () => {
@@ -1593,9 +1678,21 @@ describe("storeLinks() with a locale", () => {
     expect(localizeStoreUrl("https://www.microsoft.com/en-us/p/-1-/9N116V0599HB", "ko")).toBe(
       "https://www.microsoft.com/ko-kr/p/-1-/9N116V0599HB",
     );
-    expect(localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", "es-AR")).toBe(
-      "https://store.epicgames.com/es-MX/p/hades",
-    );
+    // Epic's Latin American Spanish where resolveLocale() picks it, its Spain Spanish elsewhere.
+    for (const [locale, tag] of [
+      ["es-AR", "es-MX"],
+      ["es-419", "es-MX"],
+      ["es_419", "es-MX"],
+      ["es-US", "es-MX"],
+      ["es-PY", "es-MX"],
+      ["es-ES", "es-ES"],
+      ["es", "es-ES"],
+      ["es-IC", "es-ES"],
+    ] as const)
+      expect([locale, localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", locale)]).toEqual([
+        locale,
+        `https://store.epicgames.com/${tag}/p/hades`,
+      ]);
     expect(localizeStoreUrl("https://store.epicgames.com/p/hades", "zh-TW")).toBe(
       "https://store.epicgames.com/zh-Hant/p/hades",
     );
