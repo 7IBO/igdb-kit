@@ -58,6 +58,17 @@ const games = await igdb.games
 
 Store ids are strings in IGDB; numbers are accepted. Unknown ids are missing from the map.
 
+Ids match as IGDB writes them. A Steam, Microsoft Store or PlayStation Store address gives one with `parseStoreUrl()`, for a link a user pastes; GOG and Epic addresses hold a slug, not an id:
+
+```ts
+import { parseStoreUrl } from "igdb-kit/game";
+
+const id = parseStoreUrl(input); // "store.steampowered.com/app/292030/The_Witcher_3_Wild_Hunt/"
+if (id?.store === "steam") await igdb.games.select("name").findByExternalIds(ExternalGameSource.Steam, [id.id]);
+```
+
+A PlayStation concept is a `PlaystationStoreUS` id; IGDB has no PlayStation product ids. A Microsoft Store product (`store: "xbox"`, `kind: "product"`) is a `Microsoft` id, or for some games, Hollow Knight: Silksong among them, only an `XboxGamePassUltimateCloud` one. An Xbox 360 game's uuid is under `XboxMarketplace` as it is, and under `Microsoft` after `"xbox360"`. Look an Xbox id up in both of its sources, two `findByExternalIds()` in one `batch()`.
+
 ## By title: games.match()
 
 For a title without a store id IGDB knows, such as most PlayStation trophy lists and Xbox titles, `games.match()` returns the games it may be, best first, each with a score from 0 to 1:
