@@ -18,11 +18,13 @@ import {
   imageSrcSet,
   type Language,
   MAIN_GAME_TYPES,
+  NetworkError,
   or,
   Platform,
   PopularityType,
   type Query,
   type QueryOf,
+  type QueryRequest,
   type ReleaseCalendarEntry,
   ReleaseDateRegion,
   ReleaseDateStatus,
@@ -563,6 +565,11 @@ import { igdbProxy } from "../../src/proxy";
 igdbProxy({ igdb, endpoints: ["games", "covers"] });
 // @ts-expect-error unknown endpoint
 igdbProxy({ igdb, endpoints: ["gamez"] });
+// Behind a proxy that refuses multiqueries, the client sends every query alone.
+igdbProxy({ igdb, multiquery: false });
+createIGDB({ proxyUrl: "/api/igdb", multiquery: false });
+// @ts-expect-error a boolean
+createIGDB({ proxyUrl: "/api/igdb", multiquery: "off" });
 
 // igdb-kit/game: helpers require the fields they read and accept any richer selection.
 import {
@@ -571,6 +578,7 @@ import {
   alternativeTitles,
   companies,
   eventTime,
+  type FormatReleaseDateInput,
   formatReleaseDate,
   languages,
   localizedCover,
@@ -580,6 +588,7 @@ import {
   parseStoreUrl,
   regionalReleases,
   releaseDate,
+  releasesByPlatform,
   type resolveLocale,
   type Store,
   type StoreId,
@@ -625,8 +634,13 @@ if (release) {
 }
 releaseDate(page, { locale: "fr-FR", statuses: [ReleaseDateStatus.FullRelease, null] });
 releaseDate(page, { statuses: ReleaseDateStatus.FullRelease });
+releaseDate(page, { statuses: "all" });
+releasesByPlatform(page, { statuses: "all" });
+regionalReleases(page, { statuses: "all" });
 // @ts-expect-error not a status
 releaseDate(page, { statuses: ["released"] });
+// @ts-expect-error "all" stands for the whole list, not for one status
+releaseDate(page, { statuses: [ReleaseDateStatus.FullRelease, "all"] });
 expectType<Equal<ReturnType<typeof storeOf>, Store | null>>();
 const storeUrl = parseStoreUrl("store.steampowered.com/app/292030");
 expectType<Equal<typeof storeUrl, StoreUrlId | null>>();
@@ -702,6 +716,19 @@ expectType<Equal<ReturnType<typeof resolveLocale>["languages"], number[]>>();
 if (release) formatReleaseDate(release, { locale: "fr-FR", dateStyle: "long" });
 const entry = calendar[0];
 if (entry) formatReleaseDate(entry.release, { locale: "fr-FR" });
+// A date stored with its precision: year and quarter are read from it.
+formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, { locale: "fr-FR" });
+formatReleaseDate({ date: 1_798_675_200, precision: "year" }, { locale: "fr-FR" });
+formatReleaseDate({ precision: "quarter", start: "2026-10-01", quarter: null }, { locale: "fr-FR" });
+// A row's `date`, which IGDB leaves out on TBD rows.
+if (release) {
+  const stored: FormatReleaseDateInput = { date: release.row.date, precision: release.precision };
+  formatReleaseDate(stored, { locale: "fr-FR" });
+}
+// @ts-expect-error not a precision
+formatReleaseDate({ date: "2026-10-01", precision: "soon" }, { locale: "fr-FR" });
+// @ts-expect-error no date
+formatReleaseDate({ precision: "day" }, { locale: "fr-FR" });
 regionalReleases(page, { platform: 6 })[0]?.row.human;
 languages(page, { locale: "fr-FR" });
 supportsLanguage(page, "fr-FR").audio satisfies boolean | null;
@@ -986,3 +1013,14 @@ endpointSchema("games").linkedFrom[0]?.endpoint satisfies EndpointName | undefin
 jsonSchema("release_dates") satisfies Record<string, unknown>;
 // @ts-expect-error not an endpoint
 endpointSchema("game");
+
+// A NetworkError says whether the attempt got no answer within attemptTimeoutMs.
+const timedOut = new NetworkError("Request to games timed out after 45000 ms", { timedOut: true });
+timedOut.timedOut satisfies boolean;
+// @ts-expect-error read-only
+timedOut.timedOut = false;
+new NetworkError("IGDB server error 502", { status: 502 });
+// One of igdb-kit's own pages carries the number of rows or ids its caller halves when it times out.
+({ halvable: 500 }) satisfies Partial<QueryRequest>;
+// @ts-expect-error a number
+({ halvable: true }) satisfies Partial<QueryRequest>;

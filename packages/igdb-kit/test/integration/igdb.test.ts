@@ -756,7 +756,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     });
     for (const status of statuses) {
       const row = { id: 1, date: 0, date_format: 0, release_region: 8, platform: 6, status: status.id };
-      expect(releaseDate({ release_dates: [row] })?.status).toBe(status.id);
+      expect(releaseDate({ release_dates: [row] }, { statuses: "all" })?.status).toBe(status.id);
       // Every status is known, and so ranked.
       expect((Object.values(ReleaseDateStatus) as number[]).includes(status.id)).toBe(true);
     }

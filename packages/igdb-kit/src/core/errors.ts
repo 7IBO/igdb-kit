@@ -1,3 +1,5 @@
+import { PROXY_AUTH_ERROR } from "./util";
+
 /** One entry of the error array IGDB returns for Apicalypse errors (400, 403, 413). */
 export interface ApicalypseErrorDetail {
   title: string;
@@ -63,7 +65,10 @@ export class PayloadTooLargeError extends IGDBError {
   override name = "PayloadTooLargeError";
 }
 
-/** Credentials are invalid or revoked, or the token was still refused after one renewal. */
+/**
+ * Credentials are invalid or revoked, or the token was still refused after one renewal. Through
+ * `proxyUrl`, the proxy's own credentials.
+ */
 export class AuthError extends IGDBError {
   override name = "AuthError";
 }
@@ -83,9 +88,19 @@ export class QueryTimeoutError extends IGDBError {
   override name = "QueryTimeoutError";
 }
 
-/** A 5xx or network failure that persisted until the retry budget ran out. */
+/**
+ * A 5xx or network failure, from IGDB or from Twitch's token endpoint, that persisted until the
+ * retry budget ran out.
+ */
 export class NetworkError extends IGDBError {
   override name = "NetworkError";
+  /** The last attempt got no answer within `attemptTimeoutMs`. */
+  readonly timedOut: boolean;
+
+  constructor(message: string, options: IGDBErrorOptions & { timedOut?: boolean | undefined } = {}) {
+    super(message, options);
+    this.timedOut = options.timedOut ?? false;
+  }
 }
 
 /** The request queue is full (`maxQueueSize`). */
@@ -132,6 +147,8 @@ export function errorFromResponse(
     parsed && typeof parsed === "object" && !Array.isArray(parsed) && "message" in parsed
       ? String((parsed as { message: unknown }).message)
       : undefined;
+  // igdbProxy answers 502 when its own credentials are refused: the app's user can do nothing about it.
+  const proxyAuth = (parsed as { error?: unknown } | null | undefined)?.error === PROXY_AUTH_ERROR;
 
   const detailText = details.map((d) => [d.title, d.cause, d.details].filter(Boolean).join(": ")).join("; ");
   const text = detailText || gatewayMessage || bodyText.slice(0, 300) || `HTTP ${status}`;
@@ -143,7 +160,7 @@ export function errorFromResponse(
     return new PayloadTooLargeError(`${subject} too large${where}: ${text}`, options);
   }
   if (status === 429) return new RateLimitError(`Rate limited${where}: ${text}`, options);
-  if (status === 401) return new AuthError(`Authentication failed${where}: ${text}`, options);
+  if (status === 401 || proxyAuth) return new AuthError(`Authentication failed${where}: ${text}`, options);
   if (status === 403 && /tier/i.test(text))
     return new TierError(`Not available in your API tier${where}: ${text}`, options);
   if (status === 408) return new QueryTimeoutError(`IGDB timed out${where}: ${text}`, options);

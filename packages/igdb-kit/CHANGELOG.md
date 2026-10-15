@@ -1,5 +1,29 @@
 # igdb-kit
 
+## 0.7.1
+
+### Patch Changes
+
+- 4421017: Fixes for clients behind `igdbProxy` and for queries outside your API tier:
+  
+  - When IGDB or Twitch refuses the proxy's own credentials, the browser client throws an `AuthError` at once. The proxy still answers 502, now with `"error": "proxy_credentials"` in its JSON body so that the client does not retry it: the client retried it for `retryTimeoutMs`, with one Twitch token request per retry, then threw a `NetworkError`.
+  - A browser client works behind `igdbProxy({ multiquery: false })`. `batch()`, views, `family()`, `series()`, `catalog()`, `match()` and `removed()` failed with a 403 `QueryError` ("Multiqueries are not allowed"), even with `autoBatch: false`, and so did queries started together. The client now sends its queries one by one after the first refused multiquery, and the new `multiquery: false` option of `createIGDB()` does so from the start.
+  - A `TierError` on a multiquery, such as one with a `content_safety_*` query on an account whose tier does not include them, splits the batch as an invalid query does, so only that query fails. It failed every query of the batch, with an error naming the multiquery instead of the endpoint.
+- 4421017: A slow answer no longer stops a long read such as `sync()`:
+  
+  - The retry budget, `retryTimeoutMs` (30 s), starts at a request's first failure, and time waiting for a request slot does not count. It used to start before the request queued, so an attempt that hit the attempt timeout, as long as the budget, was never retried, and a request that had waited 30 s behind others failed on its first 429 or 503.
+  - `attemptTimeoutMs` defaults to 45 s instead of 30 s: IGDB gives up after 29 s, and the rest leaves time to download a large response. An attempt that gets no answer in time is retried; once the retries run out, the request throws a `NetworkError` whose new `timedOut` field is true.
+  - `findByIds()`, `findBy()`, `findByGames()`, `iterate()` and `sync()` read a page of 100 rows or more (100 ids for `findBy()` and `findByGames()`) that gets no answer in time again in halves, as they do a page IGDB gives up building after 29 s (504 "Endpoint request timed out"). Such a page is sent once instead of being retried until the budget ran out, and the halves of `findByIds()`, `findBy()`, `findByGames()` and `sync()` are sent alone instead of in one multiquery that made the same request again. When the first page of `sync()` timed out, the count sent with it failed the sync; it is now sent again alone. Once a page of `sync()` is halved, the pages it then reads with an id cursor, such as with `cursorThreshold`, are no larger either, instead of asking for 500 rows again.
+  
+  Behavior change: a request that gets no answer takes longer to reject, from 30 s at most to its time in the queue, then its first attempt and a retry, about 90 s; a page of 500 rows rejects once its halves of 250, 125 and 63 rows have timed out too, about 4 minutes. Pass `signal: AbortSignal.timeout(ms)` to cap it. `hooks.onRetry` and `hooks.onRequest` report fewer tries for a page that IGDB gives up on or that gets no answer in time, since it is read in halves instead of retried.
+- 4421017: An aborted query, a slow Twitch, a broken cache or a malformed answer no longer leaves requests running or pending:
+  
+  - Aborting a query cancels its HTTP request and stops its retries, and takes it out of the rate limiter's queue if it is still waiting; until now the caller stopped waiting, but the request was still sent and retried. A request that identical queries share is cancelled once all of them are aborted, and a multiquery once none of its queries is wanted.
+  - A request waits for its Twitch token before it takes a request slot, and each try of the token request gives up after 10 s, 4 tries at most: a token request that got no answer used to hang every query, holding every slot. After 4 failed tries the request is retried for `retryTimeoutMs`, as it already was after network errors, and now after 5xx answers too, then rejects with a `NetworkError`; so is a request whose token renewal after a 401 fails, which failed at once. An error of the token request now carries the `endpoint` and `query` of the request that waited for it, and one from a Twitch that cannot be reached says `Could not obtain a Twitch token: fetch failed` instead of `Request to games failed: fetch failed`. `hooks.onRequest` no longer reports with status 0 a try whose token could not be had, since nothing was sent to IGDB; `hooks.onRetry` still reports the retries.
+  - A renewal of the token ahead of its expiry that fails is tried again after 1 minute, then 2, 4 and so on up to 30, instead of with every request, and `hooks.onRetry` reports it with the path `oauth2/token`. An error thrown by `hooks.onTokenRefresh` is ignored, as one thrown by `hooks.onRequest` is: it made the request that renewed the token retry.
+  - A cache store never fails or holds back a query: a read that fails, throws, takes more than a second or returns something that is not a response counts as a miss, the request's `signal` stops it, and the query does not wait for the write. A read or a write that never ended used to leave the query pending, and an unreadable value made it fail.
+  - A multiquery answered 200 with something else than its blocks, such as a proxy's JSON error, rejects its queries with an `IGDBError`. They stayed pending, along with every identical query after them, and the error went unhandled, which stops Node.
+
 ## 0.7.0
 
 ### Minor Changes
