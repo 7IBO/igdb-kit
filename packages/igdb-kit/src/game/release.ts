@@ -1,4 +1,5 @@
 import { ReleaseDateRegion, ReleaseDateStatus } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import { type ReleaseDetails, type ReleasePrecision, releaseDetails } from "../query/release-period";
 import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
@@ -10,6 +11,20 @@ export type ReleaseDateFields =
   | "release_dates.release_region"
   | "release_dates.platform"
   | "release_dates.status";
+
+/**
+ * The fields {@link releaseDate}, {@link releasesByPlatform} and {@link regionalReleases} read, to
+ * spread into `select()`.
+ */
+export function releaseDateFields(): Selection<"games", ReleaseDateFields> {
+  return Object.freeze([
+    "release_dates.date",
+    "release_dates.date_format",
+    "release_dates.release_region",
+    "release_dates.platform",
+    "release_dates.status",
+  ] as const);
+}
 
 interface ReleaseDateRow {
   date?: number | undefined;

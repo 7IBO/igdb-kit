@@ -1,8 +1,14 @@
 import { WebsiteType } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import { idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `websites` that {@link websiteLinks} reads; `websites.trusted` too when selected. */
 export type WebsiteLinkFields = "websites.type" | "websites.url";
+
+/** The fields {@link websiteLinks} reads, `websites.trusted` included, to spread into `select()`. */
+export function websiteLinkFields(): Selection<"games", WebsiteLinkFields | "websites.trusted"> {
+  return Object.freeze(["websites.type", "websites.url", "websites.trusted"] as const);
+}
 
 interface WebsiteRow {
   type?: Ref | undefined;
@@ -109,6 +115,11 @@ function parse(url: string): { key: string; path: string } | undefined {
 
 /** Fields of `videos` that {@link videoLinks} reads. */
 export type VideoLinkFields = "videos.video_id" | "videos.name";
+
+/** The fields {@link videoLinks} reads, to spread into `select()`. */
+export function videoLinkFields(): Selection<"games", VideoLinkFields> {
+  return Object.freeze(["videos.video_id", "videos.name"] as const);
+}
 
 interface VideoRow {
   video_id?: string | undefined;

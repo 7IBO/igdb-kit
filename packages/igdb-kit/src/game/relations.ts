@@ -1,10 +1,27 @@
-import { type Game, GameType } from "../generated/schema";
+import { type Franchise, type Game, GameType } from "../generated/schema";
 import type { Selection } from "../links/selection";
 import type { FieldPath } from "../query/types";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
 /** Fields that {@link parentGame} reads. */
 export type ParentGameFields = "game_type" | "parent_game" | "version_parent";
+
+/**
+ * The fields {@link parentGame} and {@link groupByParent} read, to spread into `select()`: the parent
+ * as an id, or with the fields you name, and the edition's title.
+ */
+export function parentGameFields<F extends string = never>(
+  ...fields: FieldPath<Game, F>[]
+): Selection<
+  "games",
+  | "game_type"
+  | "version_title"
+  | ([F] extends [never] ? "parent_game" | "version_parent" : `${"parent_game" | "version_parent"}.${F}`)
+> {
+  const refs = ["parent_game", "version_parent"];
+  const paths = fields.length === 0 ? refs : refs.flatMap((ref) => fields.map((field) => `${ref}.${field}`));
+  return Object.freeze(["game_type", "version_title", ...paths]) as never;
+}
 
 /** A game whose selection lets {@link parentGame} work. */
 export interface ParentGameInput {
@@ -119,7 +136,7 @@ export function gameKind<G extends object>(game: G & Requires<G, GameKindFields>
 
 /** The fields {@link gameKind} reads, to spread into `select()`. */
 export function gameKindFields(): Selection<"games", GameKindFields> {
-  return Object.freeze<GameKindFields[]>(["game_type", "version_parent"]);
+  return Object.freeze(["game_type", "version_parent"] as const);
 }
 
 /** The arrays of a game that list the games it relates to, from IGDB's `games` fields. */
@@ -282,6 +299,18 @@ export function groupByParent<G extends { id: number }>(
 
 /** Fields that {@link franchisesOf} reads. */
 export type FranchiseFields = "franchise" | "franchises";
+
+/**
+ * The fields {@link franchisesOf} reads, to spread into `select()`: the franchises as ids, or with
+ * the fields you name (`franchiseFields("name")`).
+ */
+export function franchiseFields<F extends string = never>(
+  ...fields: FieldPath<Franchise, F>[]
+): Selection<"games", [F] extends [never] ? FranchiseFields : `${FranchiseFields}.${F}`> {
+  const refs = ["franchise", "franchises"];
+  const paths = fields.length === 0 ? refs : refs.flatMap((ref) => fields.map((field) => `${ref}.${field}`));
+  return Object.freeze(paths) as never;
+}
 
 export interface GameFranchises<F> {
   /**

@@ -1,19 +1,21 @@
-export { type AgeRatingFields, ageRating, ageRatings, type GameAgeRating } from "./age";
+export { type AgeRatingFields, ageRating, ageRatingFields, ageRatings, type GameAgeRating } from "./age";
 export {
   type AlternativeNameInfo,
   type AlternativeNameKind,
   type AlternativeNameVariant,
   type AlternativeTitle,
+  alternativeNameFields,
   alternativeTitles,
   parseAlternativeName,
 } from "./alternative-names";
-export { type CompanyFields, companies, type GameCompanies } from "./companies";
+export { type CompanyFields, companies, companyFields, type GameCompanies } from "./companies";
 export {
   countryName,
   type EventTime,
   type EventTimeFields,
   type EventTimeOptions,
   eventTime,
+  eventTimeFields,
   type FormatReleaseDateOptions,
   formatReleaseDate,
   type LanguageNameOptions,
@@ -24,6 +26,7 @@ export {
   type ExternalId,
   type ExternalIdFields,
   externalId,
+  externalIdFields,
   externalIds,
 } from "./external-ids";
 export {
@@ -31,12 +34,14 @@ export {
   type BestImageOptions,
   type BestImageRequires,
   bestImage,
+  bestImageFields,
 } from "./images";
 export {
   type GameLanguage,
   type LanguageFields,
   type LanguageSupport,
   type LanguagesOptions,
+  languageFields,
   languages,
   supportsLanguage,
 } from "./languages";
@@ -44,15 +49,17 @@ export {
   type VideoKind,
   type VideoLink,
   type VideoLinkFields,
+  videoLinkFields,
   videoLinks,
   type WebsiteKind,
   type WebsiteLink,
   type WebsiteLinkFields,
   type WebsiteLinksOptions,
+  websiteLinkFields,
   websiteLinks,
 } from "./links";
 export { type Locale, type ResolvedLocale, resolveLocale } from "./locale";
-export { type Multiplayer, type MultiplayerFields, multiplayer } from "./multiplayer";
+export { type Multiplayer, type MultiplayerFields, multiplayer, multiplayerFields } from "./multiplayer";
 export {
   type AlternativeNameFields,
   type LocalizationFields,
@@ -61,13 +68,16 @@ export {
   type LocalizedName,
   localization,
   localizedCover,
+  localizedCoverFields,
   localizedName,
+  localizedNameFields,
 } from "./names";
 export {
   type PlatformVersionFields,
   type PlatformVersionReleases,
   type PlatformVersionsOptions,
   type PlatformVersionsRequires,
+  platformVersionFields,
   platformVersions,
 } from "./platforms";
 export {
@@ -80,9 +90,11 @@ export {
   type TimeToBeatFields,
   type TimeToBeatOptions,
   timeToBeat,
+  timeToBeatFields,
 } from "./playtime";
 export {
   type FranchiseFields,
+  franchiseFields,
   franchisesOf,
   type GameFranchises,
   type GameGroup,
@@ -97,6 +109,7 @@ export {
   type ParentGameFields,
   type ParentRelation,
   parentGame,
+  parentGameFields,
   type RelatedGameFields,
   type RelatedGames,
   relatedGameFields,
@@ -111,6 +124,7 @@ export {
   type ReleasePrecision,
   regionalReleases,
   releaseDate,
+  releaseDateFields,
   releasesByPlatform,
 } from "./release";
 export type { Ref, Requires } from "./select";
@@ -120,6 +134,7 @@ export {
   type Store,
   type StoreLink,
   type StoreLinksOptions,
+  storeLinkFields,
   storeLinks,
   storeOf,
   type WebsiteFields,

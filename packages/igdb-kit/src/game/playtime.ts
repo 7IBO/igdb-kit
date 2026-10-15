@@ -1,8 +1,17 @@
+import type { Selection } from "../links/selection";
 import type { Locale } from "./locale";
 import { positive, type Requires } from "./select";
 
 /** Fields of `game_time_to_beats` that {@link timeToBeat} and {@link playtimes} read. */
 export type TimeToBeatFields = "hastily" | "normally" | "completely" | "count";
+
+/**
+ * The fields {@link timeToBeat} and {@link playtimes} read, to spread into
+ * `igdb.game_time_to_beats.select()`.
+ */
+export function timeToBeatFields(): Selection<"game_time_to_beats", TimeToBeatFields> {
+  return Object.freeze(["hastily", "normally", "completely", "count"] as const);
+}
 
 /** A `game_time_to_beats` row whose selection lets {@link timeToBeat} and {@link playtimes} work. */
 export interface TimeToBeatInput {

@@ -1,4 +1,5 @@
 import { ExternalGameSource } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import { numericCountry } from "./countries";
 import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires, type RequiresIfSelected } from "./select";
@@ -32,6 +33,20 @@ export type ExternalGameFields =
   | "external_games.platform"
   | "external_games.countries"
   | "external_games.game_release_format";
+
+/** The fields {@link storeLinks} reads from `websites` and `external_games`, to spread into `select()`. */
+export function storeLinkFields(): Selection<"games", WebsiteFields | ExternalGameFields> {
+  return Object.freeze([
+    "websites.url",
+    "websites.trusted",
+    "external_games.uid",
+    "external_games.url",
+    "external_games.external_game_source",
+    "external_games.platform",
+    "external_games.countries",
+    "external_games.game_release_format",
+  ] as const);
+}
 
 interface WebsiteRow {
   url?: string | undefined;

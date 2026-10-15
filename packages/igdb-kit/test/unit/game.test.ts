@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   AgeRatingOrganization,
+  defineSelection,
+  type EndpointName,
   GameReleaseFormat,
   GameType,
   Language,
@@ -12,34 +14,53 @@ import {
 } from "../../src";
 import {
   ageRating,
+  ageRatingFields,
   ageRatings,
+  alternativeNameFields,
   alternativeTitles,
+  bestImageFields,
   companies,
+  companyFields,
   countryName,
   eventTime,
+  eventTimeFields,
+  externalIdFields,
   formatPlaytime,
   formatReleaseDate,
+  franchiseFields,
   gameKind,
   gameKindFields,
+  languageFields,
   languageName,
   languages,
   localization,
   localizedCover,
+  localizedCoverFields,
   localizedName,
+  localizedNameFields,
   localizeStoreUrl,
   multiplayer,
+  multiplayerFields,
   parentGame,
+  parentGameFields,
   parseAlternativeName,
+  platformVersionFields,
   playtimes,
   regionalReleases,
+  relatedGameFields,
   releaseDate,
+  releaseDateFields,
   releaseRegionName,
   releasesByPlatform,
   resolveLocale,
+  storeLinkFields,
   storeLinks,
   storeOf,
   supportsLanguage,
   timeToBeat,
+  timeToBeatFields,
+  videoLinkFields,
+  websiteLinkFields,
 } from "../../src/game";
 import * as fixtures from "./fixtures/games";
 
@@ -1259,5 +1280,146 @@ describe("storeLinks() with a locale", () => {
     const apple = "https://apps.apple.com/us/app/hades/id1234567890";
     expect(localizeStoreUrl(apple, "fr-FR")).toBe(apple);
     expect(localizeStoreUrl("not a url", "fr-FR")).toBe("not a url");
+  });
+});
+
+describe("field lists", () => {
+  test("every path is valid on its endpoint, once, and the lists are frozen", () => {
+    const lists: [EndpointName, readonly string[]][] = [
+      ["games", releaseDateFields()],
+      ["games", companyFields()],
+      ["games", companyFields("name", "logo.image_id")],
+      ["games", storeLinkFields()],
+      ["games", externalIdFields()],
+      ["games", websiteLinkFields()],
+      ["games", videoLinkFields()],
+      ["games", ageRatingFields()],
+      ["games", localizedNameFields()],
+      ["games", localizedCoverFields()],
+      ["games", alternativeNameFields()],
+      ["games", languageFields()],
+      ["games", languageFields("native_name", "locale")],
+      ["games", multiplayerFields()],
+      ["games", parentGameFields()],
+      ["games", parentGameFields("name")],
+      ["games", relatedGameFields("name")],
+      ["games", gameKindFields()],
+      ["games", franchiseFields()],
+      ["games", franchiseFields("name")],
+      ["games", bestImageFields()],
+      ["game_time_to_beats", timeToBeatFields()],
+      ["events", eventTimeFields()],
+      ["platforms", platformVersionFields()],
+      ["platforms", platformVersionFields("name")],
+    ];
+    for (const [endpoint, fields] of lists) {
+      expect(Object.isFrozen(fields)).toBe(true);
+      // defineSelection() checks each path against the schema, as select() does, and drops repeats.
+      const checked: readonly string[] = defineSelection(endpoint, ...(fields as never[]));
+      expect(checked).toEqual(fields);
+    }
+  });
+
+  test("everything the helper reads", () => {
+    expect(releaseDateFields()).toEqual([
+      "release_dates.date",
+      "release_dates.date_format",
+      "release_dates.release_region",
+      "release_dates.platform",
+      "release_dates.status",
+    ]);
+    expect(storeLinkFields()).toEqual([
+      "websites.url",
+      "websites.trusted",
+      "external_games.uid",
+      "external_games.url",
+      "external_games.external_game_source",
+      "external_games.platform",
+      "external_games.countries",
+      "external_games.game_release_format",
+    ]);
+    expect(externalIdFields()).toEqual([
+      "external_games.external_game_source",
+      "external_games.uid",
+      "external_games.url",
+    ]);
+    expect(websiteLinkFields()).toEqual(["websites.type", "websites.url", "websites.trusted"]);
+    expect(videoLinkFields()).toEqual(["videos.video_id", "videos.name"]);
+    expect(ageRatingFields()).toEqual([
+      "age_ratings.organization",
+      "age_ratings.rating_category",
+      "age_ratings.synopsis",
+      "age_ratings.rating_content_descriptions.description",
+    ]);
+    expect(localizedNameFields()).toEqual([
+      "name",
+      "game_localizations.name",
+      "game_localizations.region",
+      "alternative_names.name",
+      "alternative_names.comment",
+    ]);
+    expect(localizedCoverFields()).toEqual([
+      "cover.image_id",
+      "game_localizations.region",
+      "game_localizations.cover.image_id",
+    ]);
+    expect(alternativeNameFields()).toEqual(["alternative_names.name", "alternative_names.comment"]);
+    expect(multiplayerFields()).toHaveLength(11);
+    expect(multiplayerFields()).toContain("multiplayer_modes.campaigncoop");
+    expect(bestImageFields()).toEqual([
+      "cover.image_id",
+      "cover.width",
+      "cover.height",
+      "artworks.image_id",
+      "artworks.image_type",
+      "artworks.artwork_type",
+      "artworks.width",
+      "artworks.height",
+      "screenshots.image_id",
+      "screenshots.width",
+      "screenshots.height",
+    ]);
+    expect(timeToBeatFields()).toEqual(["hastily", "normally", "completely", "count"]);
+    expect(eventTimeFields()).toEqual(["start_time", "end_time", "time_zone"]);
+  });
+
+  test("the fields you name go on the rows a helper returns as selected", () => {
+    const roles = [
+      "involved_companies.developer",
+      "involved_companies.publisher",
+      "involved_companies.porting",
+      "involved_companies.supporting",
+    ] as const;
+    expect(companyFields()).toEqual(["involved_companies.company", ...roles]);
+    expect(companyFields("name")).toEqual(["involved_companies.company.name", ...roles]);
+    expect(languageFields()).toEqual([
+      "language_supports.language",
+      "language_supports.language_support_type",
+    ]);
+    expect(languageFields("native_name")).toEqual([
+      "language_supports.language.native_name",
+      "language_supports.language_support_type",
+    ]);
+    expect(parentGameFields()).toEqual(["game_type", "version_title", "parent_game", "version_parent"]);
+    expect(parentGameFields("name")).toEqual([
+      "game_type",
+      "version_title",
+      "parent_game.name",
+      "version_parent.name",
+    ]);
+    expect(franchiseFields()).toEqual(["franchise", "franchises"]);
+    expect(franchiseFields("name", "slug")).toEqual([
+      "franchise.name",
+      "franchise.slug",
+      "franchises.name",
+      "franchises.slug",
+    ]);
+    const dates = [
+      "versions.platform_version_release_dates.date",
+      "versions.platform_version_release_dates.date_format",
+      "versions.platform_version_release_dates.release_region",
+    ] as const;
+    expect(platformVersionFields()).toEqual(dates);
+    expect(platformVersionFields("name")).toEqual([...dates, "versions.name"]);
   });
 });

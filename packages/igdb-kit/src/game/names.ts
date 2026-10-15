@@ -1,4 +1,5 @@
 import { Region } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import {
   type AlternativeNameFields,
   type AlternativeNameVariant,
@@ -15,6 +16,32 @@ export type LocalizedCoverFields =
   | "game_localizations.region"
   | "game_localizations.cover.image_id";
 export type { AlternativeNameFields };
+
+/**
+ * The fields {@link localizedName} reads, to spread into `select()`: `name`, the localizations and
+ * the alternative names. They cover {@link localization} too.
+ */
+export function localizedNameFields(): Selection<
+  "games",
+  "name" | LocalizationFields | AlternativeNameFields
+> {
+  return Object.freeze([
+    "name",
+    "game_localizations.name",
+    "game_localizations.region",
+    "alternative_names.name",
+    "alternative_names.comment",
+  ] as const);
+}
+
+/** The fields {@link localizedCover} reads, to spread into `select()`. */
+export function localizedCoverFields(): Selection<"games", LocalizedCoverFields> {
+  return Object.freeze([
+    "cover.image_id",
+    "game_localizations.region",
+    "game_localizations.cover.image_id",
+  ] as const);
+}
 
 interface LocalizationRow {
   name?: string | undefined;

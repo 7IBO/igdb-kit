@@ -11,16 +11,15 @@ For IGDB's genres, themes and other labels in the user's language, see [Language
 
 ## Using the helpers
 
-Each helper requires the fields it reads at compile time (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection; `release_dates.*` style wildcards work too.
+Each helper requires the fields it reads at compile time (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection. The fields a helper reads come as a list, such as `releaseDateFields()`, to spread into `select()`:
 
 ```ts
-import { ageRating, companies, localizedName, releaseDate, storeLinks } from "igdb-kit/game";
-import { AgeRatingOrganization, Platform, ReleaseDateRegion } from "igdb-kit";
+import { ageRating, ageRatingFields, companies, companyFields, releaseDate, releaseDateFields, storeLinkFields,
+  storeLinks } from "igdb-kit/game";
+import { AgeRatingOrganization, Platform } from "igdb-kit";
 
 const game = await igdb.games
-  .select("name", "release_dates.*", "involved_companies.company.name", "involved_companies.developer",
-    "involved_companies.publisher", "involved_companies.porting", "involved_companies.supporting",
-    "websites.url", "websites.trusted", "age_ratings.organization", "age_ratings.rating_category")
+  .select("name", ...releaseDateFields(), ...companyFields("name"), ...storeLinkFields(), ...ageRatingFields())
   .findByIdOrThrow(1942);
 
 releaseDate(game, { locale: "fr-FR", platform: Platform.NintendoSwitch });
@@ -29,6 +28,10 @@ companies(game).developers;                          // [{ id: 908, name: "CD Pr
 storeLinks(game);                                    // [{ store: "epic", url, trusted: true, ... }, { store: "steam", ... }]
 ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { label: "18", minimumAge: 18, ... }
 ```
+
+A list holds everything its helper reads, where the compile-time check only asks for what the helper cannot do without: `localizedName()` compiles with `name` alone and then always returns it, and `storeLinks()` with `websites` alone misses the store pages of `external_games`. The fields you name in a list go on the rows its helper returns as selected: `companyFields("name")` selects `involved_companies.company.name`. The lists are `releaseDateFields()`, `companyFields(...fields)`, `storeLinkFields()`, `externalIdFields()`, `websiteLinkFields()`, `videoLinkFields()`, `ageRatingFields()`, `localizedNameFields()` (for `localization()` too), `localizedCoverFields()`, `alternativeNameFields()`, `languageFields(...fields)`, `parentGameFields(...fields)` (for `groupByParent()` too), `gameKindFields()`, `relatedGameFields(...fields)`, `franchiseFields(...fields)`, `multiplayerFields()` and `bestImageFields()` for games, `timeToBeatFields()` for `game_time_to_beats`, `eventTimeFields()` for `events` and `platformVersionFields(...fields)` for `platforms`.
+
+Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the content descriptors as ids, which `ageRating()` reads as text: add `age_ratings.rating_content_descriptions.description`.
 
 ## Release dates
 

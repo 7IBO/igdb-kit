@@ -1,3 +1,6 @@
+import type { PlatformVersion } from "../generated/schema";
+import type { Selection } from "../links/selection";
+import type { FieldPath } from "../query/types";
 import { type GameRelease, type ReleaseDateOptions, regionalReleases, releaseDate } from "./release";
 import type { ItemOf } from "./select";
 
@@ -5,6 +8,21 @@ type DateField = "date" | "date_format" | "release_region";
 
 /** Fields of `platforms` that {@link platformVersions} reads. */
 export type PlatformVersionFields = `versions.platform_version_release_dates.${DateField}`;
+
+/**
+ * The fields {@link platformVersions} reads, to spread into `igdb.platforms.select()`, with the
+ * fields you name on each version (`platformVersionFields("name")`).
+ */
+export function platformVersionFields<F extends string = never>(
+  ...fields: FieldPath<PlatformVersion, F>[]
+): Selection<"platforms", PlatformVersionFields | `versions.${F}`> {
+  return Object.freeze([
+    "versions.platform_version_release_dates.date",
+    "versions.platform_version_release_dates.date_format",
+    "versions.platform_version_release_dates.release_region",
+    ...fields.map((field) => `versions.${field}`),
+  ]) as never;
+}
 
 type DateRowOf<P> = ItemOf<ItemOf<P, "versions">, "platform_version_release_dates">;
 type MissingDateFields<P> = [DateRowOf<P>] extends [never]

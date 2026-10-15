@@ -1,9 +1,29 @@
-import { LanguageSupportType } from "../generated/schema";
+import { type Language, LanguageSupportType } from "../generated/schema";
+import type { Selection } from "../links/selection";
+import type { FieldPath } from "../query/types";
 import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `language_supports` that {@link languages} reads. */
 export type LanguageFields = "language_supports.language" | "language_supports.language_support_type";
+
+/**
+ * The fields {@link languages} and {@link supportsLanguage} read, to spread into `select()`: the
+ * languages as ids, or with the fields you name (`languageFields("native_name")`).
+ */
+export function languageFields<F extends string = never>(
+  ...fields: FieldPath<Language, F>[]
+): Selection<
+  "games",
+  | "language_supports.language_support_type"
+  | ([F] extends [never] ? "language_supports.language" : `language_supports.language.${F}`)
+> {
+  const language =
+    fields.length === 0
+      ? ["language_supports.language"]
+      : fields.map((field) => `language_supports.language.${field}`);
+  return Object.freeze([...language, "language_supports.language_support_type"]) as never;
+}
 
 interface LanguageSupportRow {
   language?: Ref | undefined;
