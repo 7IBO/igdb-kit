@@ -134,6 +134,12 @@ expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
 
+// popular() and weightedPopular() throw on a cut list only when asked.
+igdb.games.popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });
+igdb.games.weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { incomplete: "partial" });
+// @ts-expect-error "partial" or "throw"
+igdb.games.popular(PopularityType.IGDBVisits, { incomplete: true });
+
 // sync() takes ids on every endpoint, and since only where rows have updated_at.
 for await (const page of igdb.covers.select("image_id").sync({ ids: [1, 2] }))
   expectType<Equal<typeof page, { id: number; image_id?: string }[]>>();

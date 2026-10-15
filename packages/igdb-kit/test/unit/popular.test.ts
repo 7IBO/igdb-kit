@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PopularityType } from "../../src";
+import { PopularityType, QueryError } from "../../src";
 import { type Call, mockFetch, testClient } from "./helpers";
 
 // 1000 popularity rows for games 1..1000, most popular first. Games go up to 30,000: even ids are
@@ -137,6 +137,29 @@ describe("popular()", () => {
     expect(await filtered.popular(PopularityType.IGDBVisits, { maxRows: 10_000 })).toHaveLength(500);
   });
 
+  test("incomplete: throw says when maxRows rows did not hold the page", async () => {
+    const igdb = testClient(api().fetch);
+    const filtered = igdb.games.where((g) => g.game_status.eq(0)).limit(500);
+    await expect(
+      filtered.popular(PopularityType.IGDBVisits, { maxRows: 500, incomplete: "throw" }).execute(),
+    ).rejects.toThrow(
+      "popular() read 500 popularity rows and found 250 of the 500 games the page needs, among 15000 games matching the where: raise maxRows or narrow the where",
+    );
+    const full = filtered.popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });
+    expect(await full).toHaveLength(500);
+    // The end of the rows is not a cut: fewer games match, and that is the whole list.
+    const end = filtered
+      .offset(100)
+      .popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });
+    expect(await end).toHaveLength(400);
+  });
+
+  test("a deep page reads the rows up to it, whatever maxRows", async () => {
+    const igdb = testClient(api().fetch);
+    const page = await igdb.games.limit(20).offset(500).popular(PopularityType.IGDBVisits, { maxRows: 500 });
+    expect(page.map((t) => t.game.id)).toEqual(Array.from({ length: 20 }, (_, i) => i + 501));
+  });
+
   test("the query's limit and offset page the ranking", async () => {
     const mock = api();
     const igdb = testClient(mock.fetch);
@@ -174,6 +197,13 @@ describe("popular()", () => {
     await expect(igdb.games.search("zelda").popular(PopularityType.IGDBVisits).execute()).rejects.toThrow(
       /search/,
     );
+    await expect(igdb.games.popular(PopularityType.IGDBVisits, { maxRows: 0 }).execute()).rejects.toThrow(
+      /maxRows/,
+    );
+    await expect(
+      // @ts-expect-error "partial" or "throw"
+      igdb.games.popular(PopularityType.IGDBVisits, { incomplete: "error" }).execute(),
+    ).rejects.toThrow(QueryError);
     // @ts-expect-error only on games
     expect(igdb.platforms.popular).toBeUndefined();
   });

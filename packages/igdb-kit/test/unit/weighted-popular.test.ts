@@ -125,6 +125,31 @@ describe("weightedPopular()", () => {
       .weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { maxRows: 1000 });
     expect(none).toEqual([]);
     expect(scans(capped)).toHaveLength(2);
+    await expect(
+      testClient(capped.fetch)
+        .games.where((g) => g.game_status.eq(0))
+        .limit(3)
+        .weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { maxRows: 1000, incomplete: "throw" })
+        .execute(),
+    ).rejects.toThrow(
+      "weightedPopular() reached maxRows (1000) before settling the top 3, among 18800 games matching the where: raise maxRows or narrow the where",
+    );
+    // Settled within maxRows: no error.
+    const settled = await query.weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { incomplete: "throw" });
+    expect(settled.map((t) => t.game.id)).toEqual([1201, 1202, 1203]);
+  });
+
+  test("a deep page reads the rows up to it, whatever maxRows", async () => {
+    const rows = rowsOf(
+      PopularityType.IGDBVisits,
+      Array.from({ length: 2000 }, (_, i) => [i + 1, (2000 - i) / 1e6] as [number, number]),
+    );
+    const igdb = testClient(api(rows).fetch);
+    const page = await igdb.games
+      .limit(3)
+      .offset(1000)
+      .weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { maxRows: 500, incomplete: "throw" });
+    expect(page.map((t) => t.game.id)).toEqual([1001, 1002, 1003]);
   });
 
   test("a where matching few games scores their own rows: exact, past maxRows", async () => {

@@ -17,10 +17,17 @@ export type PopularityWeights = Readonly<Partial<Record<number, number>>>;
 export interface WeightedPopularOptions {
   /**
    * Stop after reading this many rows of each type, even if the ranking is not settled. Defaults to
-   * 5000. Does not apply when the first round does not settle the ranking and the `where` matches at
-   * most 10,000 games: their own rows are read instead.
+   * 5000; a deeper page reads at least the rows up to it. Does not apply when the first round does
+   * not settle the ranking and the `where` matches at most 10,000 games: their own rows are read
+   * instead.
    */
   maxRows?: number;
+  /**
+   * When a type stops at `maxRows` before the ranking is settled, so that a game not read could
+   * still enter the page: `"partial"` (default) returns the best games found, `"throw"` throws a
+   * `QueryError`.
+   */
+  incomplete?: "partial" | "throw";
 }
 
 export interface WeightedPopular<R> {
@@ -113,6 +120,14 @@ export async function allIds(
   return [...matches.first, ...rest.flat().map((row) => row.id)];
 }
 
+/** @internal Checks the options of `popular()` and `weightedPopular()`. */
+export function validateRanking(maxRows: number, incomplete: string): void {
+  if (!Number.isInteger(maxRows) || maxRows < 1) throw new QueryError(`maxRows must be a positive integer`);
+  if (incomplete !== "partial" && incomplete !== "throw") {
+    throw new QueryError(`incomplete must be "partial" or "throw", got ${incomplete}`);
+  }
+}
+
 /** Splits ids into lists of `size`. */
 export function chunk(ids: readonly number[], size: number): number[][] {
   const chunks: number[][] = [];
@@ -141,8 +156,10 @@ export async function weightedPopular<R>(
   /** The games the caller's `where` matches (`gameIds()`); `undefined` without a `where`. */
   matching?: Query<EndpointName, { id: number }>,
 ): Promise<WeightedPopular<R>[]> {
-  const { maxRows = 5000 } = options;
-  if (!Number.isInteger(maxRows) || maxRows < 1) throw new QueryError(`maxRows must be a positive integer`);
+  const { maxRows = 5000, incomplete = "partial" } = options;
+  validateRanking(maxRows, incomplete);
+  // A deep page needs at least the rows up to it.
+  const budget = Math.max(maxRows, limit);
   const weightOf = new Map<number, number>();
   for (const [key, weight] of Object.entries(weights)) {
     const type = Number(key);
@@ -206,6 +223,7 @@ export async function weightedPopular<R>(
   const ended = new Set<number>();
   const seen = new Set<number>();
   const results: WeightedPopular<R>[] = [];
+  let total: number | undefined;
 
   for (let round = 0; offsets.size > 0; round++) {
     const reads = [...offsets.entries()];
@@ -216,6 +234,7 @@ export async function weightedPopular<R>(
       round === 0 && matching !== undefined ? firstIds(matching, execute) : undefined,
     ]);
     if (matches?.total === 0) return [];
+    if (matches !== undefined) total = matches.total;
     if (round === 0) for (const [i, type] of unscanned.entries()) top.set(type, firsts[i]?.[0]?.value ?? 0);
     const fresh: number[] = [];
     reads.forEach(([type, offset], i) => {
@@ -230,7 +249,7 @@ export async function weightedPopular<R>(
       const end = rows.length < PAGE;
       if (end) ended.add(type);
       threshold.set(type, end ? 0 : (rows[rows.length - 1]?.value ?? 0));
-      if (end || offset + PAGE >= maxRows) offsets.delete(type);
+      if (end || offset + PAGE >= budget) offsets.delete(type);
       else offsets.set(type, offset + PAGE);
     });
 
@@ -247,7 +266,7 @@ export async function weightedPopular<R>(
       if (max > 0) bound += ((weightOf.get(type) as number) * (threshold.get(type) ?? 0)) / max;
     }
     const last = results[limit - 1];
-    if (last !== undefined && last.score >= bound) break;
+    if (last !== undefined && last.score >= bound) return results.slice(0, limit);
     if (
       matching !== undefined &&
       matches !== undefined &&
@@ -277,6 +296,13 @@ export async function weightedPopular<R>(
         return game === undefined ? [] : [{ ...entry, game }];
       });
     }
+  }
+  // Every type ran out of rows, or one stopped at maxRows before the top was settled.
+  if (ended.size < scanned.length && incomplete === "throw") {
+    throw new QueryError(
+      `weightedPopular() reached maxRows (${maxRows}) before settling the top ${limit}` +
+        `${total === undefined ? "" : `, among ${total} games matching the where`}: raise maxRows or narrow the where`,
+    );
   }
   return results.slice(0, limit);
 }
