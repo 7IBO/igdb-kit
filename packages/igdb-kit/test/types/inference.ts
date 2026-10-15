@@ -668,13 +668,16 @@ import {
   companies,
   eventTime,
   type FormatReleaseDateInput,
+  formatPlaytime,
   formatReleaseDate,
   languages,
   localizedCover,
   localizedName,
   multiplayer,
+  type Playtimes,
   parentGame,
   parseStoreUrl,
+  playtimes,
   regionalReleases,
   releaseDate,
   releasesByPlatform,
@@ -796,7 +799,12 @@ const title = alternativeTitles(localized)[0];
 if (title) {
   expectType<Equal<typeof title.row, { id: number; name?: string; comment?: string; game?: number }>>();
   expectType<Equal<typeof title.kind, AlternativeNameKind>>();
+  expectType<Equal<typeof title.locale, string | null>>();
+  expectType<Equal<typeof title.inScript, boolean | null>>();
 }
+// Rows of a local copy, read without a query.
+alternativeTitles({ alternative_names: [{ name: "Vedmak 3", comment: "Russian title" }] })[0]
+  ?.locale satisfies string | null | undefined;
 // @ts-expect-error alternative_names.comment is not selected
 alternativeTitles(await igdb.games.select("alternative_names.name").findByIdOrThrow(1));
 expectType<Equal<ReturnType<typeof resolveLocale>["languages"], number[]>>();
@@ -835,6 +843,16 @@ timeToBeat(ttb, { prefer: ["hastily"] });
 timeToBeat(ttb, { prefer: ["quickly"] });
 // @ts-expect-error count is not selected
 timeToBeat(await igdb.game_time_to_beats.select("hastily", "normally", "completely").first());
+expectType<Equal<ReturnType<typeof playtimes>, Playtimes | null>>();
+playtimes(ttb)?.completely satisfies number | null | undefined;
+// @ts-expect-error completely is not selected
+playtimes(await igdb.game_time_to_beats.select("hastily", "normally", "count").first());
+// formatPlaytime() returns null for 0, a negative number or NaN, whatever the type of its input.
+const playtimeText = formatPlaytime(254778);
+expectType<Equal<typeof playtimeText, string | null>>();
+// @ts-expect-error a number can be 0, which formats to null
+formatPlaytime(0) satisfies string;
+formatPlaytime(timeToBeat(ttb)?.seconds, { locale: "fr-FR" }) satisfies string | null;
 
 // artworkType() reads image_type and artwork_type, ids or expanded.
 const artworks = await igdb.artworks
@@ -851,6 +869,10 @@ import {
   externalId,
   externalIds,
   franchisesOf,
+  type GameKind,
+  type GameKindFields,
+  gameKind,
+  gameKindFields,
   groupByParent,
   type ParentRelation,
   platformVersions,
@@ -889,6 +911,13 @@ missingParents satisfies number[];
 groupByParent(await igdb.games.select("game_type", "parent_game").limit(1));
 // @ts-expect-error not a relation
 groupByParent(catalog, { relations: ["sequel"] });
+
+expectType<Equal<ReturnType<typeof gameKind>, GameKind>>();
+gameKind(catalog[0] ?? page) satisfies ParentRelation | "main_game" | "bundle";
+// @ts-expect-error version_parent is not selected
+gameKind(await igdb.games.select("game_type", "parent_game").findByIdOrThrow(1));
+expectType<Equal<ReturnType<typeof gameKindFields>[number], GameKindFields>>();
+gameKind(await igdb.games.select("name", ...gameKindFields()).findByIdOrThrow(1));
 
 const franchises = franchisesOf(await igdb.games.select("franchise", "franchises.name").findByIdOrThrow(1));
 franchises.main satisfies number | { id: number; name?: string } | null;
@@ -954,6 +983,178 @@ const versionDates = await igdb.platforms
   .findByIdOrThrow(48);
 // @ts-expect-error the versions' release regions are not selected
 platformVersions(versionDates);
+
+// Field lists: everything a helper reads, to spread into select().
+import {
+  type AlternativeNameFields,
+  ageRatingFields,
+  alternativeNameFields,
+  bestImageFields,
+  type CompanyFields,
+  companyFields,
+  type EventTimeFields,
+  type ExternalGameFields,
+  type ExternalIdFields,
+  eventTimeFields,
+  externalIdFields,
+  type FranchiseFields,
+  franchiseFields,
+  type LanguageFields,
+  type LocalizationFields,
+  type LocalizedCoverFields,
+  languageFields,
+  localization,
+  localizedCoverFields,
+  localizedNameFields,
+  type MultiplayerFields,
+  multiplayerFields,
+  type ParentGameFields,
+  type PlatformVersionFields,
+  parentGameFields,
+  platformVersionFields,
+  type ReleaseDateFields,
+  releaseDateFields,
+  storeLinkFields,
+  type TimeToBeatFields,
+  timeToBeatFields,
+  type VideoLinkFields,
+  videoLinkFields,
+  type WebsiteFields,
+  type WebsiteLinkFields,
+  websiteLinkFields,
+} from "../../src/game";
+
+// Lists that take fields select ids without them.
+const companyIds = companyFields();
+const languageIds = languageFields();
+const parentIds = parentGameFields();
+const franchiseIds = franchiseFields();
+const versionDateFields = platformVersionFields();
+expectType<
+  Equal<
+    ReturnType<typeof releaseDateFields>[number],
+    ReleaseDateFields | "release_dates.human" | "release_dates.y" | "release_dates.m"
+  >
+>();
+expectType<Equal<(typeof companyIds)[number], CompanyFields>>();
+expectType<
+  Equal<
+    ReturnType<typeof companyFields<"name">>[number],
+    Exclude<CompanyFields, "involved_companies.company"> | "involved_companies.company.name"
+  >
+>();
+expectType<Equal<ReturnType<typeof storeLinkFields>[number], WebsiteFields | ExternalGameFields>>();
+expectType<Equal<ReturnType<typeof externalIdFields>[number], ExternalIdFields | "external_games.url">>();
+expectType<Equal<ReturnType<typeof websiteLinkFields>[number], WebsiteLinkFields | "websites.trusted">>();
+expectType<Equal<ReturnType<typeof videoLinkFields>[number], VideoLinkFields>>();
+expectType<
+  Equal<
+    ReturnType<typeof ageRatingFields>[number],
+    | "age_ratings.organization"
+    | "age_ratings.rating_category.rating"
+    | "age_ratings.synopsis"
+    | "age_ratings.rating_content_descriptions.description"
+  >
+>();
+expectType<
+  Equal<ReturnType<typeof localizedNameFields>[number], "name" | LocalizationFields | AlternativeNameFields>
+>();
+expectType<Equal<ReturnType<typeof localizedCoverFields>[number], LocalizedCoverFields>>();
+expectType<Equal<ReturnType<typeof alternativeNameFields>[number], AlternativeNameFields>>();
+expectType<Equal<(typeof languageIds)[number], LanguageFields>>();
+expectType<Equal<ReturnType<typeof multiplayerFields>[number], MultiplayerFields>>();
+expectType<Equal<(typeof parentIds)[number], ParentGameFields | "version_title">>();
+expectType<Equal<(typeof franchiseIds)[number], FranchiseFields>>();
+expectType<Equal<ReturnType<typeof timeToBeatFields>[number], TimeToBeatFields>>();
+expectType<Equal<ReturnType<typeof eventTimeFields>[number], EventTimeFields | "end_time">>();
+expectType<
+  Equal<
+    (typeof versionDateFields)[number],
+    PlatformVersionFields | `versions.platform_version_release_dates.${"human" | "y" | "m"}`
+  >
+>();
+
+// The lists of several helpers go into one select(), and each helper accepts the result.
+const shown = await igdb.games
+  .select(
+    ...localizedNameFields(),
+    ...releaseDateFields(),
+    ...companyFields("name"),
+    ...storeLinkFields(),
+    ...ageRatingFields(),
+    ...languageFields("native_name"),
+    ...externalIdFields(),
+    ...websiteLinkFields(),
+    ...videoLinkFields(),
+    ...multiplayerFields(),
+  )
+  .findByIdOrThrow(1942);
+localizedName(shown, "ja-JP");
+localization(shown, "ja-JP");
+releaseDate(shown, { locale: "fr-FR" });
+companies(shown).developers[0]?.name satisfies string | undefined;
+storeLinks(shown, { locale: "fr-FR" });
+ageRating(shown, { locale: "fr-FR" })?.descriptors satisfies string[] | undefined;
+languages(shown)[0]?.language.native_name satisfies string | undefined;
+supportsLanguage(shown, "fr-FR");
+externalIds(shown);
+websiteLinks(shown);
+videoLinks(shown);
+multiplayer(shown);
+const groupedFields = await igdb.games
+  .select(
+    ...parentGameFields("name"),
+    ...franchiseFields("name"),
+    ...bestImageFields(),
+    ...localizedCoverFields(),
+    ...alternativeNameFields(),
+  )
+  .findByIdOrThrow(1942);
+parentGame(groupedFields)?.game satisfies number | { id: number; name?: string } | undefined;
+groupByParent([groupedFields]);
+gameKind(groupedFields);
+franchisesOf(groupedFields).main satisfies { id: number; name?: string } | null;
+bestImage(groupedFields, { prefer: "background" });
+localizedCover(groupedFields, "ja-JP");
+alternativeTitles(groupedFields);
+const playtimeRow = await igdb.game_time_to_beats.select(...timeToBeatFields()).first();
+timeToBeat(playtimeRow);
+playtimes(playtimeRow);
+// A helper takes one row: findByGames() and a view's `with` give each game's rows as an array.
+const playtimesByGame = await igdb.game_time_to_beats.select(...timeToBeatFields()).findByGames([1942]);
+playtimes(playtimesByGame.get(1942)?.[0]);
+// @ts-expect-error the rows of a game, not one row
+playtimes(playtimesByGame.get(1942));
+// @ts-expect-error the rows of a game, not one row
+timeToBeat(playtimesByGame.get(1942));
+// @ts-expect-error a list of games, not one game
+gameKind(await igdb.games.select(...gameKindFields()).limit(5));
+// @ts-expect-error a list of games, not one game
+releaseDate(await igdb.games.select(...releaseDateFields()).limit(5));
+eventTime(await igdb.events.select("name", ...eventTimeFields()).findByIdOrThrow(1), { locale: "fr" });
+const versionNames = await igdb.platforms
+  .select("name", ...platformVersionFields("name"))
+  .findByIdOrThrow(48);
+platformVersions(versionNames)[0]?.version.name satisfies string | undefined;
+// @ts-expect-error not a field of companies
+companyFields("nam");
+// A list of fields that may be empty would select ids where the type says objects: name at least one.
+const maybeNoFields: "name"[] = [];
+// @ts-expect-error a list that may be empty
+companyFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+languageFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+parentGameFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+franchiseFields(...maybeNoFields);
+// @ts-expect-error a list that may be empty
+relatedGameFields(...maybeNoFields);
+companyFields(...(["name", "logo.image_id"] as const));
+// @ts-expect-error not a field of platform_versions
+platformVersionFields("nam");
+// @ts-expect-error timeToBeatFields() holds fields of game_time_to_beats, not of games
+igdb.games.select(...timeToBeatFields());
 
 // igdb-kit/i18n: tables and ids are checked, rows of any selection are accepted.
 import {

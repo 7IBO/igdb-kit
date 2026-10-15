@@ -1,9 +1,19 @@
 import { ExternalGameSource } from "../generated/schema";
+import type { Selection } from "../links/selection";
 import { idOf, type Ref, type Requires } from "./select";
 import { type Store, type StoreId, type StoreIdKind, toStoreId } from "./stores";
 
 /** Fields of `external_games` that {@link externalIds} reads; `external_games.url` too when selected. */
 export type ExternalIdFields = "external_games.external_game_source" | "external_games.uid";
+
+/** The fields {@link externalIds} and {@link externalId} read, to spread into `select()`, URL included. */
+export function externalIdFields(): Selection<"games", ExternalIdFields | "external_games.url"> {
+  return Object.freeze([
+    "external_games.external_game_source",
+    "external_games.uid",
+    "external_games.url",
+  ] as const);
+}
 
 interface ExternalGameRow {
   external_game_source?: Ref | undefined;

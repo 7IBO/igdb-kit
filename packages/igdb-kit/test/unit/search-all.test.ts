@@ -254,6 +254,32 @@ describe("searchAll", () => {
     expect(hit?.matched).toBe("name");
   });
 
+  test("kana keep their voicing marks, and are not split into words", async () => {
+    const { igdb } = searchClient([
+      {
+        id: 1,
+        name: "ボケモン",
+        alternative_name: "",
+        game: { id: 1, name: "ボケモン", total_rating_count: 100 },
+      },
+      {
+        id: 2,
+        name: "ポケモン",
+        alternative_name: "",
+        game: { id: 2, name: "ポケモン", total_rating_count: 1 },
+      },
+      {
+        id: 3,
+        name: "マケモン",
+        alternative_name: "",
+        game: { id: 3, name: "マケモン", total_rating_count: 50 },
+      },
+    ]);
+    expect((await igdb.searchAll("ポケモン")).map((h) => h.id)).toEqual([2, 1, 3]);
+    // "ケモン" does not start a word of "ポケモン": the most rated comes first.
+    expect((await igdb.searchAll("ケモン")).map((h) => h.id)).toEqual([1, 3, 2]);
+  });
+
   test("reads every match up to maxRows, 500 per request, in parallel after the first", async () => {
     const rows = Array.from({ length: 1048 }, (_, i) => ({
       id: 5000 - i,

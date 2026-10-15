@@ -1,10 +1,25 @@
-import { type Game, GameType } from "../generated/schema";
+import { type Franchise, type Game, GameType } from "../generated/schema";
 import type { Selection } from "../links/selection";
 import type { FieldPath } from "../query/types";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
-/** Fields that {@link parentGame} reads. */
+/** Fields that {@link parentGame} reads; `version_title` too when selected. */
 export type ParentGameFields = "game_type" | "parent_game" | "version_parent";
+
+/**
+ * The fields {@link parentGame} and {@link groupByParent} read, to spread into `select()`: the parent
+ * as an id, or with the fields you name, and the edition's title.
+ */
+export function parentGameFields(): Selection<"games", ParentGameFields | "version_title">;
+export function parentGameFields<F extends string>(
+  field: FieldPath<Game, F>,
+  ...more: FieldPath<Game, F>[]
+): Selection<"games", "game_type" | "version_title" | `${"parent_game" | "version_parent"}.${F}`>;
+export function parentGameFields(...fields: string[]): readonly string[] {
+  const refs = ["parent_game", "version_parent"];
+  const paths = fields.length === 0 ? refs : refs.flatMap((ref) => fields.map((field) => `${ref}.${field}`));
+  return Object.freeze(["game_type", "version_title", ...paths]);
+}
 
 /** A game whose selection lets {@link parentGame} work. */
 export interface ParentGameInput {
@@ -86,6 +101,42 @@ export function parentGame<G extends object>(
   return parent as ParentGame<never> | null;
 }
 
+/** Fields that {@link gameKind} reads. */
+export type GameKindFields = "game_type" | "version_parent";
+
+/**
+ * What a game is: a `main_game`, a `bundle`, an `edition` of another game, or what `game_type`
+ * makes it, named as {@link ParentRelation} names it (`dlc`, `expansion`, `remake`, `port`...).
+ */
+export type GameKind = "main_game" | "bundle" | ParentRelation;
+
+/**
+ * What a game is, for a badge or to sort a list, including the main games and bundles for which
+ * {@link parentGame} returns null. An edition (`version_parent` set) is an `edition` whatever its
+ * `game_type`, as in `parentGame()`: 12% of editions, Gold, GOTY and Complete editions among them,
+ * are typed as bundles. Otherwise the kind comes from `game_type`, and a type added to IGDB after
+ * this version or a missing `game_type` is `other`, as in `parentGame()`. For a label in the user's
+ * language, use `label("game_types", ...)` from `igdb-kit/i18n`, which has no editions.
+ *
+ * ```ts
+ * const game = await igdb.games.select("name", ...gameKindFields()).findByIdOrThrow(119402);
+ * gameKind(game); // "edition": The Witcher 3 Complete Edition, typed as a bundle
+ * ```
+ */
+export function gameKind<G extends object>(game: G & Requires<G, GameKindFields>): GameKind {
+  const input = game as ParentGameInput;
+  if (input.version_parent !== undefined) return "edition";
+  const type = idOf(input.game_type);
+  if (type === GameType.MainGame) return "main_game";
+  if (type === GameType.Bundle) return "bundle";
+  return relations[type ?? -1] ?? "other";
+}
+
+/** The fields {@link gameKind} reads, to spread into `select()`. */
+export function gameKindFields(): Selection<"games", GameKindFields> {
+  return Object.freeze(["game_type", "version_parent"] as const);
+}
+
 /** The arrays of a game that list the games it relates to, from IGDB's `games` fields. */
 const relatedLists = [
   "dlcs",
@@ -102,7 +153,7 @@ const relatedLists = [
 type RelatedList = (typeof relatedLists)[number];
 type RelatedRef = "parent_game" | "version_parent" | RelatedList;
 
-/** Fields that {@link relatedGames} reads. */
+/** Fields that {@link relatedGames} reads; `version_title` too when selected. */
 export type RelatedGameFields = ParentGameFields | RelatedList;
 
 /**
@@ -114,15 +165,15 @@ export type RelatedGameFields = ParentGameFields | RelatedList;
  * relatedGames(game).expansions.map((g) => g.name); // ["The Witcher 3: Wild Hunt - Blood and Wine", ...]
  * ```
  */
-export function relatedGameFields<F extends string = never>(
-  ...fields: FieldPath<Game, F>[]
-): Selection<
-  "games",
-  "game_type" | "version_title" | ([F] extends [never] ? RelatedRef : `${RelatedRef}.${F}`)
-> {
+export function relatedGameFields(): Selection<"games", "game_type" | "version_title" | RelatedRef>;
+export function relatedGameFields<F extends string>(
+  field: FieldPath<Game, F>,
+  ...more: FieldPath<Game, F>[]
+): Selection<"games", "game_type" | "version_title" | `${RelatedRef}.${F}`>;
+export function relatedGameFields(...fields: string[]): readonly string[] {
   const refs: readonly string[] = ["parent_game", "version_parent", ...relatedLists];
   const paths = fields.length === 0 ? refs : refs.flatMap((ref) => fields.map((field) => `${ref}.${field}`));
-  return Object.freeze(["game_type", "version_title", ...paths]) as never;
+  return Object.freeze(["game_type", "version_title", ...paths]);
 }
 
 /** The games a game relates to, as selected: ids, or objects with the fields selected under them. */
@@ -246,6 +297,21 @@ export function groupByParent<G extends { id: number }>(
 
 /** Fields that {@link franchisesOf} reads. */
 export type FranchiseFields = "franchise" | "franchises";
+
+/**
+ * The fields {@link franchisesOf} reads, to spread into `select()`: the franchises as ids, or with
+ * the fields you name (`franchiseFields("name")`).
+ */
+export function franchiseFields(): Selection<"games", FranchiseFields>;
+export function franchiseFields<F extends string>(
+  field: FieldPath<Franchise, F>,
+  ...more: FieldPath<Franchise, F>[]
+): Selection<"games", `${FranchiseFields}.${F}`>;
+export function franchiseFields(...fields: string[]): readonly string[] {
+  const refs = ["franchise", "franchises"];
+  const paths = fields.length === 0 ? refs : refs.flatMap((ref) => fields.map((field) => `${ref}.${field}`));
+  return Object.freeze(paths);
+}
 
 export interface GameFranchises<F> {
   /**

@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   AgeRatingOrganization,
+  defineSelection,
+  type EndpointName,
   ExternalGameSource,
   GameReleaseFormat,
+  GameType,
   Language,
   LanguageSupportType,
   Platform,
@@ -13,33 +16,55 @@ import {
 } from "../../src";
 import {
   ageRating,
+  ageRatingFields,
   ageRatings,
+  alternativeNameFields,
   alternativeTitles,
+  bestImageFields,
   companies,
+  companyFields,
   countryName,
   eventTime,
+  eventTimeFields,
+  externalIdFields,
   externalIds,
   formatPlaytime,
   formatReleaseDate,
+  franchiseFields,
+  gameKind,
+  gameKindFields,
+  languageFields,
   languageName,
   languages,
   localization,
   localizedCover,
+  localizedCoverFields,
   localizedName,
+  localizedNameFields,
   localizeStoreUrl,
   multiplayer,
+  multiplayerFields,
   parentGame,
+  parentGameFields,
   parseAlternativeName,
   parseStoreUrl,
+  platformVersionFields,
+  playtimes,
   regionalReleases,
+  relatedGameFields,
   releaseDate,
+  releaseDateFields,
   releaseRegionName,
   releasesByPlatform,
   resolveLocale,
+  storeLinkFields,
   storeLinks,
   storeOf,
   supportsLanguage,
   timeToBeat,
+  timeToBeatFields,
+  videoLinkFields,
+  websiteLinkFields,
 } from "../../src/game";
 import * as fixtures from "./fixtures/games";
 import { gta5 } from "./fixtures/related";
@@ -891,6 +916,20 @@ describe("localizedName()", () => {
     expect(localizedName(game, "en-GB")?.source).toBe("name");
     expect(localizedName(game, "en-CA")?.name).toBe("Bust-a-Move");
   });
+
+  test("a Latin American title for Spanish in the Americas, as resolveLocale() picks", () => {
+    const game = {
+      name: "The Witcher 3: Wild Hunt",
+      alternative_names: [
+        { comment: "Spanish title", name: "The Witcher 3: Caza Salvaje" },
+        { comment: "Latin America title", name: "El Brujo 3: Cacería Salvaje" },
+      ],
+    };
+    for (const locale of ["es-419", "es-MX", "es-AR", "es-US", "es_419"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "El Brujo 3: Cacería Salvaje"]);
+    for (const locale of ["es-ES", "es", "es-IC"])
+      expect([locale, localizedName(game, locale)?.name]).toEqual([locale, "The Witcher 3: Caza Salvaje"]);
+  });
 });
 
 describe("resolveLocale()", () => {
@@ -1083,9 +1122,56 @@ describe("alternativeTitles()", () => {
         kind: "other",
         language: null,
         variant: null,
+        locale: null,
+        inScript: null,
         row: { id: 2, name: "X", comment: " " },
       },
     ]);
+  });
+
+  test("the language each name is written in, by the rules of localizedName()", () => {
+    const cases: [comment: string, name: string, locale: string | null, inScript: boolean | null][] = [
+      ["Russian title", "Vedmak 3", null, false],
+      ["Russian title", "Ведьмак 3", "ru", true],
+      ["Greek title", "O Magos", null, false],
+      ["Chinese title - simplified", "巫师3", "zh-Hans", true],
+      ["Chinese title - traditional", "マリオ博士64", null, false],
+      ["Japanese title", "Uitcha 3", null, false],
+      ["Japanese title", "위쳐 3", null, false],
+      ["Japanese title - original", "BIOHAZARD", "ja", false],
+      ["Japanese title - translated", "Dragon Warrior", null, false],
+      ["Japanese title - translated", "ラストウィンドウ 真夜中の約束", "ja", true],
+      ["Japanese title - romanization", "Mazā Surī", null, false],
+      // Still written in Japanese: localizedName() leaves out former titles by their variant.
+      ["Former Japanese title", "バイオハザード", "ja", true],
+      ["Korean title - translated", "드래곤 퀘스트", "ko", true],
+      ["Korean title - romanization", "Deuraegon Kweseuteu", null, false],
+      ["Portuguese title - translated", "Dragon Quest", null, true],
+      ["Brazilian title", "O Bruxo 3", "pt-BR", true],
+      ["Serbian title", "Цанди Блитз Делуке", "sr", true],
+      // The script is only checked for the languages not written in Latin letters.
+      ["French title", "ウィッチャー3", "fr", true],
+      ["UK title", "Bubble Buster", "en-GB", true],
+      ["North American title", "Bust-a-Move", "en-US", true],
+      ["European title", "Monster Rancher", null, null],
+      ["Steam title", "The Witcher 3", null, null],
+      ["Acronym", "TW3", null, null],
+    ];
+    const rows = cases.map(([comment, name]) => ({ comment, name }));
+    expect(
+      alternativeTitles({ alternative_names: rows }).map((t) => [t.comment, t.name, t.locale, t.inScript]),
+    ).toEqual(cases);
+    // localizedName() takes a name in its language exactly when it has a locale and is a current title.
+    const notCurrent = new Set(["abbreviation", "unofficial", "working", "former"]);
+    const games = [fixtures.witcher3, fixtures.mother3, fixtures.persona5Royal, { alternative_names: rows }];
+    for (const t of games.flatMap((game) => alternativeTitles(game))) {
+      if (t.language === null) continue;
+      const taken = localizedName({ name: "Game", alternative_names: [t.row] }, t.language);
+      expect([t.name, taken?.source === "alternative_name"]).toEqual([
+        t.name,
+        t.locale !== null && !notCurrent.has(t.variant ?? ""),
+      ]);
+    }
   });
 });
 
@@ -1145,7 +1231,7 @@ describe("languages()", () => {
   });
 });
 
-describe("timeToBeat() and formatPlaytime()", () => {
+describe("timeToBeat(), playtimes() and formatPlaytime()", () => {
   test("picks normally, then hastily, then completely", () => {
     expect(timeToBeat(timeToBeatRows.witcher3)).toEqual({ seconds: 254778, kind: "normally", count: 41 });
     expect(timeToBeat(timeToBeatRows.hastilyOnly)).toEqual({ seconds: 154920, kind: "hastily", count: 1 });
@@ -1157,10 +1243,31 @@ describe("timeToBeat() and formatPlaytime()", () => {
     expect(timeToBeat(undefined)).toBeNull();
   });
 
+  test("playtimes() gives the three averages, null for a missing or zero one", () => {
+    expect(playtimes(timeToBeatRows.witcher3)).toEqual({
+      hastily: 134552,
+      normally: 254778,
+      completely: 581483,
+      count: 41,
+    });
+    expect(playtimes(timeToBeatRows.hastilyOnly)).toEqual({
+      hastily: 154920,
+      normally: null,
+      completely: null,
+      count: 1,
+    });
+    const row = { hastily: 186000, normally: 254778, completely: 0, count: undefined };
+    expect(playtimes(row)).toEqual({ hastily: 186000, normally: 254778, completely: null, count: null });
+    expect(playtimes(timeToBeatRows.empty)).toBeNull();
+    expect(playtimes(null)).toBeNull();
+    expect(playtimes(undefined)).toBeNull();
+  });
+
   test("keeps IGDB's averages as they are", () => {
     expect(timeToBeat(timeToBeatRows.fortnite, { prefer: ["hastily"] })?.seconds).toBeGreaterThan(
       timeToBeat(timeToBeatRows.fortnite)?.seconds ?? 0,
     );
+    expect(playtimes(timeToBeatRows.fortnite)).toMatchObject({ hastily: 13821428, normally: 1072800 });
   });
 
   test("formats minutes, half hours and hours", () => {
@@ -1172,7 +1279,10 @@ describe("timeToBeat() and formatPlaytime()", () => {
     expect(formatPlaytime(254778, { locale: "en-US", unitDisplay: "long" })).toBe("71 hours");
     expect(formatPlaytime(254778, { locale: "fr-FR" })).toMatch(/^71\sh$/); // narrow no-break space
     expect(formatPlaytime(undefined)).toBeNull();
+    expect(formatPlaytime(null)).toBeNull();
     expect(formatPlaytime(0)).toBeNull();
+    expect(formatPlaytime(-60)).toBeNull();
+    expect(formatPlaytime(Number.NaN)).toBeNull();
   });
 });
 
@@ -1230,6 +1340,47 @@ describe("parentGame()", () => {
 
   test("standalone games", () => {
     expect(parentGame(fixtures.witcher3)).toBeNull();
+  });
+});
+
+describe("gameKind()", () => {
+  test("from game_type, editions first", () => {
+    expect(gameKind(fixtures.witcher3)).toBe("main_game");
+    // Bundles (game_type 3) that are editions of the main game, as parentGame() reads them.
+    expect(gameKind(fixtures.witcher3Complete)).toBe("edition");
+    expect(gameKind(fixtures.codGhostsGold)).toBe("edition");
+    expect(gameKind(fixtures.shadowOfTheErdtree)).toBe("expansion");
+    expect(gameKind(fixtures.persona5Royal)).toBe("expanded_game");
+    expect(gameKind(fixtures.scalebound)).toBe("remake");
+  });
+
+  test("bundles, games without a parent, expanded and unknown types", () => {
+    expect(gameKind({ game_type: GameType.Bundle, version_parent: undefined })).toBe("bundle");
+    expect(gameKind({ game_type: GameType.DLC, version_parent: undefined })).toBe("dlc");
+    expect(gameKind({ game_type: { id: GameType.Port, type: "Port" }, version_parent: undefined })).toBe(
+      "port",
+    );
+    expect(gameKind({ game_type: 99, version_parent: undefined })).toBe("other");
+  });
+
+  test("a game without game_type is other, as parentGame() names it", () => {
+    expect(gameKind({ game_type: undefined, version_parent: undefined })).toBe("other");
+    const child = { game_type: undefined, parent_game: 5, version_parent: undefined };
+    expect(parentGame(child)?.relation).toBe("other");
+    expect(gameKind(child)).toBe("other");
+  });
+
+  test("the relation parentGame() gives a game with a parent", () => {
+    for (const type of Object.values(GameType)) {
+      if (type === GameType.MainGame || type === GameType.Bundle) continue;
+      const game = { game_type: type, parent_game: 1, version_parent: undefined };
+      expect(parentGame(game)).toMatchObject({ relation: gameKind(game) });
+    }
+  });
+
+  test("gameKindFields() selects what it reads", () => {
+    expect(gameKindFields()).toEqual(["game_type", "version_parent"]);
+    expect(Object.isFrozen(gameKindFields())).toBe(true);
   });
 });
 
@@ -1337,9 +1488,30 @@ describe("names of regions, countries and languages", () => {
     expect(languageName(Language.EnglishUK, "en")).toBe("British English");
     expect(languageName("es-MX", "en")).toBe("Latin American Spanish");
     expect(languageName("zh-TW", "en")).toBe("Traditional Chinese");
+    expect(languageName("zh-cn", "en")).toBe("Simplified Chinese");
     expect(languageName(Language.German, "fr", { native: true })).toBe("Deutsch");
     expect(languageName(Language.Japanese, "en", { native: true })).toBe("日本語");
     expect(languageName(99, "en")).toBeNull();
+  });
+});
+
+describe("underscore locales", () => {
+  test("pt_BR is pt-BR in every display helper", () => {
+    const release = {
+      precision: "day",
+      start: new Date(Date.UTC(2026, 10, 19)),
+      year: 2026,
+      quarter: null,
+    } as const;
+    expect(formatReleaseDate(release, { locale: "pt_BR" })).toBe("19 de nov. de 2026");
+    expect(formatPlaytime(7200, { locale: "pt_BR" })).toBe("2 h");
+    expect(formatPlaytime(7200, { locale: ["pt_BR", "en"] })).toBe("2 h");
+    const event = { id: 1, start_time: 1781110800, time_zone: "PST" };
+    expect(eventTime(event, { locale: "pt_BR" }).text).toBe(eventTime(event, { locale: "pt-BR" }).text);
+    expect(releaseRegionName(ReleaseDateRegion.Europe, "pt_BR")).toBe("Europa");
+    expect(countryName(250, "pt_BR")).toBe("França");
+    expect(languageName(Language.French, "pt_BR")).toBe(languageName(Language.French, "pt-BR"));
+    expect(languageName("zh_TW", "en")).toBe("Traditional Chinese");
   });
 });
 
@@ -1483,6 +1655,9 @@ describe("storeLinks() with a locale", () => {
       "https://amazon.co.jp/dp/B00T3SPV36",
     ]);
     expect(urls("en-US").filter((url) => url.includes("amazon"))).toHaveLength(2);
+    expect(urls("es-419")[0]).toBe(
+      "https://www.epicgames.com/store/es-MX/product/the-witcher-3-wild-hunt/home",
+    );
   });
 
   test("localizeStoreUrl()", () => {
@@ -1503,9 +1678,21 @@ describe("storeLinks() with a locale", () => {
     expect(localizeStoreUrl("https://www.microsoft.com/en-us/p/-1-/9N116V0599HB", "ko")).toBe(
       "https://www.microsoft.com/ko-kr/p/-1-/9N116V0599HB",
     );
-    expect(localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", "es-AR")).toBe(
-      "https://store.epicgames.com/es-MX/p/hades",
-    );
+    // Epic's Latin American Spanish where resolveLocale() picks it, its Spain Spanish elsewhere.
+    for (const [locale, tag] of [
+      ["es-AR", "es-MX"],
+      ["es-419", "es-MX"],
+      ["es_419", "es-MX"],
+      ["es-US", "es-MX"],
+      ["es-PY", "es-MX"],
+      ["es-ES", "es-ES"],
+      ["es", "es-ES"],
+      ["es-IC", "es-ES"],
+    ] as const)
+      expect([locale, localizeStoreUrl("https://store.epicgames.com/en-US/p/hades", locale)]).toEqual([
+        locale,
+        `https://store.epicgames.com/${tag}/p/hades`,
+      ]);
     expect(localizeStoreUrl("https://store.epicgames.com/p/hades", "zh-TW")).toBe(
       "https://store.epicgames.com/zh-Hant/p/hades",
     );
@@ -1518,5 +1705,165 @@ describe("storeLinks() with a locale", () => {
     const apple = "https://apps.apple.com/us/app/hades/id1234567890";
     expect(localizeStoreUrl(apple, "fr-FR")).toBe(apple);
     expect(localizeStoreUrl("not a url", "fr-FR")).toBe("not a url");
+  });
+});
+
+describe("field lists", () => {
+  test("every path is valid on its endpoint, once, and the lists are frozen", () => {
+    const lists: [EndpointName, readonly string[]][] = [
+      ["games", releaseDateFields()],
+      ["games", companyFields()],
+      ["games", companyFields("name", "logo.image_id")],
+      ["games", storeLinkFields()],
+      ["games", externalIdFields()],
+      ["games", websiteLinkFields()],
+      ["games", videoLinkFields()],
+      ["games", ageRatingFields()],
+      ["games", localizedNameFields()],
+      ["games", localizedCoverFields()],
+      ["games", alternativeNameFields()],
+      ["games", languageFields()],
+      ["games", languageFields("native_name", "locale")],
+      ["games", multiplayerFields()],
+      ["games", parentGameFields()],
+      ["games", parentGameFields("name")],
+      ["games", relatedGameFields("name")],
+      ["games", gameKindFields()],
+      ["games", franchiseFields()],
+      ["games", franchiseFields("name")],
+      ["games", bestImageFields()],
+      ["game_time_to_beats", timeToBeatFields()],
+      ["events", eventTimeFields()],
+      ["platforms", platformVersionFields()],
+      ["platforms", platformVersionFields("name")],
+    ];
+    for (const [endpoint, fields] of lists) {
+      expect(Object.isFrozen(fields)).toBe(true);
+      // defineSelection() checks each path against the schema, as select() does, and drops repeats.
+      const checked: readonly string[] = defineSelection(endpoint, ...(fields as never[]));
+      expect(checked).toEqual(fields);
+    }
+  });
+
+  test("everything the helper reads", () => {
+    expect(releaseDateFields()).toEqual([
+      "release_dates.date",
+      "release_dates.date_format",
+      "release_dates.release_region",
+      "release_dates.platform",
+      "release_dates.status",
+      "release_dates.human",
+      "release_dates.y",
+      "release_dates.m",
+    ]);
+    expect(storeLinkFields()).toEqual([
+      "websites.url",
+      "websites.trusted",
+      "external_games.uid",
+      "external_games.url",
+      "external_games.external_game_source",
+      "external_games.platform",
+      "external_games.countries",
+      "external_games.game_release_format",
+    ]);
+    expect(externalIdFields()).toEqual([
+      "external_games.external_game_source",
+      "external_games.uid",
+      "external_games.url",
+    ]);
+    expect(websiteLinkFields()).toEqual(["websites.type", "websites.url", "websites.trusted"]);
+    expect(videoLinkFields()).toEqual(["videos.video_id", "videos.name"]);
+    expect(ageRatingFields()).toEqual([
+      "age_ratings.organization",
+      "age_ratings.rating_category.rating",
+      "age_ratings.synopsis",
+      "age_ratings.rating_content_descriptions.description",
+    ]);
+    expect(localizedNameFields()).toEqual([
+      "name",
+      "game_localizations.name",
+      "game_localizations.region",
+      "alternative_names.name",
+      "alternative_names.comment",
+    ]);
+    expect(localizedCoverFields()).toEqual([
+      "cover.image_id",
+      "game_localizations.region",
+      "game_localizations.cover.image_id",
+    ]);
+    expect(alternativeNameFields()).toEqual(["alternative_names.name", "alternative_names.comment"]);
+    expect(multiplayerFields()).toHaveLength(11);
+    expect(multiplayerFields()).toContain("multiplayer_modes.campaigncoop");
+    expect(bestImageFields()).toEqual([
+      "cover.image_id",
+      "cover.width",
+      "cover.height",
+      "artworks.image_id",
+      "artworks.image_type",
+      "artworks.artwork_type",
+      "artworks.width",
+      "artworks.height",
+      "screenshots.image_id",
+      "screenshots.width",
+      "screenshots.height",
+    ]);
+    expect(timeToBeatFields()).toEqual(["hastily", "normally", "completely", "count"]);
+    expect(eventTimeFields()).toEqual(["start_time", "end_time", "time_zone"]);
+  });
+
+  test("the lists keep IGDB's labels: a release date's human, a new rating category's rating", () => {
+    // The release dates as select(...releaseDateFields()) returns them.
+    const fields = releaseDateFields().map((path) => path.slice("release_dates.".length));
+    const release_dates = fixtures.witcher3.release_dates?.map((row) =>
+      Object.fromEntries(Object.entries(row).filter(([key]) => key === "id" || fields.includes(key))),
+    );
+    expect(releaseDate({ release_dates } as never)?.human).toBe("May 19, 2015");
+    // A rating category added to IGDB after this version is labeled from rating_category.rating.
+    const rating = { id: 1, organization: 2, rating_category: { id: 99, rating: "New" } };
+    expect(ageRatingFields()).toContain("age_ratings.rating_category.rating");
+    expect(ageRating({ age_ratings: [rating] }, 2)?.label).toBe("New");
+  });
+
+  test("the fields you name go on the rows a helper returns as selected", () => {
+    const roles = [
+      "involved_companies.developer",
+      "involved_companies.publisher",
+      "involved_companies.porting",
+      "involved_companies.supporting",
+    ] as const;
+    expect(companyFields()).toEqual(["involved_companies.company", ...roles]);
+    expect(companyFields("name")).toEqual(["involved_companies.company.name", ...roles]);
+    expect(languageFields()).toEqual([
+      "language_supports.language",
+      "language_supports.language_support_type",
+    ]);
+    expect(languageFields("native_name")).toEqual([
+      "language_supports.language.native_name",
+      "language_supports.language_support_type",
+    ]);
+    expect(parentGameFields()).toEqual(["game_type", "version_title", "parent_game", "version_parent"]);
+    expect(parentGameFields("name")).toEqual([
+      "game_type",
+      "version_title",
+      "parent_game.name",
+      "version_parent.name",
+    ]);
+    expect(franchiseFields()).toEqual(["franchise", "franchises"]);
+    expect(franchiseFields("name", "slug")).toEqual([
+      "franchise.name",
+      "franchise.slug",
+      "franchises.name",
+      "franchises.slug",
+    ]);
+    const dates = [
+      "versions.platform_version_release_dates.date",
+      "versions.platform_version_release_dates.date_format",
+      "versions.platform_version_release_dates.release_region",
+      "versions.platform_version_release_dates.human",
+      "versions.platform_version_release_dates.y",
+      "versions.platform_version_release_dates.m",
+    ] as const;
+    expect(platformVersionFields()).toEqual(dates);
+    expect(platformVersionFields("name")).toEqual([...dates, "versions.name"]);
   });
 });

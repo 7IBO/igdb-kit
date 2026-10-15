@@ -11,16 +11,15 @@ For IGDB's genres, themes and other labels in the user's language, see [Language
 
 ## Using the helpers
 
-Each helper requires the fields it reads at compile time (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection; `release_dates.*` style wildcards work too.
+Each helper requires, at compile time, the fields it cannot do without (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection. It takes one row, not an array: the rows `findByGames()` and a view's `with` give for a game are an array, so pass one, `timeToBeat(byGame.get(1942)?.[0])`. The fields a helper reads come as a list, such as `releaseDateFields()`, to spread into `select()`:
 
 ```ts
-import { ageRating, companies, localizedName, releaseDate, storeLinks } from "igdb-kit/game";
-import { AgeRatingOrganization, Platform, ReleaseDateRegion } from "igdb-kit";
+import { ageRating, ageRatingFields, companies, companyFields, releaseDate, releaseDateFields, storeLinkFields,
+  storeLinks } from "igdb-kit/game";
+import { AgeRatingOrganization, Platform } from "igdb-kit";
 
 const game = await igdb.games
-  .select("name", "release_dates.*", "involved_companies.company.name", "involved_companies.developer",
-    "involved_companies.publisher", "involved_companies.porting", "involved_companies.supporting",
-    "websites.url", "websites.trusted", "age_ratings.organization", "age_ratings.rating_category")
+  .select("name", ...releaseDateFields(), ...companyFields("name"), ...storeLinkFields(), ...ageRatingFields())
   .findByIdOrThrow(1942);
 
 releaseDate(game, { locale: "fr-FR", platform: Platform.NintendoSwitch });
@@ -29,6 +28,10 @@ companies(game).developers;                          // [{ id: 908, name: "CD Pr
 storeLinks(game);                                    // [{ store: "epic", url, trusted: true, ... }, { store: "steam", ... }]
 ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { label: "18", minimumAge: 18, ... }
 ```
+
+A list holds everything its helper reads, where the compile-time check only asks for what the helper cannot do without: `localizedName()` compiles with `name` alone and then always returns it, and `storeLinks()` with `websites` alone misses the store pages of `external_games`. The fields you name in a list go on the rows its helper returns as selected: `companyFields("name")` selects `involved_companies.company.name`, and `companyFields()` the companies as ids (a `string[]` that may be empty does not compile, since its type cannot say which). The lists are `releaseDateFields()`, `companyFields(...fields)`, `storeLinkFields()`, `externalIdFields()`, `websiteLinkFields()`, `videoLinkFields()`, `ageRatingFields()`, `localizedNameFields()` (for `localization()` too), `localizedCoverFields()`, `alternativeNameFields()`, `languageFields(...fields)`, `parentGameFields(...fields)` (for `groupByParent()` too), `gameKindFields()`, `relatedGameFields(...fields)`, `franchiseFields(...fields)`, `multiplayerFields()` and `bestImageFields()` for games, `timeToBeatFields()` for `game_time_to_beats`, `eventTimeFields()` for `events` and `platformVersionFields(...fields)` for `platforms`.
+
+Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the content descriptors as ids, which `ageRating()` reads as text: add `age_ratings.rating_content_descriptions.description`.
 
 ## Release dates
 
@@ -39,7 +42,7 @@ ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { 
 ## Companies, stores and links
 
 - **`companies(game)`** returns `{ developers, publishers, porting, supporting }` with your selected company fields. It handles several regional publishers and a company listed twice.
-- **`storeLinks(game, { stores?, locale? })`** and **`localizeStoreUrl(url, locale)`** give one link per store product from `websites` and `external_games`. The store comes from the address: archived copies, mistyped links and the Xbox 360 Marketplace, closed in 2024, are dropped. Kartridge and Utomik links are kept, as IGDB still lists them; to leave them out, list the stores you want in `stores`. Missing URLs are built for Steam, Google Play and single-country Amazon products. With `locale`, PlayStation, Xbox, Epic and GOG pages are in the user's language (99.5% of IGDB's PlayStation links are `en-us`) and Amazon products of other countries are left out.
+- **`storeLinks(game, { stores?, locale? })`** and **`localizeStoreUrl(url, locale)`** give one link per store product from `websites` and `external_games`. The store comes from the address: archived copies, mistyped links and the Xbox 360 Marketplace, closed in 2024, are dropped. Kartridge and Utomik links are kept, as IGDB still lists them; to leave them out, list the stores you want in `stores`. Missing URLs are built for Steam, Google Play and single-country Amazon products. With `locale`, PlayStation, Xbox, Epic and GOG pages are in the user's language (99.5% of IGDB's PlayStation links are `en-us`) and Amazon products of other countries are left out. Epic's Spanish pages follow `resolveLocale().languages`: Latin American (`es-MX`) for `es-419`, `es-US` and the countries of Latin America, Spain's otherwise.
 - **`storeOf(url)`** and **`parseStoreUrl(url)`** read an address, pasted or stored, with or without its `https://`: `"steam"`, and `{ store: "steam", kind: "app", id: "292030" }`. Every address of one product gives the same id (locale, slug, case), and a game's igdb.com page gives `{ store: "igdb", kind: "slug", id }`. An Amazon id is the ASIN, the same on every country's site, where `storeLinks()` keeps a link per site. `kind` is `app`, `product`, `concept` (PlayStation), `slug` (GOG and Epic addresses, which hold no id) or `id`. `parseStoreUrl` is null for an address without an id, such as Nintendo's and itch.io's.
 - **`externalIds(game, source?)`** and **`externalId(game, source)`** return `[{ source, uid, url, storeId }]` and `"292030"`: a game's ids in stores and services, several per source (1,830 games have two or three Steam appids), duplicates dropped. `uid` is IGDB's, for `findByExternalIds()`; `storeId` is the store id it holds, written as `parseStoreUrl()` writes it, or null. 7% of the Microsoft uids are `"xbox360"` and an Xbox 360 Marketplace uuid, which `XboxMarketplace` has too: both give `{ store: "xbox", kind: "xbox360_product", id }`, and the Microsoft Store id is the one with `kind: "product"`. Epic uids are 32 hexadecimal digits, or a dashed uuid for its older links, whose `storeId` is null. IGDB has no PlayStation trophy ids, only store concept ids, and no Nintendo, Ubisoft, EA or Battle.net source.
 - **`websiteLinks(game, { kinds? })`** returns `[{ kind, type, url, trusted }]`: official site, wikis, social networks and stores, by `kind`. IGDB never marks official sites as trusted, so nothing is dropped for it; social links with no page are.
@@ -51,9 +54,10 @@ ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { 
 
 ## Names and languages
 
-- **`localizedName(game, locale)`** and **`localization(game, locale)`** return `{ name, source, language, variant }`: the regional localization (`ja-JP`, `ko-KR`), then an alternative name in the locale's language ("Japanese title", "Chinese title - traditional", "Brazilian title", "UK title" for `en-GB`), then the European title for a European locale, then `name`. Romanizations, abbreviations and unofficial titles are skipped, and so is a name in the wrong script: a "Japanese title" in Latin letters is often a romanization.
+- **`localizedName(game, locale)`** returns `{ name, source, language, variant }`: the regional localization (`ja-JP`, `ko-KR`), then an alternative name in the locale's language ("Japanese title", "Chinese title - traditional", "Brazilian title", "UK title" for `en-GB`, "Latin America title" before "Spanish title" for `es-419`, `es-MX` or `es-US`), then the European title for a European locale, then `name`. Romanizations, abbreviations and unofficial titles are skipped, and so is a name in the wrong script: a "Japanese title" in Latin letters is often a romanization.
+- **`localization(game, locale)`** returns the game's `game_localizations` row for the locale, as selected (`{ id, name, region, cover }`): Japan's or Korea's for their language, else Europe's for a European country. It is null for 89% of games, with no fallback to alternative names or `name`, and its `name` can be missing (8% of localizations only carry a regional cover): use `localizedName()` for a title and `localizedCover()` for box art.
 - **`localizedCover(game, locale)`** returns `{ image_id, source, region }`: the Japanese, Korean or European box art of the game's localizations, then `cover`. A query of `covers` by game misses these.
-- **`alternativeTitles(game)`** and **`parseAlternativeName(comment)`** return `{ name, kind, language, variant }` from IGDB's 739 free-text comments ("Japanese title - romanization", "Korean Acroynm", "Steam title"): `kind` is `language`, `regional`, `platform`, `alternative`, `stylized`, `abbreviation`, `working`… and `language` a BCP 47 tag (`zh-Hant`, `pt-BR`). Executable file names are left out.
+- **`alternativeTitles(game)`** and **`parseAlternativeName(comment)`** return `{ name, kind, language, variant }` from IGDB's 739 free-text comments ("Japanese title - romanization", "Korean Acroynm", "Steam title"): `kind` is `language`, `regional`, `platform`, `alternative`, `stylized`, `abbreviation`, `working`… and `language` a BCP 47 tag (`zh-Hant`, `pt-BR`). Executable file names are left out. `alternativeTitles()` also gives the `locale` each name is written in, by the rules of `localizedName()`, and `inScript`, whether it has a letter of its language's script, Han without kana for Chinese (null when the comment names no language): a "Russian title" in Latin letters has the `language` `"ru"`, the `locale` null and `inScript` false, and a "Japanese title - original" in Latin letters ("BIOHAZARD") keeps the `locale` `"ja"`. The script is only checked for the languages not written in Latin letters (Japanese, Chinese, Korean, the Cyrillic ones, Greek, Hebrew, Arabic, Persian, Thai, Hindi): for the others, `inScript` is true and `locale` follows the comment, so a "French title" in kana is `"fr"`. An app that stores the titles of every language, for search or to pick one later, tags them with `locale`.
 - **`resolveLocale(locale)`** returns `{ country, releaseRegion, localizationRegions, ageRatingOrganizations, languages }`: what a locale picks in IGDB, used by the `locale` options. `"fr"` is France and Europe, `"en-GB"` prefers `Language.EnglishUK`, `"de-DE"` USK then PEGI and ESRB.
 - **`languages(game, { locale? })`** and **`supportsLanguage(game, locale)`** return `audio`, `subtitles` and `interface` per language, or for the user's: `null` when the game has no data of that kind, `false` when other languages have it. `locale` puts the user's languages first; Spanish (Spain) counts for `es-MX`.
 - **`releaseRegionName(id, locale)`**, **`countryName(code, locale)`** and **`languageName(language, locale)`** return `"Amérique du Nord"`, `"France"`, `"chinois simplifié"`, with names from `Intl`. `countryName` reads IGDB's numeric codes (`companies.country`: 250); `languageName` takes a `Language` id or IGDB's `locale` (`"es-MX"` is Latin American Spanish).
@@ -62,6 +66,7 @@ ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { 
 ## Related games
 
 - **`parentGame(game)`** returns `{ relation, game, title }` for editions, DLCs, expansions, remakes, ports..., from `version_parent` and `parent_game`, named from `game_type`.
+- **`gameKind(game)`** returns what a game is, for a badge or to sort a list: `"main_game"`, `"bundle"`, `"edition"`, or the relation `parentGame()` names from `game_type` (`"dlc"`, `"expansion"`, `"remake"`, `"port"`…, and `"other"` for a type added to IGDB after this version or a missing `game_type`). An edition (`version_parent`) is an `"edition"` whatever its type, as in `parentGame()`: 12% of editions, Gold, GOTY and Complete editions among them, are typed as bundles. For a label in the user's language, use `label("game_types", game.game_type, locale)` ([Languages](languages.md)), which has no editions.
 - **`relatedGames(game)`** and **`relatedGameFields(...fields)`** return `{ parent, dlcs, expansions, standalone_expansions, remakes, remasters, expanded_games, ports, forks, bundles }`. Lists are empty rather than undefined; `relatedGameFields("name")` selects them all with their names. A game's own fields cannot show its editions, mods, episodes, seasons, packs and updates: they point to it and no array lists them (see [`family()`](linked-data.md#related-games-family-series-catalog)).
 - **`groupByParent(games, { relations? })`** returns `{ groups: [{ game, members }], missingParents }`: the editions and ports of a list (a company's catalog, search results, a library) under their original. A parent missing from the list is an id to load.
 - **`franchisesOf(game)`** returns `{ main, others }`. IGDB sets `franchise` on 1,348 games and `franchises` on 29,259.
@@ -69,7 +74,8 @@ ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { 
 ## Multiplayer and playtime
 
 - **`multiplayer(game, platform?)`** returns player counts and co-op flags per platform. IGDB's 0 means unknown, so counts are `null` then. With a platform, it returns that platform's row, else the row that applies to every platform, else null.
-- **`timeToBeat(row, { prefer? })`** and **`formatPlaytime(seconds)`** return `{ seconds, kind, count }` and `"71 hr"`, from rows of `game_time_to_beats` (97% of games have none), localized with `Intl`.
+- **`timeToBeat(row, { prefer? })`** and **`formatPlaytime(seconds)`** return `{ seconds, kind, count }` and `"71 hr"`, from rows of `game_time_to_beats` (97% of games have none), localized with `Intl`. `formatPlaytime()` returns `null` for a missing, zero or negative time: `formatPlaytime(time.seconds) ?? "—"`.
+- **`playtimes(row)`** returns `{ hastily, normally, completely, count }`, for a page that shows the three times side by side (main story, with extras, 100%). A time IGDB has not filled in (missing or 0) is `null`. The averages come from different submissions, so `hastily` can exceed `normally`, and 72% of rows rest on one submission (`count: 1`).
 
 ## Pictures and platform versions
 

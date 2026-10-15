@@ -347,11 +347,15 @@ function otherScript(term: string): boolean {
   return /(?=\p{L})\P{Script=Latin}/u.test(term);
 }
 
-/** Lower case, without accents or punctuation: "Pokémon: Red" -> "pokemon red". */
+/**
+ * Lower case, without accents or punctuation: "Pokémon: Red" -> "pokemon red". Kana keep their
+ * voicing marks: ポ is not ボ.
+ */
 function normalize(text: string): string {
   return text
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
+    .normalize("NFC") // puts back the kana voicing marks (ｶﾞ is ガ) and the hangul syllables
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
