@@ -1,12 +1,14 @@
 # Keeping a local copy
 
-IGDB encourages keeping your own copy of its data.
+IGDB encourages keeping your own copy of its data. Its API is free, for commercial use too through a free partnership that asks for a visible credit to IGDB; IGDB's partners can also download data dumps, which igdb-kit does not read. The [API docs](https://api-docs.igdb.com) have the current terms.
 
 - [`sync()`](#copying-an-endpoint-sync) copies an endpoint, then only what changed since the last run.
 - [`sync({ ids })`](#tables-without-updated_at) reads the rows of tables without `updated_at` that changed games point to.
 - [A loop over table names](#copying-several-endpoints) needs no cast.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
+- [Rows that point to games](#rows-that-point-to-games): run `removed()` on each table you copy, not only on `games`.
+- [The display helpers](#display-helpers-on-stored-rows) read stored rows as they read query results.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
 
 ## Copying an endpoint: sync
@@ -18,10 +20,11 @@ const startedAt = new Date();
 for await (const page of igdb.games.select("*").sync({ since: lastSync })) {
   await db.upsertGames(page); // up to 500 games
 }
-lastSync = startedAt; // next time, only what changed since this run
+// Next time, what changed from ten minutes before this run: updated_at is IGDB's clock, not yours.
+lastSync = new Date(startedAt.getTime() - 10 * 60_000);
 ```
 
-With `since` (a `Date`, a date string or Unix seconds), only entities whose `updated_at` is newer come back. Sync requests run at `background` priority, so interactive queries pass first. Pair it with webhooks to stay up to date between runs.
+With `since` (a `Date`, a date string or Unix seconds), only entities whose `updated_at` is at or after it come back. Take it a few minutes before the previous run started: a row changed while that run was reading, with IGDB's clock behind yours, would otherwise never come back. The rows read twice are harmless with upserts. Sync requests run at `background` priority, so interactive queries pass first. Pair it with webhooks to stay up to date between runs.
 
 How it reads:
 
@@ -32,9 +35,23 @@ How it reads:
 
 A day of changes on `games` (about 33,000) takes 8 requests and 3 seconds, all 73,000 companies with `*` 26 requests and about 11 seconds, and the 133,000 rows of one popularity type, crowded into a few stretches of ids, 28 requests and 7 seconds.
 
+A copy stopped partway through a table (a deploy, a crash) can go on from where it was: pages come in id order, so save the last id of each page you wrote, and start again after it with the same `since`. Keep the time the stopped run started too: the next `since` comes from it, not from the restart, or the rows read before the stop that changed while it was stopped never come back.
+
+```ts
+// Created when a copy starts, and kept until it ends: { since: lastSync, startedAt: new Date() }
+const query = igdb.games.select("*").where((g) => g.id.gt(checkpoint.lastId ?? -1));
+for await (const page of query.sync({ since: checkpoint.since })) {
+  await db.upsertGames(page);
+  checkpoint.lastId = page[page.length - 1]?.id; // saved with the rows, in one transaction
+}
+lastSync = new Date(checkpoint.startedAt.getTime() - 10 * 60_000);
+```
+
 ## Tables without updated_at
 
-Covers, websites, alternative names and other tables have no `updated_at`, so `since` cannot find what changed in them. The games that changed point to their rows: read those with `ids`.
+23 of the 84 endpoints have no `updated_at`, so `since` cannot find what changed in them (the type of `sync()` refuses it, and it throws at run time): `age_rating_content_descriptions`, `age_ratings`, `alternative_names`, `artworks`, `character_mug_shots`, `company_logos`, `company_websites`, `covers`, `executables`, `game_engine_logos`, `game_version_feature_values`, `game_version_features`, `game_videos`, `logos`, `multiplayer_modes`, `platform_families`, `platform_logos`, `platform_version_companies`, `platform_versions`, `platform_websites`, `screenshots`, `search` and `websites`. `endpointSchema(name).fields` says which have it.
+
+Most of them hang off a row that has one: the games that changed point to their covers, websites and screenshots, the companies to their logos and websites, the platforms to theirs. Read those with `ids`.
 
 ```ts
 const coverIds = changedGames.flatMap((game) => (game.cover === undefined ? [] : [game.cover]));
@@ -44,6 +61,8 @@ for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
 ```
 
 Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies, `cursorThreshold` does not. `findByIds()` returns the same rows in one array, in the order of the ids.
+
+Read the whole table now and then too (weekly, say): nothing says that editing a cover or a website changes its game's `updated_at`.
 
 ## Copying several endpoints
 
@@ -117,6 +136,31 @@ const gone = await igdb.games.removed(storedIds);
 // [{ id: 422306, reason: "Duplicate", replacement: 399156 }, { id: 202354, reason: "Invalid", replacement: null }]
 ```
 
+## Rows that point to games
+
+`gameLink(endpoint)`, from `igdb-kit`, gives the field that links an endpoint's rows to games: `game` for `release_dates`, `websites`, `covers`, `language_supports`…, `game_id` for `game_time_to_beats` and `popularity_primitives`, and `games` for `characters`, `collections`, `events` and `franchises`. It is undefined for the others. `findByGames()` reads by it, and a copy indexes it.
+
+Games list most of these rows in a field of their own (`websites`, `release_dates`, `cover`…), but not those of `characters`, `collection_memberships`, `events`, `game_content_safety_ratings`, `game_time_to_beats`, `game_version_feature_values`, `game_versions`, `logos` and `popularity_primitives`, which only point to games. A deleted row of those leaves no trace on any game, and one that a game lists only drops out of its field, which shows when the game is read again: run `removed()` on every table you copy, not only on `games`. `endpointSchema(name).linkedFrom` lists every relation that points to an endpoint, which is also what a deletion leaves dangling. The `game_id` numbers of `game_time_to_beats` and `popularity_primitives` are not relations: `gameLink()` names them.
+
+## Display helpers on stored rows
+
+The helpers of `igdb-kit/game` are plain functions that read IGDB's field names, so they work on stored rows as on query results, without a cast. Give them the rows a query would have expanded, in the field that holds their ids:
+
+```ts
+import { releaseDate, storeLinks } from "igdb-kit/game";
+
+const game = {
+  ...stored, // the games row as stored, relations as ids
+  release_dates: await db.releaseDatesOf(stored.id), // the rows themselves, each with its platform, date...
+  websites: await db.websitesOf(stored.id),
+  external_games: await db.externalGamesOf(stored.id),
+};
+releaseDate(game, { locale: "fr-FR" });
+storeLinks(game, { locale: "fr-FR" });
+```
+
+A related row can stay an id where the helper only compares it (a release date's `platform` or `release_region`): `Ref` accepts both. Rows typed with an index signature (`{ id: number; [field: string]: unknown }`) skip the compile-time check of the fields a helper reads, so check them against what the helper's field list selects, such as `releaseDateFields()`.
+
 ## The schema: igdb-kit/schema
 
 `igdb-kit/schema` describes every endpoint as data, with no request, to generate the tables and indexes of a local copy or to declare a tool's input and output:
@@ -131,3 +175,5 @@ jsonSchema("games"); // JSON Schema (draft 2020-12) of a row, relations as ids
 ```
 
 A field's `type` is `string`, `integer`, `number`, `boolean`, `timestamp` (Unix seconds) or `relation` (with its `endpoint`); `array` marks lists, and `values` the names of an integer that holds one of a few values. Fields IGDB replaced are left out, and those it deprecated but still fills are marked `deprecated`.
+
+Nine fields are listed though IGDB never fills them, as the weekly schema audit checks: `age_ratings.rating_cover_url`, `characters.country_name`, `multiplayer_modes.splitscreenonline`, `platform_version_release_dates.platform_version`, `popularity_primitives.checksum`, `release_dates.d`, and `search.company`, `search.description` and `search.checksum`. A copy needs no column or index for them, and `linkedFrom` still lists the two relations among them.

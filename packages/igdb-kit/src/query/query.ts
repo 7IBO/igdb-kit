@@ -595,7 +595,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    */
   async *sync(
     options: SyncOptions &
-      ("updated_at" extends keyof Endpoints[N] ? { since?: DateInput } : { since?: never }) = {},
+      ("updated_at" extends keyof Endpoints[N] ? { since?: DateInput | undefined } : { since?: never }) = {},
   ): AsyncGenerator<R[], void, undefined> {
     if (this.state.search) throw new QueryError("sync() cannot be combined with search");
     this.idOrder("sync()");

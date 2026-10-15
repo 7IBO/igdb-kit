@@ -68,7 +68,9 @@ export function redisTokenStore(client: RedisLike, options: RedisTokenStoreOptio
   return {
     async get() {
       const value = await send(["GET", key]);
-      return typeof value === "string" ? (JSON.parse(value) as StoredToken) : null;
+      if (typeof value === "string") return JSON.parse(value) as StoredToken;
+      // A client that parses JSON replies, as Upstash's does by default, gives the token already read.
+      return typeof value === "object" && value !== null && "token" in value ? (value as StoredToken) : null;
     },
     async set(token) {
       const ttl = Math.max(1, Math.floor(token.expiresAt - Date.now()));
@@ -100,7 +102,9 @@ export function redisCache(client: RedisLike, options: RedisCacheOptions = {}): 
   return {
     async get(key) {
       const value = await send(["GET", prefix + key]);
-      return typeof value === "string" ? value : null;
+      if (typeof value === "string") return value;
+      // Parsed by a client that reads JSON replies, as Upstash's does by default: written back.
+      return typeof value === "object" && value !== null ? JSON.stringify(value) : null;
     },
     async set(key, value, ttlMs) {
       await send(["SET", prefix + key, value, "PX", String(Math.max(1, Math.round(ttlMs)))]);

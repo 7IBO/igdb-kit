@@ -18,6 +18,6 @@ export interface FieldSchema {
   values?: Record<string, number>;
   /** IGDB's description of the field. */
   description?: string;
-  /** IGDB deprecated the field but still fills it. Fields it replaced or emptied are left out. */
+  /** IGDB deprecated the field but still fills it. Deprecated fields it replaced or stopped filling are left out. */
   deprecated?: boolean;
 }

@@ -114,6 +114,42 @@ const igdb = createIGDB({
 
 `redis` can be an [ioredis](https://github.com/redis/ioredis) client, a [node-redis](https://github.com/redis/node-redis) client, Bun's `RedisClient`, or a function sending one raw command. igdb-kit depends on none of them.
 
+### Serverless
+
+A serverless function starts cold often, and each start of a client with the default memory store asks Twitch for a token of its own. Keep the token in a store every instance reads. [Upstash](https://upstash.com)'s REST client goes in as a function sending one raw command; replies it reads as JSON, which it does by default, are accepted:
+
+```ts
+import { Redis } from "@upstash/redis";
+
+const redis = Redis.fromEnv();
+const send = (args: string[]) => redis.exec(args as [string, ...string[]]);
+createIGDB({ clientId, clientSecret, tokenStore: redisTokenStore(send, { clientId }), cache: redisCache(send) });
+```
+
+Any key-value store works through the `TokenStore` and `CacheStore` interfaces, here Cloudflare Workers KV:
+
+```ts
+import type { CacheStore, StoredToken, TokenStore } from "igdb-kit";
+
+const kvTokenStore = (kv: KVNamespace, key = "igdb-token"): TokenStore => ({
+  get: () => kv.get<StoredToken>(key, "json"),
+  set: (token) => kv.put(key, JSON.stringify(token), { expiration: Math.floor(token.expiresAt / 1000) }),
+  async delete(token) {
+    if ((await kv.get<StoredToken>(key, "json"))?.token === token) await kv.delete(key);
+  },
+});
+const kvCache = (kv: KVNamespace, waitUntil: (write: Promise<unknown>) => void): CacheStore => ({
+  get: (key) => kv.get(key),
+  set(key, value, ttlMs) {
+    const write = kv.put(key, value, { expirationTtl: Math.max(60, Math.ceil(ttlMs / 1000)) });
+    waitUntil(write); // the query answers without waiting for it, and the Worker may stop once it answers
+    return write;
+  },
+});
+```
+
+KV has no lock and takes up to a minute to show a write everywhere: instances starting together may each fetch a token before they share one, and after a 401 an instance that still reads the old token may delete the new one and fetch another. KV also keeps a value 60 s at least. A function that stops once it answers, as a Worker does without `ctx.waitUntil()`, can lose a cache write, which igdb-kit does not wait for: create the client in the request there, with `(write) => ctx.waitUntil(write)`.
+
 ## In the browser: proxy
 
 IGDB does not allow CORS, and your client secret must stay on the server. `igdbProxy` forwards the browser's queries through your server's client, with its credentials, rate limit, retries and cache:
