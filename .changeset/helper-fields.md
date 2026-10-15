@@ -13,4 +13,4 @@ The docs say that `age_ratings.*` alone is not enough for `ageRating()`, which r
 
 Breaking changes, in types only:
 
-- `relatedGameFields(...fields)` with a `string[]` that may be empty no longer compiles, as with the new lists: empty, it selects the related games as ids, where its type said objects with these fields. Call `relatedGameFields()` for ids, or name the fields, one by one or as a tuple.
+- `relatedGameFields(...fields)` with a `string[]` that may be empty no longer compiles, as with `companyFields()`, `languageFields()`, `parentGameFields()` and `franchiseFields()`: empty, it selects the related games as ids, where its type said objects with these fields. Call `relatedGameFields()` for ids, or name the fields, one by one or as a tuple.

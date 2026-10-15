@@ -990,6 +990,17 @@ alternativeTitles(groupedFields);
 const playtimeRow = await igdb.game_time_to_beats.select(...timeToBeatFields()).first();
 timeToBeat(playtimeRow);
 playtimes(playtimeRow);
+// A helper takes one row: findByGames() and a view's `with` give each game's rows as an array.
+const playtimesByGame = await igdb.game_time_to_beats.select(...timeToBeatFields()).findByGames([1942]);
+playtimes(playtimesByGame.get(1942)?.[0]);
+// @ts-expect-error the rows of a game, not one row
+playtimes(playtimesByGame.get(1942));
+// @ts-expect-error the rows of a game, not one row
+timeToBeat(playtimesByGame.get(1942));
+// @ts-expect-error a list of games, not one game
+gameKind(await igdb.games.select(...gameKindFields()).limit(5));
+// @ts-expect-error a list of games, not one game
+releaseDate(await igdb.games.select(...releaseDateFields()).limit(5));
 eventTime(await igdb.events.select("name", ...eventTimeFields()).findByIdOrThrow(1), { locale: "fr" });
 const versionNames = await igdb.platforms
   .select("name", ...platformVersionFields("name"))
@@ -1012,7 +1023,7 @@ relatedGameFields(...maybeNoFields);
 companyFields(...(["name", "logo.image_id"] as const));
 // @ts-expect-error not a field of platform_versions
 platformVersionFields("nam");
-// @ts-expect-error a list belongs to its endpoint: timeToBeatFields() to game_time_to_beats
+// @ts-expect-error timeToBeatFields() holds fields of game_time_to_beats, not of games
 igdb.games.select(...timeToBeatFields());
 
 // igdb-kit/i18n: tables and ids are checked, rows of any selection are accepted.

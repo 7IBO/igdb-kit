@@ -11,7 +11,7 @@ For IGDB's genres, themes and other labels in the user's language, see [Language
 
 ## Using the helpers
 
-Each helper requires, at compile time, the fields it cannot do without (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection. The fields a helper reads come as a list, such as `releaseDateFields()`, to spread into `select()`:
+Each helper requires, at compile time, the fields it cannot do without (a missing one is an error naming it, such as `select("release_dates.status") is missing`) and accepts any richer selection. It takes one row, not an array: the rows `findByGames()` and a view's `with` give for a game are an array, so pass one, `timeToBeat(byGame.get(1942)?.[0])`. The fields a helper reads come as a list, such as `releaseDateFields()`, to spread into `select()`:
 
 ```ts
 import { ageRating, ageRatingFields, companies, companyFields, releaseDate, releaseDateFields, storeLinkFields,
