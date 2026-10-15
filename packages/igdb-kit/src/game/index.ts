@@ -15,6 +15,7 @@ export {
   type EventTimeOptions,
   eventTime,
   type FormatReleaseDateOptions,
+  type FormattableRelease,
   formatReleaseDate,
   type LanguageNameOptions,
   languageName,

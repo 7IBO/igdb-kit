@@ -700,6 +700,14 @@ expectType<Equal<ReturnType<typeof resolveLocale>["languages"], number[]>>();
 if (release) formatReleaseDate(release, { locale: "fr-FR", dateStyle: "long" });
 const entry = calendar[0];
 if (entry) formatReleaseDate(entry.release, { locale: "fr-FR" });
+// A date stored with its precision: year and quarter are read from it.
+formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, { locale: "fr-FR" });
+formatReleaseDate({ date: 1_798_675_200, precision: "year" }, { locale: "fr-FR" });
+formatReleaseDate({ precision: "quarter", start: "2026-10-01", quarter: null }, { locale: "fr-FR" });
+// @ts-expect-error not a precision
+formatReleaseDate({ date: "2026-10-01", precision: "soon" }, { locale: "fr-FR" });
+// @ts-expect-error no date
+formatReleaseDate({ precision: "day" }, { locale: "fr-FR" });
 regionalReleases(page, { platform: 6 })[0]?.row.human;
 languages(page, { locale: "fr-FR" });
 supportsLanguage(page, "fr-FR").audio satisfies boolean | null;

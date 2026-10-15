@@ -5,6 +5,7 @@ import {
   Language,
   LanguageSupportType,
   Platform,
+  QueryError,
   Region,
   ReleaseDateRegion,
   ReleaseDateStatus,
@@ -1104,6 +1105,43 @@ describe("formatReleaseDate()", () => {
     // The day is IGDB's UTC day, whatever the machine's zone.
     const release = releaseDate(fixtures.witcher3);
     if (release) expect(formatReleaseDate(release, { locale: "en-US" })).toBe("May 19, 2015");
+  });
+
+  test("a date stored with its precision", () => {
+    const fr = { locale: "fr-FR" };
+    expect(formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, fr)).toBe("T4 2026");
+    // IGDB's own date of a quarter or a year is its last day.
+    expect(formatReleaseDate({ date: "2026-12-31", precision: "quarter" }, fr)).toBe("T4 2026");
+    expect(formatReleaseDate({ date: Date.UTC(2026, 11, 31) / 1000, precision: "year" }, fr)).toBe("2026");
+    expect(formatReleaseDate({ date: "2027-01-01", precision: "year" }, fr)).toBe("2027");
+    expect(formatReleaseDate({ date: new Date("2026-11-01"), precision: "month" }, fr)).toBe("nov. 2026");
+    expect(formatReleaseDate({ date: "2015-05-19", precision: "day" }, fr)).toBe("19 mai 2015");
+    expect(formatReleaseDate({ date: null, precision: "tbd" }, fr)).toBe("À déterminer");
+    // A result of releaseDate() that went through JSON.
+    const json = { precision: "quarter", start: "2026-10-01T00:00:00.000Z" } as const;
+    expect(formatReleaseDate(json, fr)).toBe("T4 2026");
+    expect(() => formatReleaseDate({ date: "soon", precision: "day" }, fr)).toThrow(QueryError);
+    expect(() => formatReleaseDate({ date: Date.now(), precision: "day" }, fr)).toThrow(QueryError);
+  });
+
+  test("a missing year or quarter is read from the date", () => {
+    const en = { locale: "en-US" };
+    const start = new Date(Date.UTC(2026, 9, 1));
+    expect(formatReleaseDate({ precision: "quarter", start }, en)).toBe("Q4 2026");
+    expect(formatReleaseDate({ precision: "quarter", start, year: 2026, quarter: null }, en)).toBe("Q4 2026");
+    expect(formatReleaseDate({ precision: "year", start, year: null }, en)).toBe("2026");
+  });
+
+  test("Gregorian dates in every locale, as IGDB's", () => {
+    const all = (locale: string) =>
+      (["day", "month", "quarter", "year"] as const).map((p) => formatReleaseDate(at(p), { locale }));
+    // Not the Buddhist era (2569) next to "Q4 2026".
+    expect(all("th-TH")).toEqual(["19 พ.ย. 2026", "พ.ย. 2026", "Q4 2026", "2026"]);
+    // Not the Persian year, 1404 until March 2026 and 1405 after.
+    expect(all("fa-IR")).toEqual(["۱۹ نوامبر ۲۰۲۶", "نوامبر ۲۰۲۶", "Q4 2026", "۲۰۲۶"]);
+    expect(formatReleaseDate({ date: "2026-01-01", precision: "year" }, { locale: "fa-IR" })).toBe("۲۰۲۶");
+    expect(formatReleaseDate(at("year"), { locale: "he-IL-u-ca-hebrew" })).toBe("2026");
+    expect(formatReleaseDate(at("day"), { locale: "ja-JP-u-ca-japanese" })).toBe("2026/11/19");
   });
 });
 
