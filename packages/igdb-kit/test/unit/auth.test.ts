@@ -87,23 +87,28 @@ describe("tokens", () => {
     }
   });
 
-  test("a token request that fails rejects each query with the endpoint and query it comes from", async () => {
+  test("a token request that fails is retried like IGDB, then rejects each query with its endpoint and query", async () => {
     const random = spyOn(Math, "random").mockReturnValue(0); // no wait between tries
     try {
-      for (const [answer, type] of [
-        [() => Promise.reject(new TypeError("fetch failed")), NetworkError],
-        [() => Response.json({ message: "unavailable" }, { status: 503 }), NetworkError],
-        [() => Response.json({ message: "invalid client secret" }, { status: 400 }), AuthError],
+      for (const [answer, type, retried] of [
+        [() => Promise.reject(new TypeError("fetch failed")), NetworkError, true],
+        [() => Response.json({ message: "unavailable" }, { status: 503 }), NetworkError, true],
+        [() => Response.json({ message: "invalid client secret" }, { status: 400 }), AuthError, false],
       ] as const) {
-        const fetch = (async (input: string | URL | Request) =>
-          String(input).startsWith("https://id.twitch.tv")
-            ? answer()
-            : Response.json([{ id: 1 }])) as typeof globalThis.fetch;
-        const igdb = testClient(fetch, { autoBatch: false });
+        let tokens = 0;
+        const fetch = (async (input: string | URL | Request) => {
+          if (!String(input).startsWith("https://id.twitch.tv")) return Response.json([{ id: 1 }]);
+          tokens++;
+          return answer();
+        }) as typeof globalThis.fetch;
+        const igdb = testClient(fetch, { autoBatch: false, retryTimeoutMs: 300 });
         const [games, platforms] = await Promise.all([
           igdb.games.limit(1).catch((e) => e),
           igdb.platforms.limit(1).catch((e) => e),
         ]);
+        // 4 tries for each request of the token, which the two queries share.
+        if (retried) expect(tokens).toBeGreaterThan(4);
+        else expect(tokens).toBe(1);
         expect(games).toBeInstanceOf(type);
         expect(games).toMatchObject({ endpoint: "games", query: "limit 1;" });
         expect(platforms).toMatchObject({ endpoint: "platforms", query: "limit 1;" });

@@ -89,8 +89,8 @@ export class QueryTimeoutError extends IGDBError {
 }
 
 /**
- * A 5xx or network failure that persisted until the retry budget ran out, or a Twitch token request
- * that failed 4 times.
+ * A 5xx or network failure, from IGDB or from Twitch's token endpoint, that persisted until the
+ * retry budget ran out.
  */
 export class NetworkError extends IGDBError {
   override name = "NetworkError";

@@ -179,7 +179,14 @@ export class Transport {
         release();
         if (timeout) report(0, 0);
         if (signal?.aborted) throw signal.reason;
-        if (error instanceof IGDBError) throw error; // from the token provider or the limiter
+        if (error instanceof IGDBError) {
+          // From the token provider or the limiter: a Twitch that fails or cannot be reached is
+          // retried like IGDB, refused credentials and a full queue are not.
+          if (!(error instanceof NetworkError)) throw error;
+          deadline ??= Date.now() + budget;
+          if (!(await this.backoff(path, attempt, deadline, error, signal))) throw error;
+          continue;
+        }
         const timedOut = timeout?.aborted === true;
         const failure = new NetworkError(
           timedOut
