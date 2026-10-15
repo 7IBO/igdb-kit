@@ -500,6 +500,21 @@ describe("terminals", () => {
     ]);
   });
 
+  test("findByIds asks a repeated id once and returns one row per id, where it first appears", async () => {
+    const mock = mockFetch((call) => {
+      const ids =
+        call.body
+          .match(/id = \(([^)]*)\)/)?.[1]
+          ?.split(",")
+          .map(Number) ?? [];
+      return Response.json(ids.filter((id) => id !== 404).map((id) => ({ id, name: `game ${id}` })));
+    });
+    const client = testClient(mock.fetch);
+    const rows = await client.games.select("name").findByIds([9, 7, 7, 9, 404, 5]);
+    expect(rows.map((row) => row.id)).toEqual([9, 7, 5]);
+    expect(mock.calls.map((call) => call.body)).toEqual(["fields name; where id = (9,7,404,5); limit 4;"]);
+  });
+
   test("lookups by id ignore the query's offset and sort", async () => {
     const mock = mockFetch((call) => Response.json([{ id: Number(call.body.match(/id = \(?(\d+)/)?.[1]) }]));
     const client = testClient(mock.fetch);

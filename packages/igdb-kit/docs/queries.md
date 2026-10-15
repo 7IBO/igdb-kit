@@ -136,7 +136,7 @@ Avoid filters three levels deep, such as `involved_companies.company.name`: IGDB
 await igdb.games.select("name").first();                 // R | null
 await igdb.games.select("name").findById(1942);          // R | null
 await igdb.games.select("name").findByIdOrThrow(1942);   // R, or throws NotFoundError (also firstOrThrow())
-await igdb.games.select("name").findByIds(ids);          // R[], in the order given, 500 per request at most
+await igdb.games.select("name").findByIds(ids);          // R[], one per id found, in the order given
 await igdb.games.where((g) => g.rating.gte(90)).count(); // number
 await igdb.games.select("name").limit(20).withCount();   // { data: R[]; total: number }, one request
 for await (const game of igdb.games.select("name").iterate()) {
@@ -145,6 +145,8 @@ for await (const game of igdb.games.select("name").iterate()) {
 await igdb.games.select("name").search("zelda").limit(5); // searchable endpoints only, no sort
 await igdb.games.select("name").catch(() => []);         // a query is a promise: then, catch, finally
 ```
+
+`findByIds()` returns one row per id, where the id first appears, and skips the ids IGDB does not have: ids gathered from many rows, such as the covers of a set of games, can go to an upsert as they are. It asks for 500 ids per query, batched; for a long list, [`sync({ ids })`](local-copy.md#tables-without-updated_at) reads the rows page by page instead of holding them all.
 
 `findByIds()`, `iterate()` and `sync()` size their pages by weight: 500 rows of a light selection, fewer of a heavy one, so that a page stays near `maxBatchBytes` (4 MB). A game with its media, companies, release dates and websites expanded weighs about 20 KB, so such pages hold about 200 games. The weight of a row starts from a cautious guess and is learned from each response. A page IGDB refuses for its size (above 10 MB, or not built within 29 seconds) is asked again in halves.
 

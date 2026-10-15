@@ -363,7 +363,7 @@ describe("defineView()", () => {
 
   test("findByIds keeps the order and gives every game its links, empty or not", async () => {
     const igdb = testClient(fakeIgdb(tables).fetch);
-    const rows = await view(igdb).findByIds([20, 404, 10]);
+    const rows = await view(igdb).findByIds([20, 404, 10, 20]);
     expect(rows.map((r) => [r.id, r.timeToBeat.length, r.characters.length])).toEqual([
       [20, 0, 1],
       [10, 1, 2],

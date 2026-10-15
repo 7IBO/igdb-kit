@@ -158,6 +158,11 @@ export interface SyncOptions extends ExecuteOptions {
   concurrency?: number | undefined;
   /** Up to this many matches, pages are read one after another with an id cursor. Default 0. */
   cursorThreshold?: number | undefined;
+  /**
+   * Reads only the rows with these ids, one id or several, such as the covers of the games that
+   * changed: each row once, in id order. The `where` and `since` still apply.
+   */
+  ids?: number | readonly number[] | undefined;
 }
 
 /** Base of everything that can be awaited or put in a `batch()`. */
@@ -392,10 +397,12 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   }
 
   /**
-   * The entities with these ids, in the order given (missing ids are skipped). Splits them into
+   * The entities with these ids, in the order given: one row per id, where it first appears (a
+   * repeated id is asked and returned once), and none for an id IGDB does not have. Splits them into
    * chunks of 500, fewer when the selected rows are heavy, which `batch` and automatic batching send
    * together; a chunk IGDB finds too heavy is split in two. The query's `offset` and `sort` do not
-   * apply. Sends nothing before it is awaited.
+   * apply. Sends nothing before it is awaited. For a long list, `sync({ ids })` reads the rows page
+   * by page instead of holding them all.
    */
   findByIds(ids: readonly number[]): Task<R[]> {
     return new Task((execute) => this.runFindByIds(ids, execute));
@@ -411,7 +418,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
     const pages = await Promise.all(chunks.map((chunk) => query.readIds(chunk, options)));
     const byId = new Map<number, R>();
     for (const page of pages) for (const item of page) byId.set((item as { id: number }).id, item);
-    return ids.flatMap((id) => (byId.has(id) ? [byId.get(id) as R] : []));
+    return unique.flatMap((id) => (byId.has(id) ? [byId.get(id) as R] : []));
   }
 
   /** The rows with these ids, read in halves when IGDB finds the response too heavy. */
@@ -520,7 +527,8 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
    * page starts on the last row of the previous one: when matches change during the sync and a page
    * starts further, the rows in between are read again with an id cursor, so none is missed. At most
    * `concurrency` pages are requested or waiting at once, about 64 MB. Requests default to
-   * `background` priority so they wait behind interactive ones. Pages arrive in id order.
+   * `background` priority so they wait behind interactive ones. Pages arrive in id order. With `ids`,
+   * a page asks for its rows by id instead: the first alone, then up to `concurrency` at once.
    */
   async *sync(
     options: SyncOptions &
@@ -528,7 +536,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
   ): AsyncGenerator<R[], void, undefined> {
     if (this.state.search) throw new QueryError("sync() cannot be combined with search");
     this.idOrder("sync()");
-    const { concurrency = 40, cursorThreshold = 0, since: _, ...execute } = options;
+    const { concurrency = 40, cursorThreshold = 0, since: _, ids, ...execute } = options;
     const executeOptions: ExecuteOptions = { ...execute, priority: execute.priority ?? "background" };
     let query: Query<N, R> = this.with({
       fields: this.fieldsWithId(),
@@ -541,6 +549,10 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
         throw new QueryError(`${this.endpoint} has no updated_at field: sync it without since`);
       }
       query = query.where(`updated_at >= ${dateSeconds(options.since, "since")}`);
+    }
+    if (ids !== undefined) {
+      yield* query.idPages(typeof ids === "number" ? [ids] : ids, concurrency, executeOptions);
+      return;
     }
 
     // Pages are segments of the matches in id order. Each starts on the last row of the previous one
@@ -706,6 +718,42 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
       if (more) yield* query.cursorPages({ ...executeOptions, after: last });
     } finally {
       stopped = true;
+    }
+  }
+
+  /**
+   * `sync({ ids })`: the rows with these ids, in id order, a page of ids at a time. The first page
+   * goes alone and tells what a row of this selection weighs; up to `concurrency` pages, about 64 MB,
+   * are then requested or waiting at once.
+   */
+  private async *idPages(
+    ids: readonly number[],
+    concurrency: number,
+    options: ExecuteOptions,
+  ): AsyncGenerator<R[], void, undefined> {
+    const sorted = [...new Set(ids.map(toId))].sort((a, b) => a - b);
+    const pages: Promise<R[]>[] = [];
+    let next = 0;
+    const read = () => {
+      const chunk = sorted.slice(next, next + this.pageRows());
+      next += chunk.length;
+      const page = this.readIds(chunk, options);
+      page.catch(() => {}); // awaited in order below
+      pages.push(page);
+    };
+    if (sorted.length > 0) read();
+    let window: number | undefined;
+    while (pages.length > 0) {
+      const rows = await (pages.shift() as Promise<R[]>);
+      if (window === undefined) {
+        const pageBytes = this.runner.pageSize?.(this.endpoint, this.state.fields).bytes ?? 0;
+        window = Math.max(
+          1,
+          Math.min(concurrency, Math.floor(SYNC_BYTES_IN_FLIGHT / Math.max(pageBytes, 1))),
+        );
+      }
+      while (next < sorted.length && pages.length < window) read();
+      if (rows.length > 0) yield rows;
     }
   }
 

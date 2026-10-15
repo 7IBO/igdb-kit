@@ -3,6 +3,7 @@
 IGDB encourages keeping your own copy of its data.
 
 - [`sync()`](#copying-an-endpoint-sync) copies an endpoint, then only what changed since the last run.
+- [`sync({ ids })`](#tables-without-updated_at) reads the rows of tables without `updated_at` that changed games point to.
 - [Webhooks](#webhooks) push every change between runs.
 - [`removed()`](#deletions-removed) finds the rows deleted while you were not listening.
 - [`igdb-kit/schema`](#the-schema-igdb-kitschema) describes every table, to create yours.
@@ -28,6 +29,19 @@ How it reads:
 - At most `concurrency` pages (40 by default, about 64 MB) are requested or waiting to be read, so a slow consumer does not fill the memory.
 
 A day of changes on `games` (about 33,000) takes 8 requests and 3 seconds, all 73,000 companies with `*` 26 requests and about 11 seconds, and the 133,000 rows of one popularity type, crowded into a few stretches of ids, 28 requests and 7 seconds.
+
+## Tables without updated_at
+
+Covers, websites, alternative names and other tables have no `updated_at`, so `since` cannot find what changed in them. The games that changed point to their rows: read those with `ids`.
+
+```ts
+const coverIds = changedGames.flatMap((game) => (game.cover === undefined ? [] : [game.cover]));
+for await (const page of igdb.covers.select("*").sync({ ids: coverIds })) {
+  await db.upsertCovers(page); // each cover once, even when games share it
+}
+```
+
+Each row comes once, in id order, and ids IGDB no longer has are skipped. The first page of ids goes alone and tells what a row weighs; then up to `concurrency` pages (about 64 MB) are requested or waiting at once, at `background` priority. The `where` still applies. `findByIds()` returns the same rows in one array, in the order of the ids.
 
 ## Webhooks
 

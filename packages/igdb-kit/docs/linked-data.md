@@ -91,7 +91,7 @@ const count = await gamePage.where((g) => g.rating.gte(90)).count(); // games on
 
 Like a query, a view sends nothing before it is awaited, and neither do `findById()`, `findByIds()`, `first()` and `withCount()`: pass `signal` or `priority` to their `execute()`.
 
-`findById()` and `findByIds()` send the games and the linked queries together: a game with 6 links costs one multiquery (22 KB for The Witcher 3). A list or a search needs the game ids first, so it takes one more request; a `search` is always sent alone. A key can't hide a game field, so name the link to `collection_memberships` `memberships`, not `collections`.
+`findById()` and `findByIds()` send the games and the linked queries together: a game with 6 links costs one multiquery (22 KB for The Witcher 3). `findByIds()` returns each game once, in the order given. A list or a search needs the game ids first, so it takes one more request; a `search` is always sent alone. A key can't hide a game field, so name the link to `collection_memberships` `memberships`, not `collections`.
 
 ## Expanding ids later: expand()
 

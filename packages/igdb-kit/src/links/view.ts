@@ -83,7 +83,10 @@ export class View<R, W extends ViewLinks> implements PromiseLike<ViewRow<R, W>[]
     return new Task(async (execute) => (await this.readIds([id], execute))[0] ?? null);
   }
 
-  /** The games with these ids, in the order given (missing ids are skipped), with their linked rows. */
+  /**
+   * The games with these ids, in the order given, with their linked rows: one per id, where it first
+   * appears, and none for an id IGDB does not have.
+   */
   findByIds(ids: readonly number[]): Task<ViewRow<R, W>[]> {
     return new Task((execute) => this.readIds(ids, execute));
   }

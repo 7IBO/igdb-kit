@@ -134,6 +134,13 @@ expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
 
+// sync() takes ids on every endpoint, and since only where rows have updated_at.
+for await (const page of igdb.covers.select("image_id").sync({ ids: [1, 2] }))
+  expectType<Equal<typeof page, { id: number; image_id?: string }[]>>();
+igdb.games.sync({ ids: 7, since: "2026-01-01" });
+// @ts-expect-error covers have no updated_at
+igdb.covers.sync({ ids: [1], since: "2026-01-01" });
+
 // Chaining keeps the selection.
 const q5 = q2
   .where((g) => g.rating.gte(80))
