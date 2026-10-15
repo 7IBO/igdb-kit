@@ -740,6 +740,10 @@ import {
   externalId,
   externalIds,
   franchisesOf,
+  type GameKind,
+  type GameKindFields,
+  gameKind,
+  gameKindFields,
   groupByParent,
   type ParentRelation,
   platformVersions,
@@ -778,6 +782,13 @@ missingParents satisfies number[];
 groupByParent(await igdb.games.select("game_type", "parent_game").limit(1));
 // @ts-expect-error not a relation
 groupByParent(catalog, { relations: ["sequel"] });
+
+expectType<Equal<ReturnType<typeof gameKind>, GameKind>>();
+gameKind(catalog[0] ?? page) satisfies ParentRelation | "main_game" | "bundle";
+// @ts-expect-error version_parent is not selected
+gameKind(await igdb.games.select("game_type", "parent_game").findByIdOrThrow(1));
+expectType<Equal<ReturnType<typeof gameKindFields>[number], GameKindFields>>();
+gameKind(await igdb.games.select("name", ...gameKindFields()).findByIdOrThrow(1));
 
 const franchises = franchisesOf(await igdb.games.select("franchise", "franchises.name").findByIdOrThrow(1));
 franchises.main satisfies number | { id: number; name?: string } | null;

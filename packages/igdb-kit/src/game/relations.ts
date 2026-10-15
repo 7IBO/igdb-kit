@@ -86,6 +86,42 @@ export function parentGame<G extends object>(
   return parent as ParentGame<never> | null;
 }
 
+/** Fields that {@link gameKind} reads. */
+export type GameKindFields = "game_type" | "version_parent";
+
+/**
+ * What a game is: a `main_game`, a `bundle`, an `edition` of another game, or what `game_type`
+ * makes it, named as {@link ParentRelation} names it (`dlc`, `expansion`, `remake`, `port`...).
+ */
+export type GameKind = "main_game" | "bundle" | ParentRelation;
+
+/**
+ * What a game is, for a badge or to sort a list, including the main games and bundles for which
+ * {@link parentGame} returns null. An edition (`version_parent` set) is an `edition` whatever its
+ * `game_type`, as in `parentGame()`: 12% of editions, Gold, GOTY and Complete editions among them,
+ * are typed as bundles. Otherwise the kind comes from `game_type`, and a type added to IGDB after
+ * this version is `other`. For a label in the user's language, use `label("game_types", ...)` from
+ * `igdb-kit/i18n`, which has no editions.
+ *
+ * ```ts
+ * const game = await igdb.games.select("name", ...gameKindFields()).findByIdOrThrow(119402);
+ * gameKind(game); // "edition": The Witcher 3 Complete Edition, typed as a bundle
+ * ```
+ */
+export function gameKind<G extends object>(game: G & Requires<G, GameKindFields>): GameKind {
+  const input = game as ParentGameInput;
+  if (input.version_parent !== undefined) return "edition";
+  const type = idOf(input.game_type);
+  if (type === undefined || type === GameType.MainGame) return "main_game";
+  if (type === GameType.Bundle) return "bundle";
+  return relations[type] ?? "other";
+}
+
+/** The fields {@link gameKind} reads, to spread into `select()`. */
+export function gameKindFields(): Selection<"games", GameKindFields> {
+  return Object.freeze<GameKindFields[]>(["game_type", "version_parent"]);
+}
+
 /** The arrays of a game that list the games it relates to, from IGDB's `games` fields. */
 const relatedLists = [
   "dlcs",

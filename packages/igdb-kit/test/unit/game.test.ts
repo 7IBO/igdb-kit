@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   AgeRatingOrganization,
   GameReleaseFormat,
+  GameType,
   Language,
   LanguageSupportType,
   Platform,
@@ -18,6 +19,8 @@ import {
   eventTime,
   formatPlaytime,
   formatReleaseDate,
+  gameKind,
+  gameKindFields,
   languageName,
   languages,
   localization,
@@ -989,6 +992,40 @@ describe("parentGame()", () => {
 
   test("standalone games", () => {
     expect(parentGame(fixtures.witcher3)).toBeNull();
+  });
+});
+
+describe("gameKind()", () => {
+  test("from game_type, editions first", () => {
+    expect(gameKind(fixtures.witcher3)).toBe("main_game");
+    // Bundles (game_type 3) that are editions of the main game, as parentGame() reads them.
+    expect(gameKind(fixtures.witcher3Complete)).toBe("edition");
+    expect(gameKind(fixtures.codGhostsGold)).toBe("edition");
+    expect(gameKind(fixtures.shadowOfTheErdtree)).toBe("expansion");
+    expect(gameKind(fixtures.persona5Royal)).toBe("expanded_game");
+    expect(gameKind(fixtures.scalebound)).toBe("remake");
+  });
+
+  test("bundles, games without a parent, expanded and unknown types", () => {
+    expect(gameKind({ game_type: GameType.Bundle, version_parent: undefined })).toBe("bundle");
+    expect(gameKind({ game_type: GameType.DLC, version_parent: undefined })).toBe("dlc");
+    expect(gameKind({ game_type: { id: GameType.Port, type: "Port" }, version_parent: undefined })).toBe(
+      "port",
+    );
+    expect(gameKind({ game_type: 99, version_parent: undefined })).toBe("other");
+  });
+
+  test("the relation parentGame() gives a game with a parent", () => {
+    for (const type of Object.values(GameType)) {
+      if (type === GameType.MainGame || type === GameType.Bundle) continue;
+      const game = { game_type: type, parent_game: 1, version_parent: undefined };
+      expect(parentGame(game)).toMatchObject({ relation: gameKind(game) });
+    }
+  });
+
+  test("gameKindFields() selects what it reads", () => {
+    expect(gameKindFields()).toEqual(["game_type", "version_parent"]);
+    expect(Object.isFrozen(gameKindFields())).toBe(true);
   });
 });
 
