@@ -2,7 +2,7 @@
 "igdb-kit": minor
 ---
 
-`popular()` and `weightedPopular()` take `incomplete: "throw"`, which throws a `QueryError` when reading stopped at `maxRows` before the page was complete, instead of returning a shorter list, or for `weightedPopular()` a top that a game not read could still enter. This only happens when the `where` matches more than 10,000 games, and the message says how many games were found. The default, `"partial"`, still returns the best found.
+`popular()` and `weightedPopular()` take `incomplete: "throw"`, which throws a `QueryError` when reading stopped at `maxRows` before the page was complete, instead of returning a shorter list, or for `weightedPopular()` a top that a game not read could still enter. For `popular()`, this only happens when the `where` matches more than 10,000 games, and the message says how many games were found. `weightedPopular()` can also stop at `maxRows` without a `where`, when a game ranks high in several types without leading any of them, and the message says how many rows of each type were read. The default, `"partial"`, still returns the best found.
 
 A page deeper than `maxRows`, such as `igdb.games.limit(20).offset(5000).popular(type)`, came back empty: the rows up to the page are now read.
 

@@ -44,7 +44,7 @@ const top = await igdb.games
 
 `values` holds each metric's raw value, and `null` when IGDB has no row for the game: a third of the 500 most played games have no Steam row, which is not the same as a measured 0. Such a game scores 0 for that metric. Negative weights lower a score (`SteamNegativeReviews: -0.2`).
 
-Each round reads 500 rows per positively weighted metric, then the other metrics and the games of the new ids, in about 2 multiqueries; it stops as soon as no unread game can enter the top, usually after one round. As with `popular()`, the games a filter matches are counted during the first round: if it does not settle the top and they are at most 10,000, their own rows are scored instead. Above, each metric stops after `maxRows` rows, and a game not read could then still belong in the top: `incomplete: "throw"` throws in that case.
+Each round reads 500 rows per positively weighted metric, then the other metrics and the games of the new ids, in about 2 multiqueries; it stops as soon as no unread game can enter the top, usually after one round. As with `popular()`, the games a filter matches are counted during the first round: if it does not settle the top and they are at most 10,000, their own rows are scored instead. Otherwise, without a filter too, each metric stops after `maxRows` rows (5000 by default), and a game not read could then still belong in the top, such as one that ranks high in several metrics without leading any of them: `incomplete: "throw"` throws in that case.
 
 ## popularitySnapshot()
 

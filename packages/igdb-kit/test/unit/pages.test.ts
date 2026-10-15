@@ -177,6 +177,17 @@ describe("a query with its own limit, refused for its size", () => {
     expect(small).toHaveLength(2);
   });
 
+  test("a search query is not told to use iterate(), which refuses search", async () => {
+    const igdb = testClient(heavy().fetch);
+    const error = await refusal(igdb.games.search("zelda").select("name").limit(500));
+    expect(error?.message).toEndWith(". Each row weighs more than 20 KB: try limit(250)");
+    expect(error?.suggestedLimit).toBe(250);
+    const measured = testClient(heavy().fetch);
+    await measured.games.select("name").limit(100);
+    const known = await refusal(measured.games.search("zelda").select("name").limit(500));
+    expect(known?.message).toEndWith(". Rows of this selection weigh about 25 KB: limit(319) should pass");
+  });
+
   test("a single row, or a request body, gets no limit", async () => {
     const igdb = testClient(games(10, 30, () => tooLarge()).fetch);
     const one = await refusal(igdb.games.select("name").first());

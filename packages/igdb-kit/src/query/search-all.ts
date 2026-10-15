@@ -1,4 +1,4 @@
-import { QueryError } from "../core/errors";
+import { PayloadTooLargeError, QueryError } from "../core/errors";
 import type { Character, Collection, Game, Platform, Theme } from "../generated/schema";
 import { type ExecuteOptions, MAX_LIMIT, type Query } from "./query";
 import type { Task } from "./task";
@@ -219,7 +219,7 @@ export async function searchAll(
         .where(condition(titleWhere))
         .limit(100)
         .execute(execute),
-    ]) as Promise<TitleRow[][]>;
+    ]).catch(fewerFields) as Promise<TitleRow[][]>;
   };
   // Another script than Latin: IGDB's search finds few such titles, so ask alongside it.
   let titleRows = titles && (alternativeTitles === true || otherScript(term)) ? readTitles() : undefined;
@@ -232,14 +232,14 @@ export async function searchAll(
 
   let rows: SearchRow[];
   if (relevance) {
-    const first = await query.limit(MAX_LIMIT).withCount().execute(execute);
+    const first = await query.limit(MAX_LIMIT).withCount().execute(execute).catch(fewerFields);
     // x-count is exact on this endpoint, also with a where.
     const end = Math.min(first.total, Math.max(maxRows, MAX_LIMIT));
     const pages = [];
     for (let offset = MAX_LIMIT; offset < end; offset += MAX_LIMIT) {
       pages.push(query.limit(MAX_LIMIT).offset(offset).execute(execute));
     }
-    rows = [first.data, ...(await Promise.all(pages))].flat() as SearchRow[];
+    rows = [first.data, ...(await Promise.all(pages).catch(fewerFields))].flat() as SearchRow[];
   } else {
     rows = (await query.limit(limit).execute(execute)) as SearchRow[];
   }
@@ -326,6 +326,20 @@ export async function searchAll(
     );
   }
   return ranked.slice(0, limit).map((r) => r.hit);
+}
+
+/**
+ * IGDB refused a page `searchAll()` reads to rank as above 10 MB: its `limit` does not set the size
+ * of these pages, so the error asks for fewer fields rather than a lower limit.
+ */
+function fewerFields(error: unknown): never {
+  if (!(error instanceof PayloadTooLargeError) || !error.message.startsWith("Response")) throw error;
+  const refused = error.cause instanceof PayloadTooLargeError ? error.cause : error;
+  const { status, details, query, endpoint } = error;
+  throw new PayloadTooLargeError(
+    `${refused.message}. searchAll() reads pages of a fixed size to rank its hits, whatever its limit: select fewer fields`,
+    { status, details, query, endpoint, cause: refused },
+  );
 }
 
 /** Whether the term has letters of another script than Latin: "ウィッチャー", "Ведьмак". */

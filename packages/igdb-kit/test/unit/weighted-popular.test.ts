@@ -163,6 +163,36 @@ describe("weightedPopular()", () => {
     expect(page.map((t) => t.game.id)).toEqual([1001, 1002, 1003]);
   });
 
+  test("without a where, a type can stop at maxRows too: the message only says to raise it", async () => {
+    // Games 1-600 lead Visits, games 1001-1600 Want to Play: after 500 rows of each, a game further
+    // down both could still outscore the leaders of one.
+    const rows = [
+      ...rowsOf(
+        PopularityType.IGDBVisits,
+        Array.from({ length: 600 }, (_, i) => [i + 1, 1 - i / 1e5] as [number, number]),
+      ),
+      ...rowsOf(
+        PopularityType.IGDBWantToPlay,
+        Array.from({ length: 600 }, (_, i) => [i + 1001, 1 - i / 1e5] as [number, number]),
+      ),
+    ];
+    const error = await testClient(api(rows).fetch)
+      .games.limit(3)
+      .weightedPopular(
+        { [PopularityType.IGDBVisits]: 1, [PopularityType.IGDBWantToPlay]: 1 },
+        { maxRows: 500, incomplete: "throw" },
+      )
+      .execute()
+      .then(
+        () => undefined,
+        (error) => error as QueryError,
+      );
+    expect(error).toBeInstanceOf(QueryError);
+    expect(error?.message).toBe(
+      "weightedPopular() read up to 500 popularity rows per type without settling the top 3: raise maxRows above 500",
+    );
+  });
+
   test("a where matching few games scores their own rows: exact, past maxRows", async () => {
     // The same 2000 ranked games, but only 2,500 games exist: the 1,300 above 1200 pass the filter.
     const visits = rowsOf(

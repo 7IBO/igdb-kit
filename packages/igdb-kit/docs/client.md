@@ -145,7 +145,7 @@ All errors extend `IGDBError` and carry `status`, `endpoint`, `details` (IGDB's 
 | Error | When |
 |---|---|
 | `QueryError` | Invalid field, syntax or type error, `limit` above 500 (IGDB answers 403 for that), unknown endpoint |
-| `PayloadTooLargeError` | The response would exceed IGDB's 10 MB cap, or the request body exceeds 32,000 bytes: the message says which, and for the response of a query, not of `raw()`, `suggestedLimit` gives a `limit` that should pass |
+| `PayloadTooLargeError` | The response would exceed IGDB's 10 MB cap, or the request body exceeds 32,000 bytes: the message says which, and for the response of a query, not of `raw()` or of the pages `searchAll()` reads to rank, `suggestedLimit` gives a `limit` that should pass |
 | `QueryTimeoutError` | IGDB gave up after about 27 s (408) |
 | `TierError` | Data outside your API access tier (the `content_safety_*` endpoints) |
 | `AuthError` | Bad credentials, or a token still refused after one renewal |

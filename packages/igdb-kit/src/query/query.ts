@@ -1076,8 +1076,8 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
    * positively weighted type, then the other types and the games of the new ids (about 2 multiqueries
    * per round); it stops once no unread game can enter the page. The games a `where` matches
    * are counted during the first round: if it does not settle the top and they are at most 10,000,
-   * their own rows are scored instead. Above, a type stops after `maxRows` rows, and the top may not
-   * be settled then, unless `incomplete: "throw"` makes it throw.
+   * their own rows are scored instead. Otherwise, without a `where` too, a type stops after `maxRows`
+   * rows, and the top may not be settled then, unless `incomplete: "throw"` makes it throw.
    */
   weightedPopular(
     weights: PopularityWeights,

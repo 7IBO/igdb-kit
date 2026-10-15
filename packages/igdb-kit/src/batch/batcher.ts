@@ -85,11 +85,13 @@ export class SizeEstimator {
     // Each row weighs at least its share of the 10 MB.
     const floor = RESPONSE_CAP_BYTES / rows;
     const weight = this.measured.has(key) ? this.perEntity.get(key) : undefined;
+    // iterate() refuses a search.
+    const iterate = !request.hasSearch;
     if (weight === undefined) {
       const limit = Math.floor(rows / 2);
       return {
         limit,
-        text: `Each row weighs more than ${kilobytes(floor)} KB: try limit(${limit}), or iterate(), which sizes its pages itself`,
+        text: `Each row weighs more than ${kilobytes(floor)} KB: try limit(${limit})${iterate ? ", or iterate(), which sizes its pages itself" : ""}`,
       };
     }
     const rowBytes = Math.max(weight, floor);
@@ -97,7 +99,7 @@ export class SizeEstimator {
     const limit = Math.max(1, Math.min(rows - 1, Math.floor((RESPONSE_CAP_BYTES * 0.8) / rowBytes)));
     return {
       limit,
-      text: `Rows of this selection weigh about ${kilobytes(rowBytes)} KB: limit(${limit}) should pass, or iterate() reads them in pages it sizes itself`,
+      text: `Rows of this selection weigh about ${kilobytes(rowBytes)} KB: limit(${limit}) should pass${iterate ? ", or iterate() reads them in pages it sizes itself" : ""}`,
     };
   }
 

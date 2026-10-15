@@ -304,7 +304,9 @@ export async function weightedPopular<R>(
   if (ended.size < scanned.length && incomplete === "throw") {
     throw new QueryError(
       `weightedPopular() read up to ${deepest} popularity rows per type without settling the top ${limit}` +
-        `${total === undefined ? "" : `, among ${total} games matching the where`}: raise maxRows above ${deepest} or narrow the where`,
+        (total === undefined
+          ? `: raise maxRows above ${deepest}`
+          : `, among ${total} games matching the where: raise maxRows above ${deepest} or narrow the where`),
     );
   }
   return results.slice(0, limit);

@@ -64,7 +64,8 @@ export class PayloadTooLargeError extends IGDBError {
   override name = "PayloadTooLargeError";
   /**
    * For a response above 10 MB, a `limit` that should pass: from the weight of the rows of this
-   * selection read so far, else half the one refused. Undefined for a request body, or a single row.
+   * selection read so far, else half the one refused. Undefined for a request body, a single row, or
+   * a page `searchAll()` reads to rank, whose size its `limit` does not set.
    */
   readonly suggestedLimit: number | undefined;
 
