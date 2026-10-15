@@ -1,4 +1,4 @@
-import { ExternalGameSource } from "../generated/schema";
+import { ExternalGameSource, Language } from "../generated/schema";
 import { numericCountry } from "./countries";
 import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires, type RequiresIfSelected } from "./select";
@@ -343,14 +343,16 @@ const otherLanguages: Record<string, readonly string[]> = {
  * their id names a region), Xbox and Microsoft (`/en-US/` to `/fr-FR/`), Epic (`/en-US/p/…` to
  * `/fr/p/…`) and GOG (`/en/game/…` to `/fr/game/…`). PlayStation, Xbox and Microsoft addresses
  * change only for a language spoken in the locale's country (`fr-FR`, `fr-CA`, not `fr-US`), and
- * Epic and GOG only for a language they offer. Other addresses come back as they are: Nintendo's
- * stores have different addresses per country, and an App Store app may not exist in every country.
- * 99.5% of IGDB's PlayStation links and 99.3% of its Xbox links are in `en-us`.
+ * Epic and GOG only for a language they offer. Epic's Spanish page is the Latin American one
+ * (`es-MX`) where `resolveLocale()` picks Latin American Spanish (`es-419`, `es-US`, `es-AR`), else
+ * Spain's. Other addresses come back as they are: Nintendo's stores have different addresses per
+ * country, and an App Store app may not exist in every country. 99.5% of IGDB's PlayStation links
+ * and 99.3% of its Xbox links are in `en-us`.
  */
 export function localizeStoreUrl(url: string, locale: Locale): string {
   const store = storeAt(url);
   if (store !== "playstation" && store !== "xbox" && store !== "epic" && store !== "gog") return url;
-  const { language, script, country } = resolveLocale(locale);
+  const { language, script, country, languages } = resolveLocale(locale);
   const parsed = new URL(url);
   const segments = parsed.pathname.split("/");
   // The locale comes first, or after "store" in Epic's older addresses (`/store/en-US/product/…`).
@@ -364,7 +366,7 @@ export function localizeStoreUrl(url: string, locale: Locale): string {
     if (tag === null || (store === "playstation" && language === "zh")) return url;
     tag = first === first.toLowerCase() ? tag.toLowerCase() : tag;
   } else if (store === "epic") {
-    tag = epicTag(language, script, country);
+    tag = epicTag(language, script, languages);
   } else if (gogLanguages.has(language)) {
     tag = language;
   }
@@ -388,12 +390,13 @@ function marketTag(language: string, country: string | null): string | null {
   return main === language || otherLanguages[country]?.includes(language) ? `${language}-${country}` : null;
 }
 
-function epicTag(language: string, script: string | null, country: string | null): string | null {
+function epicTag(language: string, script: string | null, languages: readonly number[]): string | null {
   switch (language) {
     case "en":
       return "en-US";
     case "es":
-      return country !== null && country !== "ES" && marketTag("es", country) !== null ? "es-MX" : "es-ES";
+      // Latin American Spanish where resolveLocale() picks it: es-419, es-US, es-MX, es-AR...
+      return languages[0] === Language.SpanishMexico ? "es-MX" : "es-ES";
     case "pt":
       return "pt-BR";
     case "zh":

@@ -128,6 +128,38 @@ describe("games.match()", () => {
     ]);
   });
 
+  test("kana keep their voicing marks: パ, バ and ハ are three letters", async () => {
+    const kana = fakeIgdb({
+      games: [
+        { id: 1, name: "バズルボブル", game_type: 0, total_rating_count: 100 },
+        { id: 2, name: "パズルボブル", game_type: 0 },
+        { id: 3, name: "ハズルボブル", game_type: 0, total_rating_count: 100 },
+        { id: 4, name: "トラコンクエスト", game_type: 0, total_rating_count: 100 },
+        { id: 5, name: "ドラゴンクエスト", game_type: 0 },
+      ],
+    });
+    // IGDB's search is fuzzy: here it returns every game.
+    const fetch = ((input: string | URL | Request, init?: RequestInit) =>
+      kana.fetch(input, {
+        ...init,
+        body: String(init?.body ?? "").replace(/search "(?:[^"\\]|\\.)*"; /, ""),
+      })) as typeof globalThis.fetch;
+    const igdb = testClient(fetch);
+    const scores = async (name: string) =>
+      summary(await igdb.games.match({ name })).map((m) => [m.id, m.score]);
+    expect(await scores("パズルボブル")).toEqual([
+      [2, 1],
+      [1, 0.72],
+      [3, 0.72],
+    ]);
+    expect(await scores("ドラゴンクエスト")).toEqual([
+      [5, 1],
+      [4, 0.514],
+    ]);
+    // Half-width kana are the same letters.
+    expect((await scores("ﾄﾞﾗｺﾞﾝｸｴｽﾄ"))[0]).toEqual([5, 1]);
+  });
+
   test("platforms and year tell games of the same name apart", async () => {
     const { igdb } = client();
     // Without them, equal scores: the most rated first, the mod last.

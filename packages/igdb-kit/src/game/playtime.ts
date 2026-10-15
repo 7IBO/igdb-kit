@@ -1,4 +1,4 @@
-import type { Locale } from "./locale";
+import { type Locale, parseLocale } from "./locale";
 import type { Requires } from "./select";
 
 /** Fields of `game_time_to_beats` that {@link timeToBeat} reads. */
@@ -83,7 +83,9 @@ export function formatPlaytime(
   options: FormatPlaytimeOptions = {},
 ): string | null {
   if (typeof seconds !== "number" || !(seconds > 0)) return null;
-  const locale = options.locale as string | string[] | undefined;
+  // "pt_BR" is "pt-BR", which Intl reads.
+  const locale =
+    options.locale === undefined ? undefined : [options.locale].flat().map((l) => parseLocale(l).canonical);
   const unitDisplay = options.unitDisplay ?? "short";
   const minutes = seconds / 60;
   if (minutes < 59.5) {

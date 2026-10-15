@@ -1168,9 +1168,10 @@ export class GamesQuery<R = { id: number }> extends Query<"games", R> {
    * The games a title from a store, a launcher or a list may be, best first, each with a score from
    * 0 to 1 and the title that matched: for the games IGDB does not link to a store id
    * (`findByExternalIds()`), such as PlayStation and Xbox titles. Looks in names, alternative names
-   * and localized titles, ignores trademark signs, punctuation, accents and case, reads "VII" as
-   * "7", and also tries the title without its edition or platform label (`" - GOTY Edition"`,
-   * `"(PS5)"`). `platforms` and `year` lower the games that disagree. A score of 1 is a sure match
+   * and localized titles, ignores trademark signs, punctuation, accents and case (kana keep their
+   * voicing marks: ガ is not カ), reads "VII" as "7", and also tries the title without its edition
+   * or platform label (`" - GOTY Edition"`, `"(PS5)"`). `platforms` and `year` lower the games that
+   * disagree. A score of 1 is a sure match
    * unless the next candidate also has it: remakes and ports often share a name, which `platforms`
    * and `year` tell apart. The query's `limit` (default 5) caps the candidates; its fields and
    * `where` apply to the games, and `sort`, `search` and `offset` throw. Two to four requests: the

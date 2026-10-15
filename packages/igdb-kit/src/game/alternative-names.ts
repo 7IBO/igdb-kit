@@ -53,7 +53,8 @@ export interface AlternativeNameInfo {
   /**
    * BCP 47 tag of the language or market the comment names: `"ja"`, `"zh-Hans"`, `"zh-TW"`,
    * `"pt-BR"`, `"en-GB"` for "UK title". Null when it names none (a European or international title
-   * can be in any language). A `"translated"` or `"romanized"` name is usually not written in it.
+   * can be in any language). A `"translated"` or `"romanized"` name is usually not written in it:
+   * the `locale` of {@link alternativeTitles} says whether it is.
    */
   language: string | null;
   variant: AlternativeNameVariant | null;
@@ -65,6 +66,26 @@ export interface AlternativeTitle<R = { name?: string | undefined; comment?: str
   name: string;
   /** IGDB's free-text comment, null when there is none. */
   comment: string | null;
+  /**
+   * BCP 47 tag of the language the name is written in: `language`, by the rules of
+   * `localizedName()`, whose `language` it is when it picks the name. Null when the comment names no
+   * language, and for a romanization, a name without a letter of its language's script (a "Russian
+   * title" in Latin letters, kana in a "Chinese title") and a translation out of a language written
+   * in Latin letters ("Portuguese title - translated" is in English). A name marked "original" keeps
+   * it, as some official titles are in Latin letters ("BIOHAZARD"). The script is only checked for
+   * the languages listed under `inScript`: a "French title" in kana is `"fr"`. It is a language tag
+   * (`"zh-Hans"`, `"es-419"`), not a user's locale: compare the `language` of `resolveLocale()`
+   * rather than the strings.
+   */
+  locale: string | null;
+  /**
+   * Whether the name has a letter of its language's script, for the languages not written in Latin
+   * letters: kana or han for Japanese, han without kana for Chinese, hangul, Cyrillic for Russian,
+   * Ukrainian, Bulgarian, Belarusian and Macedonian, Greek, Hebrew, Arabic for Arabic and Persian,
+   * Thai, Devanagari for Hindi. True for the other languages, which are not checked, and null when
+   * the comment names none.
+   */
+  inScript: boolean | null;
   /** The `alternative_names` row as selected. */
   row: R;
 }
@@ -223,6 +244,10 @@ export function parseAlternativeName(comment: string | null | undefined): Altern
  * The alternative names of a game with what their comments say (see {@link parseAlternativeName}),
  * in IGDB's order, without the executable file names (41% of all rows). Filter them by `kind`,
  * `language` or `variant`: `alternativeTitles(game).filter((t) => t.kind === "abbreviation")`.
+ * `locale` is the language a name is written in, for an app that stores the titles of every
+ * language: a "Russian title" in Latin letters has the `language` `"ru"` and the `locale` null.
+ * `localizedName()` picks among the names with a locale, without abbreviations, unofficial,
+ * working and former titles.
  */
 export function alternativeTitles<G extends object>(
   game: G & Requires<G, AlternativeNameFields>,
@@ -235,9 +260,54 @@ export function alternativeTitles<G extends object>(
     if (!name) continue;
     const info = parseAlternativeName(row.comment);
     if (info.kind === "executable") continue;
-    titles.push({ name, comment: row.comment?.trim() || null, ...info, row });
+    titles.push({
+      name,
+      comment: row.comment?.trim() || null,
+      ...info,
+      locale: titleLocale(name, info),
+      inScript: info.language === null ? null : inScript(name, info.language),
+      row,
+    });
   }
   return titles as AlternativeTitle<ItemOf<G, "alternative_names">>[];
+}
+
+// Scripts of the languages that are not written in Latin letters. A name is only taken for these
+// languages when it has at least one letter of the script.
+const scripts: Record<string, RegExp> = {
+  ja: /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u,
+  zh: /\p{Script=Han}/u,
+  ko: /\p{Script=Hangul}/u,
+  ru: /\p{Script=Cyrillic}/u,
+  uk: /\p{Script=Cyrillic}/u,
+  bg: /\p{Script=Cyrillic}/u,
+  be: /\p{Script=Cyrillic}/u,
+  mk: /\p{Script=Cyrillic}/u,
+  el: /\p{Script=Greek}/u,
+  he: /\p{Script=Hebrew}/u,
+  ar: /\p{Script=Arabic}/u,
+  fa: /\p{Script=Arabic}/u,
+  th: /\p{Script=Thai}/u,
+  hi: /\p{Script=Devanagari}/u,
+};
+const kana = /[\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+/** Whether a name has a letter of the script of a language (a BCP 47 tag); kana is not Chinese. */
+function inScript(name: string, language: string): boolean {
+  const base = language.split("-")[0] as string;
+  const script = scripts[base];
+  return !script || (script.test(name) && !(base === "zh" && kana.test(name)));
+}
+
+/**
+ * The language an alternative name is written in, from what its comment says, else null: see
+ * `AlternativeTitle.locale`. `localizedName()` reads names through it.
+ */
+export function titleLocale(name: string, { language, variant }: AlternativeNameInfo): string | null {
+  if (language === null || variant === "romanized") return null;
+  if (variant === "original") return language;
+  if (scripts[language.split("-")[0] as string]) return inScript(name, language) ? language : null;
+  return variant === "translated" ? null : language;
 }
 
 /** A regular expression matching any of the "|"-separated words or phrases, as whole words. */
