@@ -1,3 +1,6 @@
+import type { Company } from "../generated/schema";
+import type { Selection } from "../links/selection";
+import type { FieldPath } from "../query/types";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `involved_companies` that {@link companies} reads. */
@@ -7,6 +10,33 @@ export type CompanyFields =
   | "involved_companies.publisher"
   | "involved_companies.porting"
   | "involved_companies.supporting";
+
+/**
+ * The fields {@link companies} reads, to spread into `select()`: the role flags and the companies
+ * as ids, or with the fields you name (`companyFields("name")` selects
+ * `involved_companies.company.name`).
+ */
+export function companyFields(): Selection<"games", CompanyFields>;
+export function companyFields<F extends string>(
+  field: FieldPath<Company, F>,
+  ...more: FieldPath<Company, F>[]
+): Selection<
+  "games",
+  Exclude<CompanyFields, "involved_companies.company"> | `involved_companies.company.${F}`
+>;
+export function companyFields(...fields: string[]): readonly string[] {
+  const company =
+    fields.length === 0
+      ? ["involved_companies.company"]
+      : fields.map((field) => `involved_companies.company.${field}`);
+  return Object.freeze([
+    ...company,
+    "involved_companies.developer",
+    "involved_companies.publisher",
+    "involved_companies.porting",
+    "involved_companies.supporting",
+  ]);
+}
 
 interface InvolvedCompanyRow {
   company?: Ref | undefined;

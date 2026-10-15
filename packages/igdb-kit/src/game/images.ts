@@ -1,5 +1,6 @@
 import { ImageType } from "../generated/schema";
 import { type ArtworkTypeFields, artworkType } from "../images";
+import type { Selection } from "../links/selection";
 import { positive, type Requires, type RequiresIfSelected } from "./select";
 
 interface ImageRow {
@@ -35,6 +36,31 @@ export type BestImageRequires<G> = RequiresIfSelected<G, "cover", "cover.image_i
       : "screenshots" extends keyof G
         ? unknown
         : Requires<G, "cover.image_id">);
+
+type ImageFields = "image_id" | "width" | "height";
+
+/**
+ * The fields {@link bestImage} reads, to spread into `select()`: the cover, the artworks with their
+ * type and the screenshots, each with its size.
+ */
+export function bestImageFields(): Selection<
+  "games",
+  `cover.${ImageFields}` | `artworks.${ImageFields | ArtworkTypeFields}` | `screenshots.${ImageFields}`
+> {
+  return Object.freeze([
+    "cover.image_id",
+    "cover.width",
+    "cover.height",
+    "artworks.image_id",
+    "artworks.image_type",
+    "artworks.artwork_type",
+    "artworks.width",
+    "artworks.height",
+    "screenshots.image_id",
+    "screenshots.width",
+    "screenshots.height",
+  ] as const);
+}
 
 export interface BestImage {
   /** For `imageUrl()` and `imageSrcSet()`. */
