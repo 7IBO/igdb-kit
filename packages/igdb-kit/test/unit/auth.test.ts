@@ -118,6 +118,35 @@ describe("tokens", () => {
     }
   });
 
+  test("a token renewal after a 401 that fails is retried like the first token", async () => {
+    const random = spyOn(Math, "random").mockReturnValue(0); // no wait between tries
+    try {
+      // IGDB refuses the first token; Twitch then fails 6 tries before it hands out another.
+      const statuses = [200, 503, 503, 503, 503, 503, 503];
+      let tokens = 0;
+      const sent: string[] = [];
+      const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+        if (String(input).startsWith("https://id.twitch.tv")) {
+          tokens++;
+          const status = statuses.shift() ?? 200;
+          return status === 200
+            ? Response.json({ access_token: `token-${tokens}`, expires_in: 5_184_000 })
+            : Response.json({ message: "unavailable" }, { status });
+        }
+        const authorization = new Headers(init?.headers).get("authorization") ?? "";
+        sent.push(authorization);
+        return authorization === "Bearer token-1"
+          ? Response.json({ message: "Authorization Failure" }, { status: 401 })
+          : Response.json([{ id: 1 }]);
+      }) as typeof globalThis.fetch;
+      expect(await testClient(fetch).games.limit(1)).toEqual([{ id: 1 }]);
+      expect(tokens).toBe(8);
+      expect(sent).toEqual(["Bearer token-1", "Bearer token-8"]);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   test("an error thrown by hooks.onTokenRefresh does not fail the request", async () => {
     const { fetch, calls } = twitch(() => 200);
     const retries: unknown[] = [];

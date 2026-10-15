@@ -205,7 +205,7 @@ describe("sync", () => {
     expect(asked.every((a) => a.after + a.skip < ids.length)).toBe(true);
   });
 
-  test("a first page IGDB finds too heavy or times out on is halved, cursor or not", async () => {
+  test("a first page IGDB finds too heavy or times out on is halved, cursor or not, and later pages are no larger", async () => {
     const ids = Array.from({ length: 2_000 }, (_, i) => i + 1);
     const handler = dataset(ids);
     const tooLarge = () => apicalypseError(413, "Payload Too Large", "Response size exceeds maximum allowed");
@@ -217,6 +217,12 @@ describe("sync", () => {
         );
         const pages = await collect(testClient(mock.fetch).games.select("name").sync({ cursorThreshold }));
         expect(pages.flat().map((g) => g.id)).toEqual(ids);
+        // From the first half of 251 rows on, the cursor pages too.
+        const sizes = lines(mock.calls)
+          .filter((b) => b.includes("limit"))
+          .map((b) => Number(b.match(/limit (\d+)/)?.[1]));
+        expect(sizes).toContain(251);
+        expect(sizes.slice(sizes.indexOf(251)).every((size) => size <= 251)).toBe(true);
       }
     }
   });

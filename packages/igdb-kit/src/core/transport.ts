@@ -213,9 +213,17 @@ export class Transport {
       const error = errorFromResponse(status, text, { endpoint: path, query: body });
       if (status === 401 && !renewedToken && token && this.options.tokens?.canRefresh) {
         renewedToken = true;
-        await this.options.tokens.invalidate(token, signal).catch((error: unknown) => {
-          throw forRequest(error, path, body);
-        });
+        try {
+          await this.options.tokens.invalidate(token, signal);
+        } catch (renewal) {
+          if (signal?.aborted) throw signal.reason;
+          // Retried as the first token is: the refused one is gone from the store, so the next try
+          // asks Twitch again.
+          const failure = forRequest(renewal, path, body);
+          if (!(failure instanceof NetworkError)) throw failure;
+          deadline ??= Date.now() + budget;
+          if (!(await this.backoff(path, attempt, deadline, failure, signal))) throw failure;
+        }
         continue;
       }
       if (status === 429) {

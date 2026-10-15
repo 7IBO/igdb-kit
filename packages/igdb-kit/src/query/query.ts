@@ -717,7 +717,9 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
           // A page that skipped rows and starts past the last one yielded: matches changed since its
           // offset was planned, so the rows in between are read again.
           if (start !== undefined && start > last && skipped) {
-            const gap = query.where(`id < ${start}`).cursorPages({ ...executeOptions, after: last });
+            const gap = query
+              .where(`id < ${start}`)
+              .cursorPages({ ...executeOptions, pageSize: cap, after: last });
             for await (const page of gap) {
               last = (page[page.length - 1] as { id: number }).id;
               yield page;
@@ -740,7 +742,7 @@ export class Query<N extends EndpointName, R = { id: number }> extends Executabl
         }
       }
       // The last page was full, or empty while rows matched: read on after the last row yielded.
-      if (more) yield* query.cursorPages({ ...executeOptions, after: last });
+      if (more) yield* query.cursorPages({ ...executeOptions, pageSize: cap, after: last });
     } finally {
       stopped = true;
     }
