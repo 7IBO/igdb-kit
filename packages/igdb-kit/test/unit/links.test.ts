@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { defineSelection, type EndpointName, endpoints, gameLink, QueryError } from "../../src";
-import { type Call, mockFetch, testClient } from "./helpers";
+import { type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 type Row = Record<string, unknown> & { id: number };
 
@@ -62,6 +62,9 @@ const characters: Row[] = [
   { id: 3, name: "Nameless" }, // no games at all
 ];
 const timeToBeats: Row[] = [{ id: 7, game_id: 10, normally: 254778 }];
+
+/** The number of games a page of `findByGames()` asks for. */
+const gamesIn = (body: string) => body.match(/game = \(([\d,]+)\)/)?.[1]?.split(",").length ?? 0;
 
 describe("gameLink()", () => {
   test("reads the field pointing to games from the schema", () => {
@@ -318,6 +321,65 @@ describe("findByGames()", () => {
       [2, 500],
     ]);
     expect(pages.filter(([, limit]) => (limit as number) <= 100).every(([count]) => count === 1)).toBe(true);
+  });
+
+  test("a page IGDB or the attempt timeout gives up on is split by its games at once, each half alone", async () => {
+    // 240 games with 2 screenshots each; pages of more than 120 games time out.
+    const rows = Array.from({ length: 480 }, (_, i) => ({ id: i + 1, game: (i % 240) + 1 }));
+    const fake = fakeIgdb({ screenshots: rows });
+    const ids = Array.from({ length: 240 }, (_, i) => i + 1);
+    for (const timeOut of [
+      () => Response.json({ message: "Endpoint request timed out" }, { status: 504 }),
+      noAnswer,
+    ]) {
+      const mock = mockFetch((call) =>
+        gamesIn(call.body) > 120 ? timeOut(call) : fake.fetch(call.url, { method: "POST", body: call.body }),
+      );
+      const igdb = testClient(mock.fetch, { attemptTimeoutMs: 50 });
+      const byGame = await igdb.screenshots.findByGames(ids);
+      expect([...byGame.values()].every((group) => group.length === 2)).toBe(true);
+      // Each page once, with no retry, and the halves in requests of their own.
+      expect(mock.calls.map((c) => [c.url.split("/").pop(), gamesIn(c.body)])).toEqual([
+        ["screenshots", 240],
+        ["screenshots", 120],
+        ["screenshots", 120],
+      ]);
+    }
+  });
+
+  test("with no answer at all, pages are halved down to 100 games, not further", async () => {
+    const mock = mockFetch(noAnswer);
+    const igdb = testClient(mock.fetch, { attemptTimeoutMs: 40, retryTimeoutMs: 1 });
+    const ids = Array.from({ length: 500 }, (_, i) => i + 1);
+    const error = await igdb.release_dates.findByGames(ids).catch((e) => e);
+    expect(error).toMatchObject({ timedOut: true });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // 500 games, then 250, 125 and 63 or 62, each page once: 15 requests.
+    expect(mock.calls.map((c) => gamesIn(c.body)).sort((a, b) => b - a)).toEqual([
+      500, 250, 250, 125, 125, 125, 125, 63, 63, 63, 63, 62, 62, 62, 62,
+    ]);
+  });
+
+  test("only the halves go alone: their counts and parts are batched", async () => {
+    // 500 games with 10 release dates each; IGDB gives up on pages of more than 250 games.
+    const rows = Array.from({ length: 5000 }, (_, i) => ({ id: i + 1, game: (i % 500) + 1 }));
+    const fake = fakeIgdb({ release_dates: rows });
+    const mock = mockFetch((call) =>
+      gamesIn(call.body) > 250
+        ? Response.json({ message: "Endpoint request timed out" }, { status: 504 })
+        : fake.fetch(call.url, { method: "POST", body: call.body }),
+    );
+    const igdb = testClient(mock.fetch);
+    const byGame = await igdb.release_dates.findByGames(Array.from({ length: 500 }, (_, i) => i + 1));
+    expect([...byGame.values()].every((group) => group.length === 10)).toBe(true);
+    // The page of 500 games and its two halves alone, whose x-count sizes their 14 parts of 40 games
+    // or fewer, read in two multiqueries: no count request.
+    const alone = mock.calls.filter((c) => !c.url.endsWith("multiquery"));
+    expect(alone.map((c) => gamesIn(c.body))).toEqual([500, 250, 250]);
+    const blocks = mock.calls
+      .filter((c) => c.url.endsWith("multiquery"))
+      .map((c) => c.body.split("\n").length);
+    expect(blocks).toEqual([10, 4]);
   });
 
   test("rejects what it cannot do", async () => {

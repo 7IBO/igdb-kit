@@ -8,12 +8,12 @@ import {
   GameStatus,
   GameType,
   LanguageSupportType,
-  ReleaseDateStatus,
   removedFields,
   Theme,
   timestampFields,
 } from "../generated/schema";
 import { type DateInput, dateSeconds } from "./dates";
+import { NOT_RELEASED_STATUSES } from "./release-period";
 import { type ReleaseFilter, releaseFilterParts } from "./releases";
 import type { TimestampKeys } from "./types";
 
@@ -412,7 +412,7 @@ const gameFilters: Record<keyof GameFilters, (...args: never[]) => Condition> = 
     if (options.to !== undefined)
       parts.push(`release_dates.date < ${dateSeconds(options.to, "releasedIn() to")}`);
     // `status != (4,5)` alone would drop release dates without a status, which IGDB treats as no match.
-    const skipped = `${ReleaseDateStatus.Offline},${ReleaseDateStatus.Cancelled}`;
+    const skipped = NOT_RELEASED_STATUSES.join(",");
     parts.push(
       ...releaseFilterParts(
         { statuses: options.statuses },

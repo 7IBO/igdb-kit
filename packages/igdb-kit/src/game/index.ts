@@ -14,6 +14,7 @@ export {
   type EventTimeFields,
   type EventTimeOptions,
   eventTime,
+  type FormatReleaseDateInput,
   type FormatReleaseDateOptions,
   formatReleaseDate,
   type LanguageNameOptions,

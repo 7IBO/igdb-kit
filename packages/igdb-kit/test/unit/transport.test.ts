@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import {
   AuthError,
   IGDBError,
+  type Limiter,
+  LocalLimiter,
   memoryTokenStore,
   NetworkError,
   PayloadTooLargeError,
@@ -9,7 +11,7 @@ import {
   RateLimitError,
   type RequestLog,
 } from "../../src";
-import { apicalypseError, mockFetch, testClient } from "./helpers";
+import { apicalypseError, mockFetch, noAnswer, testClient } from "./helpers";
 
 describe("transport", () => {
   test("sends the IGDB headers and the Apicalypse body", async () => {
@@ -138,6 +140,75 @@ describe("transport", () => {
     ).rejects.toBeInstanceOf(NetworkError);
   });
 
+  test("an attempt that gets no answer in time throws a NetworkError marked timedOut", async () => {
+    const hung = mockFetch(noAnswer);
+    const error = await testClient(hung.fetch, { attemptTimeoutMs: 50, retryTimeoutMs: 1 })
+      .games.limit(1)
+      .execute()
+      .catch((e) => e);
+    expect(error).toBeInstanceOf(NetworkError);
+    expect(error).toMatchObject({ timedOut: true, endpoint: "games", query: "limit 1;" });
+    expect(error.message).toBe("Request to games timed out after 50 ms");
+    const broken = mockFetch(() => {
+      throw new TypeError("fetch failed");
+    });
+    const failed = await testClient(broken.fetch, { retryTimeoutMs: 1 })
+      .games.limit(1)
+      .execute()
+      .catch((e) => e);
+    expect(failed).toMatchObject({ timedOut: false, message: "Request to games failed: fetch failed" });
+  });
+
+  test("an attempt times out after 45 s by default", async () => {
+    const timeout = spyOn(AbortSignal, "timeout");
+    try {
+      const mock = mockFetch(() => Response.json([]));
+      await testClient(mock.fetch).games.limit(1);
+      expect(timeout).toHaveBeenCalledWith(45_000);
+      await testClient(mock.fetch, { attemptTimeoutMs: 1_000 }).games.limit(2);
+      expect(timeout).toHaveBeenLastCalledWith(1_000);
+    } finally {
+      timeout.mockRestore();
+    }
+  });
+
+  test("an attempt that gets no answer in time is retried, with a budget as short as the attempt timeout", async () => {
+    const random = spyOn(Math, "random").mockReturnValue(0); // a first backoff of 100 ms
+    try {
+      let calls = 0;
+      const mock = mockFetch((call) => (calls++ === 0 ? noAnswer(call) : Response.json([{ id: 1 }])));
+      const client = testClient(mock.fetch, { attemptTimeoutMs: 200, retryTimeoutMs: 200 });
+      expect(await client.games.limit(1)).toEqual([{ id: 1 }]);
+      expect(mock.calls).toHaveLength(2);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  test("time waiting for a request slot does not use the retry budget", async () => {
+    const random = spyOn(Math, "random").mockReturnValue(0); // backoffs of 100 ms
+    try {
+      // Each try waits 250 ms for its slot, more than the whole budget.
+      const slow: Limiter = {
+        acquire: async () => {
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          return () => {};
+        },
+        reportRateLimited: () => {},
+      };
+      const statuses = [503, 503, 200];
+      const mock = mockFetch(() => {
+        const status = statuses.shift() ?? 200;
+        return status === 200 ? Response.json([{ id: 1 }]) : Response.json({ message: "down" }, { status });
+      });
+      const client = testClient(mock.fetch, { limiter: slow, retryTimeoutMs: 300 });
+      expect(await client.games.limit(1)).toEqual([{ id: 1 }]);
+      expect(mock.calls).toHaveLength(3);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
   test("errors name the endpoint, and a body that is not JSON is an IGDBError", async () => {
     const broken = mockFetch(() => {
       throw new TypeError("fetch failed");
@@ -178,23 +249,39 @@ describe("transport", () => {
     expect(big.calls).toHaveLength(1);
   });
 
-  test("an abort signal cancels an in-flight request", async () => {
-    let started = false;
-    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-      if (String(input).startsWith("https://id.twitch.tv")) {
-        return Response.json({ access_token: "t", expires_in: 5_000_000 });
-      }
-      started = true;
-      return new Promise<Response>((_, reject) =>
-        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason)),
-      );
-    }) as typeof globalThis.fetch;
+  test("an abort signal cancels an in-flight request and its retries", async () => {
+    const mock = mockFetch(noAnswer);
     const controller = new AbortController();
-    const pending = testClient(fetch).games.limit(1).execute({ signal: controller.signal });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(started).toBe(true);
+    const pending = testClient(mock.fetch, { attemptTimeoutMs: 50 })
+      .games.limit(1)
+      .execute({ signal: controller.signal });
+    await Bun.sleep(20);
+    expect(mock.calls).toHaveLength(1);
     controller.abort(new Error("stop"));
     await expect(pending).rejects.toThrow("stop");
+    expect(mock.calls[0]?.signal?.aborted).toBe(true);
+    await Bun.sleep(100);
+    expect(mock.calls).toHaveLength(1);
+  });
+
+  test("a request waits for its token without holding a request slot", async () => {
+    let answerToken = () => {};
+    const tokenAsked = new Promise<void>((resolve) => {
+      answerToken = resolve;
+    });
+    const mock = mockFetch(() => Response.json([{ id: 1 }]));
+    const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).startsWith("https://id.twitch.tv")) await tokenAsked;
+      return mock.fetch(input, init);
+    }) as typeof globalThis.fetch;
+    const limiter = new LocalLimiter({ requestsPerSecond: 1000, maxConcurrent: 8 });
+    const igdb = testClient(fetch, { limiter });
+    const queries = [1, 2, 3].map((id) => igdb.games.where(`id = ${id}`).execute({ batch: false }));
+    await Bun.sleep(20);
+    expect([limiter.inFlight, limiter.queued]).toEqual([0, 0]);
+    answerToken();
+    expect(await Promise.all(queries)).toEqual([[{ id: 1 }], [{ id: 1 }], [{ id: 1 }]]);
+    expect(mock.tokenFetches).toBe(1);
   });
 
   test("bad Twitch credentials fail fast", async () => {

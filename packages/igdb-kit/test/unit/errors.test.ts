@@ -46,6 +46,19 @@ describe("errorFromResponse", () => {
     );
   });
 
+  test("igdbProxy's 502 for its own refused credentials is an AuthError", () => {
+    const e = errorFromResponse(
+      502,
+      '{"message":"The proxy\'s Twitch credentials were refused","error":"proxy_credentials"}',
+      { endpoint: "games" },
+    );
+    expect(e).toBeInstanceOf(AuthError);
+    expect(e.message).toBe("Authentication failed on games: The proxy's Twitch credentials were refused");
+    expect(errorFromResponse(502, '{"message":"The proxy could not reach IGDB"}')).toBeInstanceOf(
+      NetworkError,
+    );
+  });
+
   test("413, 408, 5xx and plain-text 404", () => {
     expect(
       errorFromResponse(

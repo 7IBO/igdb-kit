@@ -28,6 +28,7 @@ How it reads:
 - The first page goes out with the count. The other pages are then requested in parallel, which batching packs into multiqueries: each asks for the matches after a row already read, skipping those the pages in between hold, so pages come back full however the ids are spread.
 - Matches added or removed meanwhile shift the pages: repeated rows are dropped and rows a page skipped past are read again, so none is missed.
 - At most `concurrency` pages (40 by default, about 64 MB) are requested or waiting to be read, so a slow consumer does not fill the memory.
+- A page IGDB refuses for its size, or of 100 rows or more that gets no answer within `attemptTimeoutMs`, is asked again in halves, and later pages are no larger. 429, 5xx and network errors are retried for `retryTimeoutMs` (see [Errors](client.md#errors)); any other error, or one that persists, ends the sync, and the next run reads again from the same `since`.
 
 A day of changes on `games` (about 33,000) takes 8 requests and 3 seconds, all 73,000 companies with `*` 26 requests and about 11 seconds, and the 133,000 rows of one popularity type, crowded into a few stretches of ids, 28 requests and 7 seconds.
 

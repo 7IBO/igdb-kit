@@ -1,7 +1,17 @@
 import { describe, expect, test } from "bun:test";
-import { createIGDB, IGDBError, LocalLimiter, PayloadTooLargeError, QueryError } from "../../src";
+import {
+  AuthError,
+  createIGDB,
+  IGDBError,
+  type IGDBProxyClientOptions,
+  type IGDBServerClientOptions,
+  LocalLimiter,
+  NetworkError,
+  PayloadTooLargeError,
+  QueryError,
+} from "../../src";
 import { igdbProxy, type ProxyOptions } from "../../src/proxy";
-import { apicalypseError, type Call, mockFetch, testClient } from "./helpers";
+import { apicalypseError, type Call, mockFetch, relationalFake, testClient } from "./helpers";
 
 const ORIGIN = "https://app.example";
 
@@ -19,9 +29,19 @@ function igdbApi() {
 }
 
 /** A browser client whose requests reach the proxy handler, and the server client behind it. */
-function setup(options: Omit<ProxyOptions, "igdb"> = {}) {
-  const api = igdbApi();
-  const handler = igdbProxy({ igdb: testClient(api.fetch), ...options });
+function setup(
+  options: Omit<ProxyOptions, "igdb"> = {},
+  {
+    api = igdbApi(),
+    server = {},
+    client = {},
+  }: {
+    api?: ReturnType<typeof mockFetch>;
+    server?: Partial<IGDBServerClientOptions>;
+    client?: Partial<IGDBProxyClientOptions>;
+  } = {},
+) {
+  const handler = igdbProxy({ igdb: testClient(api.fetch, server), ...options });
   const browserCalls: Request[] = [];
   const browser = createIGDB({
     proxyUrl: "/api/igdb",
@@ -32,9 +52,12 @@ function setup(options: Omit<ProxyOptions, "igdb"> = {}) {
       browserCalls.push(request.clone());
       return handler(request);
     }) as typeof fetch,
+    ...client,
   });
   return { api, handler, browser, browserCalls };
 }
+
+const pathOf = (request: Request) => new URL(request.url).pathname.split("/").pop();
 
 const post = (path: string, body: string, headers: Record<string, string> = {}) =>
   new Request(`${ORIGIN}/api/igdb/${path}`, { method: "POST", body, headers });
@@ -165,14 +188,118 @@ describe("browser client through igdbProxy", () => {
   });
 
   test("authorize() can refuse a request", async () => {
-    const { api, browser } = setup({ authorize: (request) => request.headers.has("cookie") });
+    const { api, browser, browserCalls } = setup({ authorize: (request) => request.headers.has("cookie") });
     expect(
       await browser.games
         .select("name")
         .execute()
         .catch((e) => e),
     ).toBeInstanceOf(QueryError);
+    // Unlike a refused multiquery, its 403 fails a batch at once.
+    const batched = await browser
+      .batch({ a: browser.games.findById(1), b: browser.games.findById(2) })
+      .catch((e) => e);
+    expect(batched).toBeInstanceOf(QueryError);
+    expect(browserCalls.map(pathOf)).toEqual(["games", "multiquery"]);
     expect(api.calls).toHaveLength(0);
+  });
+
+  test("a failure of the proxy's own credentials throws AuthError, without retries", async () => {
+    // IGDB refuses the server's token.
+    const revoked = setup(
+      {},
+      {
+        api: mockFetch(() => Response.json({ message: "Authorization Failure" }, { status: 401 })),
+        server: { clientSecret: undefined, accessToken: "revoked" },
+      },
+    );
+    const error = (await revoked.browser.games
+      .select("name")
+      .execute()
+      .catch((e) => e)) as AuthError;
+    expect(error).toBeInstanceOf(AuthError);
+    expect(error.message).toBe("Authentication failed on games: The proxy's Twitch credentials were refused");
+    expect(revoked.browserCalls).toHaveLength(1);
+    // Twitch refuses the server's secret.
+    let tokenRequests = 0;
+    const badSecret = setup(
+      {},
+      {
+        server: {
+          fetch: (async () => {
+            tokenRequests++;
+            return Response.json({ status: 403, message: "invalid client secret" }, { status: 403 });
+          }) as unknown as typeof fetch,
+        },
+      },
+    );
+    await expect(badSecret.browser.games.select("name").execute()).rejects.toBeInstanceOf(AuthError);
+    expect(badSecret.browserCalls).toHaveLength(1);
+    expect(tokenRequests).toBe(1);
+  });
+
+  test("the proxy failing to reach IGDB is retried, then thrown as NetworkError", async () => {
+    const { browser, browserCalls } = setup(
+      {},
+      {
+        api: mockFetch(() => new Response("Internal error", { status: 500 })),
+        server: { retryTimeoutMs: 1 },
+        // Longer than the first backoff, 700 ms at most.
+        client: { retryTimeoutMs: 1_000 },
+      },
+    );
+    await expect(browser.games.select("name").execute()).rejects.toBeInstanceOf(NetworkError);
+    expect(browserCalls.length).toBeGreaterThan(1);
+  });
+
+  test("behind multiquery: false, queries are sent one by one after the first refused multiquery", async () => {
+    const { api, browser, browserCalls } = setup({ multiquery: false });
+    expect(
+      await browser.batch({
+        a: browser.games.select("name").findById(1),
+        b: browser.platforms.select("name").findById(2),
+      }),
+    ).toEqual({ a: { id: 1, name: "Game 1" }, b: { id: 2, name: "Game 2" } });
+    expect(browserCalls.map(pathOf).sort()).toEqual(["games", "multiquery", "platforms"]);
+    // From then on, no multiquery is sent.
+    browserCalls.length = 0;
+    expect(
+      await Promise.all([browser.games.select("name").findById(3), browser.games.select("name").findById(4)]),
+    ).toEqual([
+      { id: 3, name: "Game 3" },
+      { id: 4, name: "Game 4" },
+    ]);
+    expect(browserCalls.map(pathOf)).toEqual(["games", "games"]);
+    expect(api.calls.some((call) => call.url.endsWith("/multiquery"))).toBe(false);
+  });
+
+  test("multiquery: false on the client sends batch(), views and tasks one query at a time", async () => {
+    const api = relationalFake({
+      games: [
+        { id: 1, name: "Main", game_type: 0 },
+        { id: 2, name: "Main GOTY", game_type: 0, version_parent: 1 },
+      ],
+      release_dates: [{ id: 101, game: 1, date: 300 }],
+      entity_types: [{ id: 1, name: "Game" }],
+      report_types: [{ id: 1, name: "Duplicate" }],
+      reports: [{ id: 1, source_item_id: 10, target_item_id: 1, report_type: 1, entity_type: 1 }],
+    });
+    const { browser, browserCalls } = setup({ multiquery: false }, { api, client: { multiquery: false } });
+    const view = browser.defineView("games", {
+      select: ["name"],
+      with: { dates: browser.release_dates.select("date") },
+    });
+    expect(await view.findById(1)).toMatchObject({ id: 1, name: "Main", dates: [{ id: 101, date: 300 }] });
+    expect(
+      await browser.batch({
+        main: browser.games.select("name").findById(1),
+        dates: browser.release_dates.count(),
+      }),
+    ).toEqual({ main: { id: 1, name: "Main" }, dates: 1 });
+    expect((await browser.games.select("name").family(1))?.editions).toMatchObject([{ id: 2 }]);
+    expect(await browser.games.removed([1, 10])).toEqual([{ id: 10, reason: "Duplicate", replacement: 1 }]);
+    expect((await browser.games.match({ name: "Main" }))[0]?.game).toMatchObject({ id: 1 });
+    expect(browserCalls.some((call) => pathOf(call) === "multiquery")).toBe(false);
   });
 
   test("cacheTtlMs keeps answers in the server client's cache", async () => {
@@ -262,6 +389,10 @@ describe("igdbProxy requests", () => {
     });
     const res = await handler(post("games", "fields name;"));
     expect(res.status).toBe(502);
+    expect(await res.json()).toEqual({
+      message: "The proxy's Twitch credentials were refused",
+      error: "proxy_credentials",
+    });
   });
 
   test("needs a client made by createIGDB()", () => {
