@@ -1,5 +1,6 @@
 import type { Selection } from "../links/selection";
-import type { ReleaseDetails } from "../query/release-period";
+import { type DateInput, dateMillis } from "../query/dates";
+import type { ReleasePrecision } from "../query/release-period";
 import { alpha2 } from "./countries";
 import { type Locale, resolveLocale } from "./locale";
 import type { Requires } from "./select";
@@ -45,30 +46,65 @@ const releaseLabels: Record<string, [tbd: string, quarter: QuarterLabel]> = {
 };
 
 /**
+ * A release date that {@link formatReleaseDate} writes: the result of {@link releaseDate} or a
+ * calendar release of `releases()`, or a date stored with its precision, `{ date, precision }`.
+ * Dates are a `Date`, a `"YYYY-MM-DD"` or ISO string, or Unix seconds.
+ */
+export type FormatReleaseDateInput =
+  | {
+      precision: ReleasePrecision;
+      /** First day of the period; `null` for `tbd`. */
+      start: DateInput | null;
+      /** Read from `start` when missing. */
+      year?: number | null | undefined;
+      /** Read from `start` when missing. */
+      quarter?: number | null | undefined;
+    }
+  | {
+      precision: ReleasePrecision;
+      /** Any day of the period, such as IGDB's `release_dates.date`; `null` or `undefined` for `tbd`. */
+      date: DateInput | null | undefined;
+    };
+
+/**
  * A release date as text in the user's language, from the `precision` that {@link releaseDate} and
  * `releases()` work out: "19 nov. 2026", "nov. 2026", "T4 2026", "2026", "À déterminer". IGDB's own
  * `human` is always in English. Days and months come from `Intl`; quarters and TBD from a short
  * table (English, French, German, Spanish, Italian, Portuguese, Dutch, Polish, Russian, Turkish,
  * Japanese, Chinese and Korean), with English for other languages unless `labels` gives them.
  *
+ * A date stored with its precision works too, with its year and quarter read from the date. Dates
+ * are written in the Gregorian calendar, as IGDB's are, whatever the locale's calendar: a Thai or
+ * Persian page shows 2026, not 2569 or 1405 next to "Q4 2026". An invalid date, or a number in
+ * milliseconds, throws a `QueryError`.
+ *
  * ```ts
  * const release = releaseDate(game, { locale: "fr-FR" });
  * if (release) formatReleaseDate(release, { locale: "fr-FR" }); // "28 janv. 2021"
+ * formatReleaseDate({ date: "2026-12-31", precision: "quarter" }, { locale: "fr-FR" }); // "T4 2026"
  * ```
  */
 export function formatReleaseDate(
-  release: Pick<ReleaseDetails, "precision" | "start" | "year" | "quarter">,
+  release: FormatReleaseDateInput,
   options: FormatReleaseDateOptions,
 ): string {
-  const { locale, dateStyle = "medium", labels } = options;
-  const { language, script } = resolveLocale(locale);
+  const { dateStyle = "medium", labels } = options;
+  // The canonical tag, which Intl reads: "pt-BR" for "pt_BR".
+  const { locale, language, script } = resolveLocale(options.locale);
   const [tbd, quarter] =
     releaseLabels[language === "zh" && script === "Hant" ? "zh-Hant" : language] ?? englishLabels;
-  const { precision, start, year } = release;
-  if (precision === "tbd" || !start || year === null) return labels?.tbd ?? tbd;
-  if (precision === "quarter") return (labels?.quarter ?? quarter)(release.quarter ?? 1, year);
+  const { precision } = release;
+  const period: Extract<FormatReleaseDateInput, { start: unknown }> =
+    "start" in release ? release : { precision, start: release.date ?? null };
+  if (precision === "tbd" || period.start == null) return labels?.tbd ?? tbd;
+  const date = new Date(dateMillis(period.start, "release date"));
+  if (precision === "quarter") {
+    const year = period.year ?? date.getUTCFullYear();
+    return (labels?.quarter ?? quarter)(period.quarter ?? Math.floor(date.getUTCMonth() / 3) + 1, year);
+  }
+  // Gregorian, as IGDB's dates and the quarters above, whatever the locale's own calendar.
   const format = (options: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat(locale, { ...options, timeZone: "UTC" }).format(start);
+    new Intl.DateTimeFormat(locale, { ...options, calendar: "gregory", timeZone: "UTC" }).format(date);
   if (precision === "day") return format({ dateStyle });
   if (precision === "month")
     return format({

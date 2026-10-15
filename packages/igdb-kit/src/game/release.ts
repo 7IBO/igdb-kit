@@ -1,6 +1,11 @@
 import { ReleaseDateRegion, ReleaseDateStatus } from "../generated/schema";
 import type { Selection } from "../links/selection";
-import { type ReleaseDetails, type ReleasePrecision, releaseDetails } from "../query/release-period";
+import {
+  NOT_RELEASED_STATUSES,
+  type ReleaseDetails,
+  type ReleasePrecision,
+  releaseDetails,
+} from "../query/release-period";
 import { type Locale, resolveLocale } from "./locale";
 import { type ItemOf, idOf, type Ref, type Requires } from "./select";
 
@@ -55,7 +60,8 @@ export type { ReleaseDetails, ReleasePrecision };
 
 // Which statuses make "the" release date of a game, best first. A missing status counts as a full
 // release, as it does for IGDB's own `first_release_date`; a status added to IGDB after this version
-// ranks with the compatibility releases.
+// ranks with the compatibility releases. Offline and Cancelled dates are left out unless `statuses`
+// asks for them, and then rank last.
 const statusRanks: Record<number, number> = {
   [ReleaseDateStatus.FullRelease]: 0,
   [ReleaseDateStatus.DigitalCompatibilityRelease]: 1,
@@ -103,11 +109,12 @@ export interface ReleaseDateOptions {
   /** `Platform` id. Only rows of that platform are considered. */
   platform?: number | undefined;
   /**
-   * Statuses to consider: `ReleaseDateStatus` ids, one or several, `null` standing for "no status".
-   * Default: all, ranked full release (or no status) first, then compatibility releases, early and
-   * advanced access, beta and alpha, and offline or cancelled last.
+   * Statuses to consider: `ReleaseDateStatus` ids, one or several, `null` standing for "no status", or
+   * `"all"`. Default: every status except Offline and Cancelled, which are not releases, as in
+   * `releases()`. The best status wins: full release (or no status) first, then compatibility
+   * releases, early and advanced access, beta and alpha, and offline or cancelled last.
    */
-  statuses?: number | readonly (number | null)[] | undefined;
+  statuses?: number | readonly (number | null)[] | "all" | undefined;
   /** Use another region when neither the requested one nor worldwide has a row. Default true. */
   fallback?: boolean | undefined;
 }
@@ -118,7 +125,8 @@ export interface ReleaseDateOptions {
  * the best status (a full release over early access), then the requested region over worldwide,
  * then dated over TBD, then the earliest. Periods are compared by their end, so a precise date wins
  * over the month or year that contains it ("Mar 04, 1991" over "1991"), where IGDB's
- * `first_release_date` takes the period's stored timestamp. Returns null when no row matches.
+ * `first_release_date` takes the period's stored timestamp. Offline and Cancelled dates are left out
+ * unless `statuses` asks for them. Returns null when no row matches, as for a game that was cancelled.
  *
  * ```ts
  * const game = await igdb.games.select("name", "release_dates.*").findByIdOrThrow(1942);
@@ -136,7 +144,8 @@ export function releaseDate<G extends object>(
 
 /**
  * One release per platform, chosen as {@link releaseDate} does, sorted by date (TBD last). For a
- * "Released on" list: `PC: May 19, 2015 · Switch: Jan 28, 2021`.
+ * "Released on" list: `PC: May 19, 2015 · Switch: Jan 28, 2021`. A platform the game was cancelled
+ * on, or that only has offline dates, is left out unless `statuses` asks for them.
  */
 export function releasesByPlatform<G extends object>(
   game: G & Requires<G, ReleaseDateFields>,
@@ -166,6 +175,7 @@ function byDate(a: ReleaseDetails, b: ReleaseDetails): number {
  * One release per region, chosen as {@link releaseDate} does within each region (worldwide rows
  * included as their own region), sorted by date. For "Japan: Jun 24, 2021 · Worldwide: Sep 17, 2020"
  * when a platform's date changes with the region, as it does for 18% of the 1,000 most popular games.
+ * A region with only cancelled or offline dates is left out unless `statuses` asks for them.
  */
 export function regionalReleases<G extends object>(
   game: G & Requires<G, ReleaseDateFields>,
@@ -192,11 +202,10 @@ function pick(rows: readonly ReleaseDateRow[], options: ReleaseDateOptions): Gam
   const region =
     options.region ??
     (options.locale === undefined ? undefined : (resolveLocale(options.locale).releaseRegion ?? undefined));
-  const statuses = typeof options.statuses === "number" ? [options.statuses] : options.statuses;
   const ranked = rows
     .filter((row) => options.platform === undefined || idOf(row.platform) === options.platform)
     .map((row) => rank(row, region))
-    .filter((r) => !statuses || statuses.includes(r.release.status))
+    .filter((r) => keepsStatus(options.statuses, r.release.status))
     .filter((r) => r.applies || (region !== undefined && options.fallback !== false));
   const best = ranked.sort(compare)[0];
   if (!best) return null;
@@ -204,6 +213,13 @@ function pick(rows: readonly ReleaseDateRow[], options: ReleaseDateOptions): Gam
   if (region !== undefined) match = best.exact ? "exact" : best.applies ? "worldwide" : "other_region";
   const { row, release } = best;
   return { ...release, match, row };
+}
+
+/** Whether `statuses` takes a row of this status: by default, any but Offline and Cancelled. */
+function keepsStatus(statuses: ReleaseDateOptions["statuses"], status: number | null): boolean {
+  if (statuses === "all") return true;
+  if (statuses === undefined) return status === null || !NOT_RELEASED_STATUSES.includes(status);
+  return typeof statuses === "number" ? statuses === status : statuses.includes(status);
 }
 
 interface Ranked {

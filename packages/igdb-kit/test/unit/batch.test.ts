@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { createIGDB, LocalLimiter, PayloadTooLargeError, QueryError } from "../../src";
-import { apicalypseError, type Call, mockFetch, testClient } from "./helpers";
+import { createIGDB, IGDBError, LocalLimiter, PayloadTooLargeError, QueryError, TierError } from "../../src";
+import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 const echoIds = mockFetch((call) => {
   const id = Number(call.body.match(/id = (\d+)/)?.[1] ?? 0);
@@ -80,6 +80,31 @@ describe("automatic batching", () => {
     expect((results[2] as PromiseRejectedResult).reason).toBeInstanceOf(QueryError);
   });
 
+  test("a query outside the API tier only fails its own query", async () => {
+    const mock = mockFetch((call) =>
+      call.url.endsWith("/game_content_safety_ratings")
+        ? apicalypseError(
+            403,
+            "Forbidden",
+            "Trying to access a forbidden endpoint: This data is not available in your API tier",
+          )
+        : Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]),
+    );
+    const igdb = testClient(mock.fetch);
+    const results = await Promise.allSettled([
+      igdb.games.findById(1).execute(),
+      igdb.platforms.findById(2).execute(),
+      igdb.game_content_safety_ratings.limit(1).execute(),
+    ]);
+    expect(results.slice(0, 2)).toEqual([
+      { status: "fulfilled", value: { id: 1 } },
+      { status: "fulfilled", value: { id: 2 } },
+    ]);
+    const error = (results[2] as PromiseRejectedResult).reason as TierError;
+    expect(error).toBeInstanceOf(TierError);
+    expect(error.endpoint).toBe("game_content_safety_ratings");
+  });
+
   test("a too large response is split until it fits", async () => {
     const mock = mockFetch(
       () => Response.json([{ id: 1 }]),
@@ -93,6 +118,29 @@ describe("automatic batching", () => {
     expect(results).toHaveLength(6);
     // 6 blocks -> 413, then 3 + 3 -> 413, then 2 + 1 + 2 + 1 -> ok.
     expect(mock.calls).toHaveLength(7);
+  });
+
+  test("a page that times out in a multiquery is read in halves, and the other blocks are sent again", async () => {
+    const mock = mockFetch((call) => {
+      if (call.url.endsWith("/count")) return Response.json({ count: 300 });
+      const ids = (call.body.match(/id = \(([\d,]+)\)/)?.[1] ?? "").split(",").map(Number);
+      return ids.length > 100
+        ? Response.json({ message: "Endpoint request timed out" }, { status: 504 })
+        : Response.json(ids.map((id) => ({ id })));
+    });
+    const igdb = testClient(mock.fetch);
+    const ids = Array.from({ length: 300 }, (_, i) => i + 1);
+    const { games, total } = await igdb.batch({
+      games: igdb.games.findByIds(ids),
+      total: igdb.games.count(),
+    });
+    expect(games.map((g) => g.id)).toEqual(ids);
+    expect(total).toBe(300);
+    // The multiquery once, then the count alone, and the page in 2 halves, then 4.
+    const paths = mock.calls.map((c) => c.url.split("/").pop());
+    expect(paths.filter((path) => path === "multiquery")).toHaveLength(1);
+    expect(paths.filter((path) => path === "count")).toHaveLength(1);
+    expect(paths.filter((path) => path === "games")).toHaveLength(6);
   });
 
   test("a single block that is too large rejects with PayloadTooLargeError", async () => {
@@ -153,6 +201,22 @@ describe("automatic batching", () => {
     expect(mock.calls[2]?.url).toEndWith("/multiquery");
   });
 
+  test("multiquery: false sends every query alone, batch() included, and identical ones once", async () => {
+    const mock = mockFetch((call) => Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]));
+    const igdb = testClient(mock.fetch, { multiquery: false });
+    expect(await igdb.batch({ a: igdb.games.findById(1), b: igdb.platforms.findById(2) })).toEqual({
+      a: { id: 1 },
+      b: { id: 2 },
+    });
+    await Promise.all([igdb.games.findById(3), igdb.games.findById(3), igdb.games.findById(4)]);
+    expect(mock.calls.map((c) => c.url.split("/").pop()).sort()).toEqual([
+      "games",
+      "games",
+      "games",
+      "platforms",
+    ]);
+  });
+
   test("withCount is never batched (x-count only exists on single requests)", async () => {
     const mock = mockFetch(() => Response.json([{ id: 1 }], { headers: { "x-count": "7" } }));
     const igdb = testClient(mock.fetch);
@@ -171,5 +235,115 @@ describe("automatic batching", () => {
     controller.abort(new Error("stop"));
     await expect(aborted).rejects.toThrow("stop");
     expect(await other).toEqual({ id: 1 });
+  });
+
+  test("a query aborted before its batch is sent is left out of it", async () => {
+    const mock = mockFetch((call) => Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]));
+    const igdb = testClient(mock.fetch);
+    const controller = new AbortController();
+    const aborted = igdb.games.findById(1).execute({ signal: controller.signal });
+    const kept = igdb.games.findById(2).execute();
+    controller.abort(new Error("stop"));
+    await expect(aborted).rejects.toThrow("stop");
+    expect(await kept).toEqual({ id: 2 });
+    expect(mock.calls.map((c) => [c.url.split("/").pop(), c.body])).toEqual([
+      ["games", "where id = 2; limit 1;"],
+    ]);
+  });
+
+  test("a request is cancelled once every caller waiting on it has aborted", async () => {
+    const mock = mockFetch(noAnswer);
+    const igdb = testClient(mock.fetch);
+    const [first, second, third] = [new AbortController(), new AbortController(), new AbortController()];
+    const q = igdb.games.findById(1);
+    const waiting = [first, second].map((c) => q.execute({ signal: c.signal }).catch(String));
+    await Bun.sleep(10);
+    first.abort(new Error("stop"));
+    expect(mock.calls[0]?.signal?.aborted).toBe(false);
+    second.abort(new Error("stop"));
+    expect(mock.calls[0]?.signal?.aborted).toBe(true);
+    expect(await Promise.all(waiting)).toEqual(["Error: stop", "Error: stop"]);
+    // The same query asked again sends a request of its own.
+    const again = q.execute({ signal: third.signal }).catch(String);
+    await Bun.sleep(10);
+    third.abort(new Error("stop"));
+    expect(await again).toBe("Error: stop");
+    expect(mock.calls.map((c) => c.signal?.aborted)).toEqual([true, true]);
+  });
+
+  test("a multiquery is cancelled once none of its queries is wanted", async () => {
+    const mock = mockFetch((call) => Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]));
+    const answers: (() => void)[] = [];
+    const signals: (AbortSignal | null | undefined)[] = [];
+    // Multiqueries answer when told to, or fail when their signal aborts.
+    const fetch = ((input: string | URL | Request, init?: RequestInit) => {
+      if (!String(input).endsWith("/multiquery")) return mock.fetch(input, init);
+      signals.push(init?.signal);
+      return new Promise<Response>((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+        answers.push(() => resolve(mock.fetch(input, init)));
+      });
+    }) as typeof globalThis.fetch;
+    const igdb = testClient(fetch);
+    const controllers = [1, 2, 3, 4].map(() => new AbortController());
+    const run = (id: number) =>
+      igdb.games
+        .findById(id)
+        .execute({ signal: controllers[id - 1]?.signal })
+        .catch(String);
+    const [one, two] = [run(1), run(2)];
+    await Bun.sleep(10);
+    controllers[0]?.abort(new Error("stop"));
+    answers[0]?.();
+    expect(await Promise.all([one, two])).toEqual(["Error: stop", { id: 2 }]);
+    const [three, four] = [run(3), run(4)];
+    await Bun.sleep(10);
+    controllers[2]?.abort(new Error("stop"));
+    controllers[3]?.abort(new Error("stop"));
+    expect(await Promise.all([three, four])).toEqual(["Error: stop", "Error: stop"]);
+    expect(signals.map((signal) => signal?.aborted)).toEqual([false, true]);
+  });
+
+  test("queries waiting for a request slot are not sent once aborted", async () => {
+    const mock = mockFetch(noAnswer);
+    const limiter = new LocalLimiter({ requestsPerSecond: 1000, maxConcurrent: 1 });
+    const igdb = testClient(mock.fetch, { limiter });
+    const controller = new AbortController();
+    const pending = [1, 2, 3, 4].map((id) =>
+      igdb.games.findById(id).execute({ signal: controller.signal, batch: false }).catch(String),
+    );
+    await Bun.sleep(10);
+    expect(limiter.queued).toBe(3);
+    controller.abort(new Error("stop"));
+    expect(await Promise.all(pending)).toEqual(Array(4).fill("Error: stop"));
+    await Bun.sleep(10);
+    expect(mock.calls).toHaveLength(1);
+    expect(mock.calls[0]?.signal?.aborted).toBe(true);
+    expect(limiter.inFlight).toBe(0);
+  });
+
+  test("a multiquery answered with something else than its blocks rejects its queries", async () => {
+    for (const answer of [{ message: "Internal server error" }, [null], 42]) {
+      let broken = true;
+      const mock = mockFetch(
+        (call) => Response.json([{ id: Number(call.body.match(/id = (\d+)/)?.[1]) }]),
+        () => (broken ? Response.json(answer) : undefined),
+      );
+      const igdb = testClient(mock.fetch);
+      const results = await Promise.allSettled([1, 2].map((id) => igdb.games.findById(id).execute()));
+      for (const result of results) {
+        expect(result.status).toBe("rejected");
+        expect((result as PromiseRejectedResult).reason).toBeInstanceOf(IGDBError);
+      }
+      if (!Array.isArray(answer)) {
+        expect((results[0] as PromiseRejectedResult).reason).toMatchObject({
+          message: `Multiquery response is not a list of blocks: ${JSON.stringify(answer)}`,
+          endpoint: "multiquery",
+        });
+      }
+      // Nothing is left in flight: the same queries are sent again.
+      broken = false;
+      expect(await Promise.all([1, 2].map((id) => igdb.games.findById(id)))).toEqual([{ id: 1 }, { id: 2 }]);
+    }
   });
 });

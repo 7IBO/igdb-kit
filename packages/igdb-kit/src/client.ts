@@ -1,5 +1,5 @@
 import { Batcher, type BatcherOptions } from "./batch/batcher";
-import { type CacheStore, cacheKey, memoryCache, parseResponse, serializeResponse } from "./cache";
+import { type CacheStore, cacheKey, memoryCache, parseResponse, readCache, serializeResponse } from "./cache";
 import { TokenProvider, type TokenStore } from "./core/auth";
 import { IGDBError, QueryError } from "./core/errors";
 import { type Limiter, type LocalLimiterOptions, sharedLimiter } from "./core/limiter";
@@ -38,15 +38,22 @@ interface CommonClientOptions extends BatcherOptions {
    * process (4 requests per second, 8 in flight). Pass options to tune it, or your own (e.g. Redis-backed).
    */
   limiter?: Limiter | LocalLimiterOptions | undefined;
-  /** Total retry budget per request (429, 5xx, network). Default 30 s. */
+  /**
+   * How long a request is retried after a 429, a 5xx or a network error, counted from its first
+   * failure; time waiting for a token or a request slot does not count. Default 30 s.
+   */
   retryTimeoutMs?: number | undefined;
-  /** Timeout of one HTTP attempt. Default 30 s. */
+  /**
+   * Timeout of one HTTP attempt, reading the response included. Default 45 s: IGDB gives up after
+   * 29 s, and the rest leaves time to download a large response.
+   */
   attemptTimeoutMs?: number | undefined;
   fetch?: typeof fetch | undefined;
   hooks?: (TransportHooks & { onTokenRefresh?: (info: { expiresAt: number }) => void }) | undefined;
   /**
    * Where `cache()`d responses are kept. Default: in memory, per client. Use `redisCache()` from
-   * `igdb-kit/redis` to share them across processes. Cache errors never fail a query.
+   * `igdb-kit/redis` to share them across processes. A store that fails, takes more than a second
+   * to read or holds something unreadable never fails or holds back a query.
    */
   cache?: CacheStore | undefined;
   /** Cache every query for this long unless it calls `cache(false)`. Default: only `cache()`d queries. */
@@ -98,7 +105,8 @@ export type IGDBClient = { readonly [K in EndpointName]: QueryOf<K> } & {
    * Runs several queries, views and tasks together, and returns each result under its key with its
    * own type. Requests sent at the same time go as few multiqueries as possible (10 per request), so
    * single queries take one multiquery and tasks such as `findByIds()` or `popular()` share theirs.
-   * Works even when `autoBatch` is off.
+   * Works even when `autoBatch` is off, but not when `multiquery` is false or a proxy refused a
+   * multiquery: every query then goes alone.
    */
   batch<T extends BatchInput>(queries: T, options?: Omit<ExecuteOptions, "batch">): Promise<BatchResult<T>>;
   /**
@@ -176,15 +184,17 @@ export function createIGDB(options: IGDBClientOptions): IGDBClient {
     path: string,
     body: string,
     ttlMs: number,
+    signal: AbortSignal | undefined,
     send: () => Promise<RawResponse>,
   ): Promise<RawResponse> => {
     if (ttlMs <= 0) return send();
     cache ??= memoryCache();
     const store = cache;
     const key = await cacheKey(path, body);
-    const hit = await store.get(key).catch(() => undefined);
-    if (hit) {
-      const response = parseResponse(hit);
+    const hit = await readCache(store, key, signal);
+    // A value that is not a response is a miss, and the answer replaces it.
+    const response = hit ? parseResponse(hit) : undefined;
+    if (hit && response) {
       reportRequest(options.hooks, {
         path,
         method: "POST",
@@ -197,16 +207,23 @@ export function createIGDB(options: IGDBClientOptions): IGDBClient {
       });
       return response;
     }
-    const response = await send();
-    await store.set(key, serializeResponse(response), ttlMs).catch(() => {});
-    return response;
+    const sent = await send();
+    // Not awaited: a slow store must not hold the answer back.
+    Promise.resolve()
+      .then(() => store.set(key, serializeResponse(sent), ttlMs))
+      .catch(() => {});
+    return sent;
   };
   const runner: QueryRunner = {
     run: async (request: QueryRequest, runOptions?: ExecuteOptions): Promise<RawResponse> => {
       // Company names (`developedBy("Nintendo")`) become ids first: their cache and batch keys are the ids.
       const sent = request.lookups?.length ? await resolveLookups(request, runner, runOptions) : request;
-      return cached(sent.path, sent.body, sent.cacheTtlMs ?? options.cacheTtlMs ?? 0, () =>
-        batcher.run(sent, runOptions),
+      return cached(
+        sent.path,
+        sent.body,
+        sent.cacheTtlMs ?? options.cacheTtlMs ?? 0,
+        runOptions?.signal,
+        () => batcher.run(sent, runOptions),
       );
     },
     pageSize: (endpoint, fields) => {
@@ -266,7 +283,7 @@ export function createIGDB(options: IGDBClientOptions): IGDBClient {
     expand: (rows: readonly object[], key: never, target: never) =>
       new Task((execute) => expand(rows, key, target, execute)),
     [forwardKey]: ((path, body, forwardOptions) =>
-      cached(path, body, forwardOptions.cacheTtlMs ?? 0, () =>
+      cached(path, body, forwardOptions.cacheTtlMs ?? 0, forwardOptions.signal, () =>
         transport.send(path, body, { signal: forwardOptions.signal }),
       )) satisfies Forward,
   };
@@ -298,6 +315,7 @@ function directTransport(options: IGDBServerClientOptions): Transport {
     store: options.tokenStore,
     fetch: options.fetch,
     onTokenRefresh: options.hooks?.onTokenRefresh,
+    onRetry: options.hooks?.onRetry,
   });
   return new Transport({
     clientId: options.clientId,

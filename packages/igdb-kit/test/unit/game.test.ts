@@ -8,6 +8,7 @@ import {
   Language,
   LanguageSupportType,
   Platform,
+  QueryError,
   Region,
   ReleaseDateRegion,
   ReleaseDateStatus,
@@ -65,6 +66,54 @@ import {
 import * as fixtures from "./fixtures/games";
 
 const { externalRows, releaseRows, timeToBeatRows, untrustedWebsites } = fixtures;
+
+// Released on PC in 2015; the Wii U version, announced for 2014, was cancelled.
+const cancelledPort = {
+  release_dates: [
+    {
+      id: 1,
+      date: 1431993600,
+      human: "May 19, 2015",
+      platform: Platform.PCMicrosoftWindows,
+      date_format: 0,
+      release_region: ReleaseDateRegion.Worldwide,
+      status: ReleaseDateStatus.FullRelease,
+    },
+    {
+      id: 2,
+      date: 1419984000,
+      human: "2014",
+      platform: Platform.WiiU,
+      date_format: 2,
+      release_region: ReleaseDateRegion.Worldwide,
+      status: ReleaseDateStatus.Cancelled,
+    },
+  ],
+};
+
+// Released on Switch in Japan; the European release, planned for 2021, was cancelled.
+const cancelledInEurope = {
+  release_dates: [
+    {
+      id: 3,
+      date: 1614816000,
+      human: "Mar 04, 2021",
+      platform: Platform.NintendoSwitch,
+      date_format: 0,
+      release_region: ReleaseDateRegion.Japan,
+      status: ReleaseDateStatus.FullRelease,
+    },
+    {
+      id: 4,
+      date: 1640908800,
+      human: "2021",
+      platform: Platform.NintendoSwitch,
+      date_format: 2,
+      release_region: ReleaseDateRegion.Europe,
+      status: ReleaseDateStatus.Cancelled,
+    },
+  ],
+};
 
 describe("releaseDate()", () => {
   test("the first full release, like IGDB's first_release_date", () => {
@@ -169,7 +218,9 @@ describe("releaseDate()", () => {
   });
 
   test("TBD and cancelled", () => {
-    const release = releaseDate(fixtures.scalebound);
+    // Scalebound was cancelled before it had a date: no release, unless statuses asks for it.
+    expect(releaseDate(fixtures.scalebound)).toBeNull();
+    const release = releaseDate(fixtures.scalebound, { statuses: "all" });
     expect(release).toMatchObject({
       precision: "tbd",
       status: ReleaseDateStatus.Cancelled,
@@ -177,6 +228,66 @@ describe("releaseDate()", () => {
       start: null,
       end: null,
       year: null,
+    });
+    expect(releaseDate(fixtures.scalebound, { statuses: ReleaseDateStatus.Cancelled })).toEqual(release);
+  });
+
+  test("offline and cancelled dates are left out, as in releases()", () => {
+    expect(releaseDate(cancelledPort)).toMatchObject({ platform: Platform.PCMicrosoftWindows, year: 2015 });
+    expect(releaseDate(cancelledPort, { platform: Platform.WiiU })).toBeNull();
+    // With every status, a cancelled date still ranks last.
+    expect(releaseDate(cancelledPort, { statuses: "all" })?.platform).toBe(Platform.PCMicrosoftWindows);
+    expect(releaseDate(cancelledPort, { platform: Platform.WiiU, statuses: "all" })).toMatchObject({
+      status: ReleaseDateStatus.Cancelled,
+      year: 2014,
+    });
+    // A game taken offline keeps the date it came out.
+    const shutDown = {
+      release_dates: [
+        { id: 1, date: 1348531200, human: "Sep 25, 2012", platform: 6, date_format: 0, release_region: 8 },
+        {
+          id: 2,
+          date: 1601510400,
+          human: "Oct 01, 2020",
+          platform: 6,
+          date_format: 0,
+          release_region: 8,
+          status: ReleaseDateStatus.Offline,
+        },
+      ],
+    };
+    expect(releaseDate(shutDown)).toMatchObject({ human: "Sep 25, 2012", status: null });
+    expect(releaseDate({ release_dates: shutDown.release_dates.slice(1) })).toBeNull();
+  });
+
+  test("a cancelled date of the requested region or worldwide does not hide another region's release", () => {
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR" })).toMatchObject({
+      region: ReleaseDateRegion.Japan,
+      match: "other_region",
+    });
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR", fallback: false })).toBeNull();
+    expect(releasesByPlatform(cancelledInEurope, { locale: "fr-FR" }).map((r) => r.match)).toEqual([
+      "other_region",
+    ]);
+    // The same with the European date offline, or with the cancelled date worldwide.
+    const changed = (fields: object) =>
+      cancelledInEurope.release_dates.map((row) =>
+        row.status === ReleaseDateStatus.Cancelled ? { ...row, ...fields } : row,
+      );
+    for (const release_dates of [
+      changed({ status: ReleaseDateStatus.Offline }),
+      changed({ release_region: ReleaseDateRegion.Worldwide }),
+    ]) {
+      expect(releaseDate({ release_dates }, { locale: "fr-FR" })).toMatchObject({
+        region: ReleaseDateRegion.Japan,
+        match: "other_region",
+      });
+      expect(releaseDate({ release_dates }, { locale: "fr-FR", fallback: false })).toBeNull();
+    }
+    expect(releaseDate(cancelledInEurope, { locale: "fr-FR", statuses: "all" })).toMatchObject({
+      region: ReleaseDateRegion.Europe,
+      status: ReleaseDateStatus.Cancelled,
+      match: "exact",
     });
   });
 
@@ -264,7 +375,21 @@ describe("releaseDate()", () => {
       [169, "Dec 14, 2022"],
       [508, "Sep 29, 2026"],
     ]);
-    expect(releasesByPlatform(fixtures.scalebound).map((r) => r.precision)).toEqual(["tbd", "tbd"]);
+    expect(releasesByPlatform(fixtures.scalebound)).toEqual([]);
+    expect(releasesByPlatform(fixtures.scalebound, { statuses: "all" }).map((r) => r.precision)).toEqual([
+      "tbd",
+      "tbd",
+    ]);
+  });
+
+  test("releasesByPlatform() leaves out a platform the game was cancelled on", () => {
+    expect(releasesByPlatform(cancelledPort).map((r) => r.platform)).toEqual([Platform.PCMicrosoftWindows]);
+    expect(releasesByPlatform(cancelledPort, { statuses: "all" }).map((r) => [r.platform, r.status])).toEqual(
+      [
+        [Platform.WiiU, ReleaseDateStatus.Cancelled],
+        [Platform.PCMicrosoftWindows, ReleaseDateStatus.FullRelease],
+      ],
+    );
   });
 });
 
@@ -1076,6 +1201,14 @@ describe("formatReleaseDate()", () => {
     expect(all("ko").slice(2, 3)).toEqual(["2026년 4분기"]);
     // No table for Swedish: English quarters and TBD, Intl for the rest.
     expect(all("sv-SE").slice(2)).toEqual(["Q4 2026", "2026", "TBD"]);
+    // An underscore, as in some servers' locales, which Intl rejects.
+    expect(all("pt_BR")).toEqual([
+      "19 de nov. de 2026",
+      "nov. de 2026",
+      "4º trimestre de 2026",
+      "2026",
+      "A definir",
+    ]);
   });
 
   test("date styles and labels", () => {
@@ -1088,6 +1221,45 @@ describe("formatReleaseDate()", () => {
     // The day is IGDB's UTC day, whatever the machine's zone.
     const release = releaseDate(fixtures.witcher3);
     if (release) expect(formatReleaseDate(release, { locale: "en-US" })).toBe("May 19, 2015");
+  });
+
+  test("a date stored with its precision", () => {
+    const fr = { locale: "fr-FR" };
+    expect(formatReleaseDate({ date: "2026-10-01", precision: "quarter" }, fr)).toBe("T4 2026");
+    // IGDB's own date of a quarter or a year is its last day.
+    expect(formatReleaseDate({ date: "2026-12-31", precision: "quarter" }, fr)).toBe("T4 2026");
+    expect(formatReleaseDate({ date: Date.UTC(2026, 11, 31) / 1000, precision: "year" }, fr)).toBe("2026");
+    expect(formatReleaseDate({ date: "2027-01-01", precision: "year" }, fr)).toBe("2027");
+    expect(formatReleaseDate({ date: new Date("2026-11-01"), precision: "month" }, fr)).toBe("nov. 2026");
+    expect(formatReleaseDate({ date: "2015-05-19", precision: "day" }, fr)).toBe("19 mai 2015");
+    expect(formatReleaseDate({ date: null, precision: "tbd" }, fr)).toBe("À déterminer");
+    // IGDB leaves `date` out of TBD rows.
+    expect(formatReleaseDate({ date: undefined, precision: "tbd" }, fr)).toBe("À déterminer");
+    // A result of releaseDate() that went through JSON.
+    const json = { precision: "quarter", start: "2026-10-01T00:00:00.000Z" } as const;
+    expect(formatReleaseDate(json, fr)).toBe("T4 2026");
+    expect(() => formatReleaseDate({ date: "soon", precision: "day" }, fr)).toThrow(QueryError);
+    expect(() => formatReleaseDate({ date: Date.now(), precision: "day" }, fr)).toThrow(QueryError);
+  });
+
+  test("a missing year or quarter is read from the date", () => {
+    const en = { locale: "en-US" };
+    const start = new Date(Date.UTC(2026, 9, 1));
+    expect(formatReleaseDate({ precision: "quarter", start }, en)).toBe("Q4 2026");
+    expect(formatReleaseDate({ precision: "quarter", start, year: 2026, quarter: null }, en)).toBe("Q4 2026");
+    expect(formatReleaseDate({ precision: "year", start, year: null }, en)).toBe("2026");
+  });
+
+  test("Gregorian dates in every locale, as IGDB's", () => {
+    const all = (locale: string) =>
+      (["day", "month", "quarter", "year"] as const).map((p) => formatReleaseDate(at(p), { locale }));
+    // Not the Buddhist era (2569) next to "Q4 2026".
+    expect(all("th-TH")).toEqual(["19 พ.ย. 2026", "พ.ย. 2026", "Q4 2026", "2026"]);
+    // Not the Persian year, 1404 until March 2026 and 1405 after.
+    expect(all("fa-IR")).toEqual(["۱۹ نوامبر ۲۰۲۶", "نوامبر ۲۰۲۶", "Q4 2026", "۲۰۲۶"]);
+    expect(formatReleaseDate({ date: "2026-01-01", precision: "year" }, { locale: "fa-IR" })).toBe("۲۰۲۶");
+    expect(formatReleaseDate(at("year"), { locale: "he-IL-u-ca-hebrew" })).toBe("2026");
+    expect(formatReleaseDate(at("day"), { locale: "ja-JP-u-ca-japanese" })).toBe("2026/11/19");
   });
 });
 
@@ -1172,6 +1344,14 @@ describe("regionalReleases()", () => {
       year: 2020,
     });
     expect(regionalReleases({ release_dates: [] })).toEqual([]);
+  });
+
+  test("leaves out a region whose release was cancelled", () => {
+    expect(regionalReleases(cancelledInEurope).map((r) => r.region)).toEqual([ReleaseDateRegion.Japan]);
+    expect(regionalReleases(cancelledInEurope, { statuses: "all" }).map((r) => r.region)).toEqual([
+      ReleaseDateRegion.Japan,
+      ReleaseDateRegion.Europe,
+    ]);
   });
 });
 

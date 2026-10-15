@@ -1,6 +1,6 @@
 import { type Forward, forwardKey, type IGDBClient } from "../client";
 import { AuthError, IGDBError, NetworkError, RateLimitError } from "../core/errors";
-import { readBodyCapped } from "../core/util";
+import { MULTIQUERY_REFUSED, PROXY_AUTH_ERROR, readBodyCapped } from "../core/util";
 import { type EndpointName, endpoints } from "../generated/schema";
 
 export interface ProxyOptions {
@@ -10,7 +10,11 @@ export interface ProxyOptions {
   endpoints?: readonly EndpointName[] | ((endpoint: EndpointName) => boolean) | undefined;
   /** Highest `limit` accepted in a query. Default 500, IGDB's own maximum. */
   maxLimit?: number | undefined;
-  /** Allow multiqueries, which the client sends when it batches. Default true. */
+  /**
+   * Allow multiqueries, which the client sends when it batches. Default true. When false, the browser
+   * client sends its queries one by one after the first refused multiquery, or from the start with
+   * `createIGDB({ proxyUrl, multiquery: false })`.
+   */
   multiquery?: boolean | undefined;
   /**
    * Largest request body accepted, in bytes. A larger one is answered 413 as soon as it passes the
@@ -72,7 +76,7 @@ export function igdbProxy(options: ProxyOptions): (request: Request) => Promise<
       const path = pathOf(request.url);
       const body = await readBody(request, maxBodyBytes);
       if (path === "multiquery") {
-        if (options.multiquery === false) throw new Refused(403, "Multiqueries are not allowed");
+        if (options.multiquery === false) throw new Refused(403, MULTIQUERY_REFUSED);
         for (const endpoint of multiqueryEndpoints(body)) checkEndpoint(endpoint, allowed);
       } else {
         checkEndpoint(path.replace(/\/count$/, ""), allowed);
@@ -195,8 +199,15 @@ function errorResponse(error: unknown, cors: Record<string, string> | undefined)
       headers,
     });
   }
-  // The proxy's own credentials or connection failed: not the browser's fault, and not a 401 it could fix.
-  if (error instanceof AuthError || error instanceof NetworkError || !(error instanceof IGDBError)) {
+  // The proxy's own credentials or connection failed: not the browser's fault, and not a 401 it could
+  // fix. Refused credentials are marked, so that the browser client throws an AuthError without retrying.
+  if (error instanceof AuthError) {
+    return Response.json(
+      { message: "The proxy's Twitch credentials were refused", error: PROXY_AUTH_ERROR },
+      { status: 502, headers },
+    );
+  }
+  if (error instanceof NetworkError || !(error instanceof IGDBError)) {
     return Response.json({ message: "The proxy could not reach IGDB" }, { status: 502, headers });
   }
   const status = error instanceof RateLimitError ? 429 : (error.status ?? 502);

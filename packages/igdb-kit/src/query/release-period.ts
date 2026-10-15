@@ -1,4 +1,4 @@
-import { DateFormat } from "../generated/schema";
+import { DateFormat, ReleaseDateStatus } from "../generated/schema";
 
 /**
  * How precise a release date is, from its `date_format`. IGDB stores an imprecise date inside its
@@ -39,6 +39,15 @@ export interface ReleaseDetails {
 }
 
 type Ref = number | { id: number };
+
+/**
+ * @internal Offline and Cancelled: dates that are not releases, which `releases()`, `releasedIn()`
+ * and `releaseDate()` leave out unless `statuses` asks for them.
+ */
+export const NOT_RELEASED_STATUSES: readonly number[] = [
+  ReleaseDateStatus.Offline,
+  ReleaseDateStatus.Cancelled,
+];
 
 /** @internal The fields of a `release_dates` row that {@link releaseDetails} reads, as ids or expanded. */
 export interface ReleaseDateLike {
