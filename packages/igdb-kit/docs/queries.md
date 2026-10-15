@@ -157,4 +157,4 @@ await igdb.games.select("name").catch(() => []);         // a query is a promise
 ```ts
 const { data, total } = await igdb.raw<{ id: number; name?: string }[]>("games", "fields name; where rating > 90; limit 20;", { withCount: true });
 const same = await igdb.games.select("name").where("rating > 90").limit(20).withCount();
-``` A query with your own `limit` is never split: lower its `limit` if IGDB answers that the response is too large.
+``` A query with your own `limit` is never split: when IGDB answers that the response is too large, the `PayloadTooLargeError` says which `limit` should pass, also as `suggestedLimit`, from what a row of the selection weighed in earlier responses, or half the limit before any.

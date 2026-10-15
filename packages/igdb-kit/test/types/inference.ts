@@ -19,6 +19,7 @@ import {
   type Language,
   MAIN_GAME_TYPES,
   or,
+  type PayloadTooLargeError,
   Platform,
   PopularityType,
   type Query,
@@ -133,6 +134,9 @@ expectType<Equal<Awaited<ReturnType<typeof q1.firstOrThrow>>, R1>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
+
+// A response too heavy for IGDB says which limit should pass.
+expectType<Equal<PayloadTooLargeError["suggestedLimit"], number | undefined>>();
 
 // raw() returns the data, or the data and IGDB's x-count with withCount.
 expectType<Equal<Awaited<ReturnType<typeof igdb.raw<{ id: number }[]>>>, { id: number }[]>>();
