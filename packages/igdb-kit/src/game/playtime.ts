@@ -1,10 +1,10 @@
 import type { Locale } from "./locale";
-import type { Requires } from "./select";
+import { positive, type Requires } from "./select";
 
-/** Fields of `game_time_to_beats` that {@link timeToBeat} reads. */
+/** Fields of `game_time_to_beats` that {@link timeToBeat} and {@link playtimes} read. */
 export type TimeToBeatFields = "hastily" | "normally" | "completely" | "count";
 
-/** A `game_time_to_beats` row whose selection lets {@link timeToBeat} work. */
+/** A `game_time_to_beats` row whose selection lets {@link timeToBeat} and {@link playtimes} work. */
 export interface TimeToBeatInput {
   hastily?: number | undefined;
   normally?: number | undefined;
@@ -59,6 +59,43 @@ export function timeToBeat(
     if (typeof seconds === "number" && seconds > 0) return { seconds, kind, count: row.count ?? null };
   }
   return null;
+}
+
+/** The three averages of a `game_time_to_beats` row, from {@link playtimes}. */
+export interface Playtimes {
+  /** Main story, in seconds; `null` when IGDB has no time. */
+  hastily: number | null;
+  /** Story and some extras, in seconds; `null` when IGDB has no time. */
+  normally: number | null;
+  /** 100%, in seconds; `null` when IGDB has no time. */
+  completely: number | null;
+  /** Number of submissions behind the averages (1 for 72% of rows). */
+  count: number | null;
+}
+
+/**
+ * The three averages of a `game_time_to_beats` row, for a page that shows them side by side (main
+ * story, with extras, 100%): `null` for a time IGDB has not filled in (missing or 0). Null without a
+ * row or without any time in it. The averages come from different submissions, so they are not
+ * ordered (`hastily` can exceed `normally`), and 72% of rows rest on one submission: compare `count`
+ * to leave thin averages out.
+ *
+ * ```ts
+ * const row = await igdb.game_time_to_beats.select("hastily", "normally", "completely", "count")
+ *   .where((t) => t.game_id.eq(1942)).first();
+ * playtimes(row); // { hastily: 134552, normally: 254778, completely: 581483, count: 41 }
+ * ```
+ */
+export function playtimes<R extends object>(
+  row: (R & Requires<R, TimeToBeatFields>) | null | undefined,
+): Playtimes | null;
+export function playtimes(row: TimeToBeatInput | null | undefined): Playtimes | null {
+  if (!row) return null;
+  const hastily = positive(row.hastily) ?? null;
+  const normally = positive(row.normally) ?? null;
+  const completely = positive(row.completely) ?? null;
+  if (hastily === null && normally === null && completely === null) return null;
+  return { hastily, normally, completely, count: row.count ?? null };
 }
 
 export interface FormatPlaytimeOptions {

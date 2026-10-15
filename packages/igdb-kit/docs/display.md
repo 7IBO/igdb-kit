@@ -69,6 +69,7 @@ ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { 
 
 - **`multiplayer(game, platform?)`** returns player counts and co-op flags per platform. IGDB's 0 means unknown, so counts are `null` then. With a platform, it returns that platform's row, else the row that applies to every platform, else null.
 - **`timeToBeat(row, { prefer? })`** and **`formatPlaytime(seconds)`** return `{ seconds, kind, count }` and `"71 hr"`, from rows of `game_time_to_beats` (97% of games have none), localized with `Intl`.
+- **`playtimes(row)`** returns `{ hastily, normally, completely, count }`, for a page that shows the three times side by side (main story, with extras, 100%). A time IGDB has not filled in (missing or 0) is `null`. The averages come from different submissions, so `hastily` can exceed `normally`, and 72% of rows rest on one submission (`count: 1`).
 
 ## Pictures and platform versions
 

@@ -27,6 +27,7 @@ import {
   multiplayer,
   parentGame,
   parseAlternativeName,
+  playtimes,
   regionalReleases,
   releaseDate,
   releaseRegionName,
@@ -879,7 +880,7 @@ describe("languages()", () => {
   });
 });
 
-describe("timeToBeat() and formatPlaytime()", () => {
+describe("timeToBeat(), playtimes() and formatPlaytime()", () => {
   test("picks normally, then hastily, then completely", () => {
     expect(timeToBeat(timeToBeatRows.witcher3)).toEqual({ seconds: 254778, kind: "normally", count: 41 });
     expect(timeToBeat(timeToBeatRows.hastilyOnly)).toEqual({ seconds: 154920, kind: "hastily", count: 1 });
@@ -891,10 +892,31 @@ describe("timeToBeat() and formatPlaytime()", () => {
     expect(timeToBeat(undefined)).toBeNull();
   });
 
+  test("playtimes() gives the three averages, null for a missing or zero one", () => {
+    expect(playtimes(timeToBeatRows.witcher3)).toEqual({
+      hastily: 134552,
+      normally: 254778,
+      completely: 581483,
+      count: 41,
+    });
+    expect(playtimes(timeToBeatRows.hastilyOnly)).toEqual({
+      hastily: 154920,
+      normally: null,
+      completely: null,
+      count: 1,
+    });
+    const row = { hastily: 186000, normally: 254778, completely: 0, count: undefined };
+    expect(playtimes(row)).toEqual({ hastily: 186000, normally: 254778, completely: null, count: null });
+    expect(playtimes(timeToBeatRows.empty)).toBeNull();
+    expect(playtimes(null)).toBeNull();
+    expect(playtimes(undefined)).toBeNull();
+  });
+
   test("keeps IGDB's averages as they are", () => {
     expect(timeToBeat(timeToBeatRows.fortnite, { prefer: ["hastily"] })?.seconds).toBeGreaterThan(
       timeToBeat(timeToBeatRows.fortnite)?.seconds ?? 0,
     );
+    expect(playtimes(timeToBeatRows.fortnite)).toMatchObject({ hastily: 13821428, normally: 1072800 });
   });
 
   test("formats minutes, half hours and hours", () => {

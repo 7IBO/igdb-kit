@@ -75,6 +75,8 @@ export {
   formatPlaytime,
   type Playtime,
   type PlaytimeKind,
+  type Playtimes,
+  playtimes,
   type TimeToBeatFields,
   type TimeToBeatOptions,
   timeToBeat,

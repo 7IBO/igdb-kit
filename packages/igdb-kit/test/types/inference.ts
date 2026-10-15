@@ -576,7 +576,9 @@ import {
   localizedCover,
   localizedName,
   multiplayer,
+  type Playtimes,
   parentGame,
+  playtimes,
   regionalReleases,
   releaseDate,
   type resolveLocale,
@@ -711,6 +713,10 @@ timeToBeat(ttb, { prefer: ["hastily"] });
 timeToBeat(ttb, { prefer: ["quickly"] });
 // @ts-expect-error count is not selected
 timeToBeat(await igdb.game_time_to_beats.select("hastily", "normally", "completely").first());
+expectType<Equal<ReturnType<typeof playtimes>, Playtimes | null>>();
+playtimes(ttb)?.completely satisfies number | null | undefined;
+// @ts-expect-error completely is not selected
+playtimes(await igdb.game_time_to_beats.select("hastily", "normally", "count").first());
 
 // artworkType() reads image_type and artwork_type, ids or expanded.
 const artworks = await igdb.artworks
