@@ -56,6 +56,26 @@ function endless(path: string, headers: Record<string, string> = {}) {
 }
 
 describe("browser client through igdbProxy", () => {
+  test("raw() gives IGDB's x-count with withCount, on the server and through the proxy", async () => {
+    const { api, browser } = setup();
+    const server = testClient(api.fetch);
+    const body = "fields name; where id = (2);";
+    expect(await server.raw<unknown[]>("games", body)).toEqual([{ id: 2, name: "Game 2" }]);
+    expect(await server.raw("games", body, { withCount: true })).toEqual({
+      data: [{ id: 2, name: "Game 2" }],
+      total: 42,
+    });
+    expect(await server.raw("games/count", "where id = (2);", { withCount: true })).toEqual({
+      data: { count: 42 },
+      total: undefined,
+    });
+    expect(await browser.raw("games", body, { withCount: true })).toEqual({
+      data: [{ id: 2, name: "Game 2" }],
+      total: 42,
+    });
+    expect(api.calls).toHaveLength(4);
+  });
+
   test("queries reach IGDB with the server's credentials only", async () => {
     const { api, browser, browserCalls } = setup();
     const { data, total } = await browser.games

@@ -134,6 +134,12 @@ expectType<Equal<Awaited<ReturnType<typeof q1.count>>, number>>();
 expectType<Equal<Awaited<ReturnType<typeof q1.withCount>>, { data: R1[]; total: number }>>();
 for await (const g of q1.iterate()) expectType<Equal<typeof g, R1>>();
 
+// raw() returns the data, or the data and IGDB's x-count with withCount.
+expectType<Equal<Awaited<ReturnType<typeof igdb.raw<{ id: number }[]>>>, { id: number }[]>>();
+const rawPage = await igdb.raw<{ id: number }[]>("games", "fields id; limit 5;", { withCount: true });
+expectType<Equal<typeof rawPage, { data: { id: number }[]; total: number | undefined }>>();
+expectType<Equal<Awaited<ReturnType<typeof igdb.raw>>, unknown>>();
+
 // popular() and weightedPopular() throw on a cut list only when asked.
 igdb.games.popular(PopularityType.IGDBVisits, { maxRows: 10_000, incomplete: "throw" });
 igdb.games.weightedPopular({ [PopularityType.IGDBVisits]: 1 }, { incomplete: "partial" });
