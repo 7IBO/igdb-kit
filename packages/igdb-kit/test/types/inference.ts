@@ -587,12 +587,15 @@ import {
   multiplayer,
   type Playtimes,
   parentGame,
+  parseStoreUrl,
   playtimes,
   regionalReleases,
   releaseDate,
   releasesByPlatform,
   type resolveLocale,
   type Store,
+  type StoreId,
+  type StoreUrlId,
   storeLinks,
   type storeOf,
   supportsLanguage,
@@ -642,6 +645,11 @@ releaseDate(page, { statuses: ["released"] });
 // @ts-expect-error "all" stands for the whole list, not for one status
 releaseDate(page, { statuses: [ReleaseDateStatus.FullRelease, "all"] });
 expectType<Equal<ReturnType<typeof storeOf>, Store | null>>();
+const storeUrl = parseStoreUrl("store.steampowered.com/app/292030");
+expectType<Equal<typeof storeUrl, StoreUrlId | null>>();
+if (storeUrl?.store === "igdb") expectType<Equal<typeof storeUrl.kind, "slug">>();
+else if (storeUrl) expectType<Equal<typeof storeUrl, StoreId>>();
+expectType<Equal<StoreId["kind"], "app" | "product" | "concept" | "xbox360_product" | "slug" | "id">>();
 expectType<Equal<ReturnType<typeof companies<typeof page>>["developers"], { id: number; name?: string }[]>>();
 storeLinks(page);
 ageRating(page, 2);
@@ -834,6 +842,7 @@ const linked = await igdb.games
   .findByIdOrThrow(1942);
 externalId(linked, ExternalGameSource.Steam) satisfies string | null;
 externalIds(linked)[0]?.url satisfies string | null | undefined;
+expectType<Equal<ReturnType<typeof externalIds>[number]["storeId"], StoreId | null>>();
 websiteLinks(linked, { kinds: ["official", "social"] });
 videoLinks(linked)[0]?.kind satisfies "trailer" | "gameplay" | "teaser" | "intro" | "other" | undefined;
 // @ts-expect-error external_games.uid is not selected

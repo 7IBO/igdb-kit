@@ -132,9 +132,13 @@ export type { Ref, Requires } from "./select";
 export {
   type ExternalGameFields,
   localizeStoreUrl,
+  parseStoreUrl,
   type Store,
+  type StoreId,
+  type StoreIdKind,
   type StoreLink,
   type StoreLinksOptions,
+  type StoreUrlId,
   storeLinkFields,
   storeLinks,
   storeOf,
