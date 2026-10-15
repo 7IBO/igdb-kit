@@ -87,8 +87,9 @@ export function formatReleaseDate(
   release: FormatReleaseDateInput,
   options: FormatReleaseDateOptions,
 ): string {
-  const { locale, dateStyle = "medium", labels } = options;
-  const { language, script } = resolveLocale(locale);
+  const { dateStyle = "medium", labels } = options;
+  // The canonical tag, which Intl reads: "pt-BR" for "pt_BR".
+  const { locale, language, script } = resolveLocale(options.locale);
   const [tbd, quarter] =
     releaseLabels[language === "zh" && script === "Hant" ? "zh-Hant" : language] ?? englishLabels;
   const { precision } = release;

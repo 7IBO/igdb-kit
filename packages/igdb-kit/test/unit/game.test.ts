@@ -1111,6 +1111,14 @@ describe("formatReleaseDate()", () => {
     expect(all("ko").slice(2, 3)).toEqual(["2026년 4분기"]);
     // No table for Swedish: English quarters and TBD, Intl for the rest.
     expect(all("sv-SE").slice(2)).toEqual(["Q4 2026", "2026", "TBD"]);
+    // An underscore, as in some servers' locales, which Intl rejects.
+    expect(all("pt_BR")).toEqual([
+      "19 de nov. de 2026",
+      "nov. de 2026",
+      "4º trimestre de 2026",
+      "2026",
+      "A definir",
+    ]);
   });
 
   test("date styles and labels", () => {
