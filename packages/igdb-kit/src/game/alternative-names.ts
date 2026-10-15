@@ -74,8 +74,8 @@ export interface AlternativeTitle<R = { name?: string | undefined; comment?: str
    * in Latin letters ("Portuguese title - translated" is in English). A name marked "original" keeps
    * it, as some official titles are in Latin letters ("BIOHAZARD"). The script is only checked for
    * the languages listed under `inScript`: a "French title" in kana is `"fr"`. It is a language tag
-   * (`"zh-Hans"`, `"es-419"`), not a user's locale: compare the `language` of `parseLocale()` rather
-   * than the strings.
+   * (`"zh-Hans"`, `"es-419"`), not a user's locale: compare the `language` of `resolveLocale()`
+   * rather than the strings.
    */
   locale: string | null;
   /**

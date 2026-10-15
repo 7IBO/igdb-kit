@@ -1085,6 +1085,7 @@ describe("names of regions, countries and languages", () => {
     expect(languageName(Language.EnglishUK, "en")).toBe("British English");
     expect(languageName("es-MX", "en")).toBe("Latin American Spanish");
     expect(languageName("zh-TW", "en")).toBe("Traditional Chinese");
+    expect(languageName("zh-cn", "en")).toBe("Simplified Chinese");
     expect(languageName(Language.German, "fr", { native: true })).toBe("Deutsch");
     expect(languageName(Language.Japanese, "en", { native: true })).toBe("日本語");
     expect(languageName(99, "en")).toBeNull();
