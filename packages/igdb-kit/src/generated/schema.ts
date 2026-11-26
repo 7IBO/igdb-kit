@@ -3968,6 +3968,14 @@ export const removedFields: Record<string, Record<string, string | null>> = {
   Website: {category:"type"},
 };
 
+/**
+ * Deprecated fields kept because IGDB still fills them more than their replacement, while its schema
+ * has them: helpers that read one (`artworkType()`) stop asking for it once IGDB drops it.
+ */
+export interface KeptDeprecated {
+  Artwork: "artwork_type";
+}
+
 export const endpoints: Record<EndpointName, { entity: string; searchable: boolean }> = {
   age_rating_categories: { entity: "AgeRatingCategory", searchable: false },
   age_rating_content_description_types: { entity: "AgeRatingContentDescriptionType", searchable: false },

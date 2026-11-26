@@ -60,6 +60,7 @@ export {
   websiteLinks,
 } from "./links";
 export { type Locale, type ResolvedLocale, resolveLocale } from "./locale";
+export { type BestLogoOptions, bestLogo, coverFields, logoFields } from "./logos";
 export { type Multiplayer, type MultiplayerFields, multiplayer, multiplayerFields } from "./multiplayer";
 export {
   type AlternativeNameFields,

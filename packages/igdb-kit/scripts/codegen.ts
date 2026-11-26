@@ -274,6 +274,18 @@ for (const [name, fields] of messages) {
 }
 const isRemoved = (message: string, field: string) => removed.get(message)?.has(field) ?? false;
 
+// A kept field IGDB took out of its schema leaves the types with it (artworkType() still compiles,
+// as it reads it only while the schema has it): say so in the schema update's log.
+for (const [message, fields] of Object.entries(kept)) {
+  for (const field of Object.keys(fields)) {
+    if (!messages.get(message)?.some((f) => f.name === field)) {
+      console.warn(
+        `${message}.${field} is no longer in igdbapi.proto: remove it from codegen/kept-deprecated.json`,
+      );
+    }
+  }
+}
+
 // Enums: a const object for values plus a union type, for those still used by a kept field. Most
 // proto enums are legacy ones that IGDB replaced with reference tables.
 const usedEnums = new Set(
@@ -463,6 +475,21 @@ ${runtimeTimestamps.join("\n")}
 export const removedFields: Record<string, Record<string, string | null>> = {
 ${[...removed].map(([m, fields]) => `  ${m}: {${[...fields].map(([f, r]) => `${f}:${JSON.stringify(r)}`).join(",")}},`).join("\n")}
 };
+
+/**
+ * Deprecated fields kept because IGDB still fills them more than their replacement, while its schema
+ * has them: helpers that read one (\`artworkType()\`) stop asking for it once IGDB drops it.
+ */
+export interface KeptDeprecated {
+${Object.entries(kept)
+  .map(
+    ([m, fields]) =>
+      [m, Object.keys(fields).filter((f) => messages.get(m)?.some((p) => p.name === f))] as const,
+  )
+  .filter(([, fields]) => fields.length)
+  .map(([m, fields]) => `  ${m}: ${fields.map((f) => JSON.stringify(f)).join(" | ")};`)
+  .join("\n")}
+}
 
 export const endpoints: Record<EndpointName, { entity: string; searchable: boolean }> = {
 ${endpointEntries.map(([m, p]) => `  ${p}: { entity: ${JSON.stringify(m)}, searchable: ${SEARCHABLE.has(p)} },`).join("\n")}

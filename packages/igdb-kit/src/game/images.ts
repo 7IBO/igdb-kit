@@ -1,5 +1,5 @@
-import { ImageType } from "../generated/schema";
-import { type ArtworkTypeFields, artworkType } from "../images";
+import { entities, ImageType } from "../generated/schema";
+import { type ArtworkTypeFields, imageTypeOf } from "../images";
 import type { Selection } from "../links/selection";
 import { positive, type Requires, type RequiresIfSelected } from "./select";
 
@@ -39,34 +39,43 @@ export type BestImageRequires<G> = RequiresIfSelected<G, "cover", "cover.image_i
 
 type ImageFields = "image_id" | "width" | "height";
 
+type BestImageFields = Selection<
+  "games",
+  `cover.${ImageFields}` | `artworks.${ImageFields | ArtworkTypeFields}` | `screenshots.${ImageFields}`
+>;
+
 /**
  * The fields {@link bestImage} reads, to spread into `select()`: the cover, the artworks with their
  * type and the screenshots, each with its size.
  */
-export function bestImageFields(): Selection<
-  "games",
-  `cover.${ImageFields}` | `artworks.${ImageFields | ArtworkTypeFields}` | `screenshots.${ImageFields}`
-> {
+export function bestImageFields(): BestImageFields {
   return Object.freeze([
     "cover.image_id",
     "cover.width",
     "cover.height",
     "artworks.image_id",
     "artworks.image_type",
-    "artworks.artwork_type",
+    ...(hasArtworkType ? ["artworks.artwork_type"] : []),
     "artworks.width",
     "artworks.height",
     "screenshots.image_id",
     "screenshots.width",
     "screenshots.height",
-  ] as const);
+  ] as const) as BestImageFields;
 }
+
+// IGDB announced the end of `artwork_type`: the list drops it once the schema no longer has it.
+const hasArtworkType = "artwork_type" in (entities.Artwork ?? {});
 
 export interface BestImage {
   /** For `imageUrl()` and `imageSrcSet()`. */
   image_id: string;
-  source: "cover" | "artwork" | "screenshot";
-  /** `ImageType` id of an artwork, from `artworkType()`; null for a cover or a screenshot. */
+  /** `"cover"` for `game.cover` and the rows of `covers`, `"logo"` for the rows of `logos`. */
+  source: "cover" | "artwork" | "screenshot" | "logo";
+  /**
+   * `ImageType` id of an artwork, a row of `covers` or a logo, from `artworkType()`; null for a
+   * screenshot, `game.cover` and a cover IGDB has not typed.
+   */
   type: number | null;
   /** Of the original image, when selected. */
   width: number | null;
@@ -82,6 +91,16 @@ export interface BestImageOptions {
    * then a screenshot, then the cover. Logos, icons and infographics are never picked.
    */
   prefer?: "cover" | "background" | undefined;
+  /**
+   * The game's other covers, read from `covers` by game (see {@link coverFields}): `game.cover` is
+   * only the main one, and IGDB moves alternative, square and historical covers out of `artworks`
+   * at the end of 2026. Without a main cover, these come before the artworks.
+   */
+  covers?: readonly CoverRow[] | undefined;
+}
+
+interface CoverRow extends ImageRow {
+  image_type?: number | { id: number } | undefined;
 }
 
 // Artwork types, best first, for each use.
@@ -126,33 +145,52 @@ export function bestImage<G extends object>(
   options: BestImageOptions = {},
 ): BestImage | null {
   const input = game as BestImageInput;
-  const artworks = (input.artworks ?? [])
-    .filter((row) => row.image_id)
-    .map((row) => ({ row, type: artworkType(row as never) }));
+  const artworks = typed(input.artworks);
+  const covers = typed(options.covers);
   const cover = input.cover?.image_id ? input.cover : undefined;
   const screenshot = input.screenshots?.find((row) => row.image_id);
-  const artwork = (types: readonly (number | null)[], landscape: boolean) => {
-    for (const type of types) {
-      const found = artworks.find(
-        (a) => a.type === type && (!landscape || !((a.row.height ?? 0) > (a.row.width ?? 0))),
-      );
-      if (found) return found;
-    }
-    return undefined;
-  };
+  const artwork = (types: readonly (number | null)[], landscape: boolean) => pick(artworks, types, landscape);
 
   if (options.prefer === "background") {
     const wide = artwork(backgroundTypes, true);
     if (wide) return image(wide.row, "artwork", wide.type);
     if (screenshot) return image(screenshot, "screenshot", null);
     if (cover) return image(cover, "cover", null);
+    const otherCover = pick(covers, [...coverTypes, null], false);
+    if (otherCover) return image(otherCover.row, "cover", otherCover.type);
     const other = artwork([...backgroundTypes, ...coverTypes], false);
     return other ? image(other.row, "artwork", other.type) : null;
   }
   if (cover) return image(cover, "cover", null);
+  const otherCover = pick(covers, [...coverTypes, null], false);
+  if (otherCover) return image(otherCover.row, "cover", otherCover.type);
   const art = artwork([...coverTypes, ...artTypes], false);
   if (art) return image(art.row, "artwork", art.type);
   return screenshot ? image(screenshot, "screenshot", null) : null;
+}
+
+interface Typed<R> {
+  row: R;
+  type: number | null;
+}
+
+function typed<R extends CoverRow>(rows: readonly R[] | undefined): Typed<R>[] {
+  return (rows ?? []).filter((row) => row.image_id).map((row) => ({ row, type: imageTypeOf(row) }));
+}
+
+/** The first row of the first type of `types` that has one; landscape rows only when asked. */
+function pick<R extends ImageRow>(
+  rows: readonly Typed<R>[],
+  types: readonly (number | null)[],
+  landscape: boolean,
+): Typed<R> | undefined {
+  for (const type of types) {
+    const found = rows.find(
+      (a) => a.type === type && (!landscape || !((a.row.height ?? 0) > (a.row.width ?? 0))),
+    );
+    if (found) return found;
+  }
+  return undefined;
 }
 
 function image(row: ImageRow, source: BestImage["source"], type: number | null): BestImage {
