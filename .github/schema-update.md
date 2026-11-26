@@ -26,6 +26,7 @@ change on IGDB's side is handled the same day. A person can follow it too.
 | A new endpoint                                 | It is typed and listed already. Say in the docs what it holds; add a helper when it carries what a page shows.                                                                                                       |
 | New rows in a reference table                  | The constants follow. A table that maps ids (`IMAGE_TYPE_OF_ARTWORK_TYPE`, store ids, locales) may need its new row: the unit tests say so.                                                                          |
 | The audit reports a type mismatch or new field | The proto and the API disagree: write the case in the pull request, and fix codegen if it is ours.                                                                                                                   |
+| A change in IGDB's API docs (section "IGDB's API docs") | Read each line. A new deprecation or description lands in the types by itself; a field the docs drop or retype is checked against the proto and the audit. A field newly left without a description gets one in `codegen/field-notes.json`. |
 | A new article on IGDB's blog                   | Read it. An API change it announces becomes a Linear issue, with its date; one that is live now is handled in this pull request.                                                                                    |
 
 The audit needs Twitch credentials: `TWITCH_CLIENT_ID=… TWITCH_CLIENT_SECRET=… bun run --filter igdb-kit audit`.

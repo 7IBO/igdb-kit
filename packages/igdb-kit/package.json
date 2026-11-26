@@ -186,6 +186,7 @@
     "codegen": "bun scripts/codegen.ts",
     "audit": "bun scripts/audit-schema.ts",
     "blog-feed": "bun scripts/blog-feed.ts",
+    "docs-fields": "bun scripts/docs-fields.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test test/unit",
     "test:integration": "bun test test/integration",

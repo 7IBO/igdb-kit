@@ -12,6 +12,7 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..");
 const protoPath = join(root, "codegen/igdbapi.proto");
 const docsPath = join(root, "codegen/docs-fields.json");
+const notesPath = join(root, "codegen/field-notes.json");
 const outPath = join(root, "src/generated/schema.ts");
 const fieldsPath = join(root, "src/generated/fields.ts");
 
@@ -179,6 +180,7 @@ for (const m of proto.matchAll(/^enum (\w+) \{([\s\S]*?)^\}/gm)) {
 }
 
 const endpointOf = new Map<string, string>(); // message name -> endpoint path
+const warnings: string[] = [];
 const docsByMessage = new Map<string, DocEntity>();
 for (const d of docs) {
   const message = d.name.replace(/\s+/g, "");
@@ -188,7 +190,31 @@ for (const d of docs) {
 for (const [message, path] of Object.entries(TIER_RESTRICTED)) {
   if (messages.has(message)) endpointOf.set(message, path);
 }
-const warnings: string[] = [];
+
+// Our descriptions for the fields the docs leave empty (codegen/field-notes.json): by entity, then by
+// field name for every entity. The docs win when they describe a field.
+const notes: Record<string, Record<string, string>> = JSON.parse(readFileSync(notesPath, "utf8"));
+for (const [message, fields] of messages) {
+  let doc = docsByMessage.get(message);
+  if (!doc) {
+    doc = { name: message, path: "", fields: [] };
+    docsByMessage.set(message, doc);
+  }
+  for (const f of fields) {
+    const note = notes[message]?.[f.name] ?? notes["*"]?.[f.name];
+    if (!note) continue;
+    const documented = doc.fields.find((d) => d.name === f.name);
+    if (!documented) doc.fields.push({ name: f.name, type: "", desc: note });
+    else if (!documented.desc.trim()) documented.desc = note;
+  }
+}
+for (const [message, fields] of Object.entries(notes)) {
+  if (message === "*" || message === "_") continue;
+  for (const field of Object.keys(fields)) {
+    if (!messages.get(message)?.some((f) => f.name === field))
+      warnings.push(`codegen/field-notes.json describes ${message}.${field}, which the proto does not have`);
+  }
+}
 for (const name of messages.keys()) {
   if (!endpointOf.has(name)) warnings.push(`proto message ${name} has no documented endpoint`);
 }
@@ -219,6 +245,15 @@ function jsdoc(lines: string[], indent: string): string {
   if (!clean.length) return "";
   if (clean.length === 1) return `${indent}/** ${clean[0]} */\n`;
   return `${indent}/**\n${clean.map((l) => `${indent} * ${l}`).join("\n")}\n${indent} */\n`;
+}
+
+/** The anchor of an endpoint's section in the API docs: "Age Rating" is `#age-rating`. */
+function docAnchor(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 /** Turns "DEPRECATED! Use organization instead" into a TS deprecation tag. */
@@ -336,6 +371,7 @@ for (const [name, fields] of messages) {
       name in TIER_RESTRICTED
         ? "Not in the public docs: IGDB answers 403 unless your access tier includes it."
         : "",
+      doc?.path ? `@see https://api-docs.igdb.com/#${docAnchor(doc.name)}` : "",
     ],
     "",
   );

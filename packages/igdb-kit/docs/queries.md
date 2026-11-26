@@ -9,7 +9,7 @@ Every endpoint is a query builder on the client: `igdb.games`, `igdb.platforms`,
 
 ## Types
 
-Entities are generated from IGDB's `igdbapi.proto`, merged with the API docs for descriptions and `@deprecated` notices. All 84 endpoints are included, `executables`, `logos` and the tier-restricted `content_safety_*` ones among them. Fields IGDB replaced, such as `category`, are left out because they are empty or no longer updated (see [Replaced fields](#replaced-fields-and-slow-filters)).
+Entities are generated from IGDB's `igdbapi.proto`, merged with the API docs for descriptions and `@deprecated` notices (refreshed each week, and completed where the docs say nothing); each entity's JSDoc links to its section of the docs. All 84 endpoints are included, `executables`, `logos` and the tier-restricted `content_safety_*` ones among them. Fields IGDB replaced, such as `category`, are left out because they are empty or no longer updated (see [Replaced fields](#replaced-fields-and-slow-filters)).
 
 The type of every response is inferred from the fields you select: nested objects for expanded relations, ids for the others, and every field except `id` is optional because IGDB omits empty fields. Field paths are checked by TypeScript as you type, and again at runtime before the request leaves: IGDB rejects a whole multiquery for one bad field and silently ignores an unknown `sort` field.
 

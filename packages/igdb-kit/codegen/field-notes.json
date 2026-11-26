@@ -1,0 +1,69 @@
+{
+  "_": "Descriptions for the fields IGDB's API docs leave empty, by entity, then by field name for every entity (\"*\"). The docs win when they describe a field.",
+  "*": {
+    "name": "The name of the item",
+    "alpha_channel": "True when the image has an alpha channel (transparency)",
+    "animated": "True when the image is animated",
+    "checksum": "Hash of the object",
+    "trusted": "True when IGDB has checked that the address belongs to the item",
+    "game": "The game this row belongs to"
+  },
+  "AgeRatingContentDescription": { "description": "The content descriptor, as the organization words it" },
+  "AgeRatingContentDescriptionV2": { "description": "The content descriptor, as the organization words it, such as \"Blood and Gore\"" },
+  "Character": {
+    "games": "The games the character appears in",
+    "character_gender": "The character's gender",
+    "character_species": "The character's species"
+  },
+  "Collection": {
+    "as_parent_relations": "Relations in which this collection is the parent",
+    "as_child_relations": "Relations in which this collection is the child"
+  },
+  "ContentSafetyRatingDimension": {
+    "content_safety_rating": "The content safety rating this dimension belongs to",
+    "value": "The dimension's value",
+    "description": "What the dimension measures"
+  },
+  "GameContentSafetyRating": {
+    "content_safety_rating": "The game's content safety rating",
+    "content_safety_rating_dimension": "The dimension of the rating"
+  },
+  "DateFormat": { "format": "The precision of a date: YYYYMMDD, YYYYMM, YYYY, YYYYQ1 to YYYYQ4 or TBD" },
+  "EntityType": { "description": "What the entity type covers" },
+  "GameReleaseFormat": { "format": "Digital or Physical" },
+  "GameStatus": { "status": "The status, such as Released, Early Access, Cancelled or Delisted" },
+  "GameType": { "type": "The type, such as Main Game, DLC, Expansion, Bundle or Remake" },
+  "InvolvedCompany": {
+    "company": "The company",
+    "developer": "True when the company developed the game",
+    "publisher": "True when the company published the game",
+    "porting": "True when the company ported the game to another platform",
+    "supporting": "True when the company helped develop the game"
+  },
+  "LanguageSupport": {
+    "language": "The language",
+    "language_support_type": "What the language covers: Audio, Subtitles or Interface"
+  },
+  "PlatformVersionCompany": {
+    "developer": "True when the company developed the platform version",
+    "manufacturer": "True when the company manufactured the platform version"
+  },
+  "PopularityPrimitive": {
+    "game_id": "The id of the game, as a number: not a relation, so it cannot be expanded",
+    "popularity_type": "The metric this value measures",
+    "value": "The game's value for the metric; each metric has its own scale",
+    "external_popularity_source": "Where the metric comes from: IGDB, Steam, Twitch..."
+  },
+  "PopularityType": { "external_popularity_source": "Where the metric comes from: IGDB, Steam, Twitch..." },
+  "ReleaseDateRegion": { "region": "The region's slug, such as europe, north_america or worldwide" },
+  "Search": {
+    "alternative_name": "The alternative name that matched",
+    "character": "The character found",
+    "collection": "The collection found",
+    "company": "The company found",
+    "description": "A short description of the result",
+    "game": "The game found",
+    "platform": "The platform found",
+    "theme": "The theme found"
+  }
+}
