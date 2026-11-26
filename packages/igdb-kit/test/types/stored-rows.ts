@@ -1,4 +1,4 @@
-// The helpers of igdb-kit/game read rows from a local copy, with no cast (docs/local-copy.md).
+// The helpers of igdb-kit/game, and rankChanges(), read rows from a local copy, with no cast (docs/local-copy.md).
 import { type PopularitySnapshotRow, rankChanges } from "../../src";
 import { externalIds, releaseDate, storeLinks } from "../../src/game";
 

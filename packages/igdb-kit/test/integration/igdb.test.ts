@@ -347,7 +347,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     const [top, wider] = await Promise.all([read(20), read(40)]);
     const moves = rankChanges(top, wider);
     // The same computation, read twice: the games of the top 20 stay, the others enter the stored
-    // top (a tie at the 20th place can swap which game the shorter read holds).
+    // top. A tie running past the 40th place can leave a game of the shorter read out of the longer.
     const inTop = new Set(top.map((r) => r.game_id));
     for (const move of moves) {
       const expected = !inTop.has(move.game_id) ? "entered" : move.after ? "same" : "left";
@@ -355,7 +355,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
       if (expected === "same") expect(move.change).toBe(0);
     }
     expect(moves.filter((m) => m.after).map((m) => m.after?.rank)).toEqual(wider.map((r) => r.rank));
-    expect(moves.filter((m) => m.status === "same").length).toBeGreaterThanOrEqual(19);
+    expect(moves.filter((m) => m.status === "same" || m.status === "left")).toHaveLength(top.length);
   });
 
   test("popularitySnapshot() returns ranked rows with their calculation time; IGDB keeps no history", async () => {
