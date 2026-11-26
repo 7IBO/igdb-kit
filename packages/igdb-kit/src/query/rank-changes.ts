@@ -6,14 +6,17 @@ import type { PopularitySnapshotRow } from "./popularity";
 /** The columns of a stored snapshot row that `rankChanges()` reads. */
 export type RankChangeRow = Pick<PopularitySnapshotRow, "game_id" | "popularity_type" | "rank" | "value">;
 
+/** `"entered"`: in the `after` snapshot only; `"left"`: in the `before` snapshot only. */
+export type RankChangeStatus = "entered" | "up" | "down" | "same" | "left";
+
 export interface RankChange {
   game_id: number;
   popularity_type: number;
   /**
-   * `"entered"`: in `after` only; `"left"`: in `before` only. With a snapshot read with `limit`, that
-   * is the stored top, not the whole ranking.
+   * `"entered"`: in the `after` snapshot only; `"left"`: in the `before` snapshot only. With a
+   * snapshot read with `limit`, that is the stored top, not the whole ranking.
    */
-  status: "entered" | "up" | "down" | "same" | "left";
+  status: RankChangeStatus;
   /** Places gained: positive for a rise, negative for a fall, 0 for none, null when entered or left. */
   change: number | null;
   before: { rank: number; value: number } | null;
@@ -38,7 +41,7 @@ function byType(rows: Iterable<RankChangeRow>): Ranked {
 
 const place = (row: RankChangeRow | undefined) => (row ? { rank: row.rank, value: row.value } : null);
 
-function status(change: number | null, before: unknown, after: unknown): RankChange["status"] {
+function status(change: number | null, before: unknown, after: unknown): RankChangeStatus {
   if (!before) return "entered";
   if (!after) return "left";
   return change === 0 ? "same" : (change ?? 0) > 0 ? "up" : "down";

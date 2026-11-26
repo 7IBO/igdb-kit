@@ -63,7 +63,7 @@ A metric IGDB returns no rows for is left out, which happened to Steam's for a w
 
 ## rankChanges()
 
-`rankChanges(before, after)` compares two stored snapshots, such as yesterday's and today's, and sends no request. It reads `game_id`, `popularity_type`, `rank` and `value` of each row, and returns one entry per game and metric:
+`rankChanges(before, after)` compares two stored snapshots, such as yesterday's and today's, and sends no request. It reads `game_id`, `popularity_type`, `rank` and `value` of each row, as numbers (convert a `bigint` or `numeric` column, which `pg` reads as a string), and returns one entry per game and metric:
 
 ```ts
 import { PopularityType, rankChanges } from "igdb-kit";
@@ -71,10 +71,10 @@ import { PopularityType, rankChanges } from "igdb-kit";
 const moves = rankChanges(await db.popularityOn(yesterday), await db.popularityOn(today));
 // { game_id, popularity_type, status, change, before: { rank, value } | null, after: { rank, value } | null }[]
 const risers = moves
-  .filter((m) => m.popularity_type === PopularityType.IGDBPlaying && (m.change ?? 0) >= 10)
-  .sort((a, b) => (b.change ?? 0) - (a.change ?? 0));
+  .filter((m) => m.popularity_type === PopularityType.IGDBPlaying)
+  .filter((m) => m.status === "entered" || (m.change ?? 0) >= 10); // a game entering the stored top has no change
 ```
 
 `status` is `"up"`, `"down"` or `"same"` for a game in both snapshots, with `change` the places gained (5 for a game from 12th to 7th, negative for a fall). It is `"entered"` or `"left"` for a game in one of them, with `change` null: for snapshots read with `limit`, that means it entered or left the stored top, not IGDB's ranking. Entries come metric by metric, in the order of `after`, ranked by their rank in `after`, then the games that left by their rank in `before`.
 
-A metric found in only one snapshot is left out, rather than every one of its games seeming to enter or leave: IGDB sometimes returns no rows for a metric (see above). Since each metric is recomputed on its own schedule, compare snapshots of different `calculated_at` for a metric to see a move; two snapshots of the same computation show every game as `"same"`.
+Each side holds one computation per metric: since each metric is recomputed on its own schedule, yesterday's snapshot is the latest `calculated_at` of each metric up to yesterday. A game repeated for one metric keeps its first row. A metric found in only one snapshot is left out, rather than every one of its games seeming to enter or leave: IGDB sometimes returns no rows for a metric (see above). Since each metric is recomputed on its own schedule, compare snapshots of different `calculated_at` for a metric to see a move; two snapshots of the same computation show every game as `"same"`. Tied values share a rank (1, 2, 2, 4), so a game can move a place when others tie or untie around it.
