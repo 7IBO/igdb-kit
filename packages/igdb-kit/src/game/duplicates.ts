@@ -195,7 +195,11 @@ export function duplicateCandidates<G extends { id: number }>(
       if (members !== index) groups.set(key, [members, index]);
     } else if (members.at(-1) !== index) members.push(index);
   };
+  // A game given twice (two lists merged) is read once: its copies would pair and count twice.
+  const ids = new Set<number>();
   for (const game of games) {
+    if (ids.has(game.id)) continue;
+    ids.add(game.id);
     const entry = prepare(game as G);
     if (!entry) continue;
     const index = prepared.push(entry) - 1;

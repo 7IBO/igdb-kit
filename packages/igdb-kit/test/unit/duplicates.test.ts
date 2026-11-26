@@ -201,9 +201,12 @@ describe("duplicateCandidates()", () => {
     expect(duplicateCandidates([row(1, 0), row(2, y(2020))], { minScore: 0 })[0]?.score).toBe(0.5);
   });
 
-  test("the same game given twice never pairs with itself", () => {
+  test("the same game given twice is read once", () => {
     const at = { first_release_date: y(2020), platforms: [6] };
     expect(duplicateCandidates([game(1, "Hades", at), game(1, "Hades", at)], { minScore: 0 })).toEqual([]);
+    const twice = duplicateCandidates([game(1, "Hades", at), game(1, "Hades", at), game(2, "Hades", at)]);
+    expect(ids(twice)).toEqual([[1, 2]]);
+    expect(twice[0]?.score).toBe(0.8);
   });
 
   test("a common name counts only games that could pair, and empty keys never match", () => {
