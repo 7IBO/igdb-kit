@@ -50,7 +50,10 @@ export function newArticles(feed: Article[], seen: string[]): { fresh: Article[]
 
 if (import.meta.main) {
   const res = await fetch(FEED, {
-    headers: { "user-agent": "Mozilla/5.0 (compatible; igdb-kit; +https://github.com/7IBO/igdb-kit)", accept: "application/rss+xml" },
+    headers: {
+      "user-agent": "Mozilla/5.0 (compatible; igdb-kit; +https://github.com/7IBO/igdb-kit)",
+      accept: "application/rss+xml",
+    },
   });
   if (!res.ok) {
     console.log(`\n**Could not read IGDB's blog feed (${FEED}): HTTP ${res.status}.**`);
