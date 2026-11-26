@@ -17,7 +17,7 @@ for (const [label, seeds] of [["random", random], ["recent", [...recent, ...rece
   for (let i = 0; i < names.length; i += 40) {
     const list = names.slice(i, i + 40).map((n) => JSON.stringify(n)).join(",");
     const rows = await igdb.games
-      .select(...duplicateFields(), "involved_companies.company.name", "platforms.abbreviation")
+      .select(...duplicateFields(), "involved_companies.company.name", "platforms.abbreviation", "slug", "summary")
       .where(`name = (${list})`)
       .limit(500)
       .execute();
@@ -40,6 +40,9 @@ for (const [label, seeds] of [["random", random], ["recent", [...recent, ...rece
       year: g.first_release_date ? new Date(g.first_release_date * 1000).getUTCFullYear() : null,
       platforms: g.platformNames,
       dev: g.involved_companies?.filter((c: any) => c.developer).map((c: any) => c.companyName),
+      slug: g.slug,
+      summary: g.summary?.slice(0, 160),
+      sites: g.websites?.map((w: any) => w.url),
     });
     console.log("PAIR", label, p.score, p.reasons.join(","), p.conflicts.join(","), JSON.stringify(p.games.map(show)));
   }

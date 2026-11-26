@@ -143,6 +143,7 @@ interface Prepared<G> {
   platforms: Set<number>;
   developers: Set<number>;
   linked: Set<number>;
+  parent: number | undefined;
 }
 
 /**
@@ -153,7 +154,8 @@ interface Prepared<G> {
  * "VII" read as "7"), the name without its edition label, an alternative name, or a store id (from
  * `websites` and `external_games`). Left out: editions and versions (`version_parent`), DLCs,
  * bundles and other content, a remake or remaster next to its original, ports IGDB ties to their
- * game (`parent_game`), and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`).
+ * game (`parent_game`), pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`),
+ * and two remakes or ports of different games, or of one game on other platforms.
  *
  * ```ts
  * const games = await igdb.games.select(...duplicateFields()).where("name = (\"Hades\")").execute();
@@ -251,11 +253,18 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
       (input.involved_companies ?? []).flatMap((row) => (row.developer ? (idOf(row.company) ?? []) : [])),
     ),
     linked,
+    parent: idOf(input.parent_game),
   };
 }
 
 function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateCandidate<G> | null {
   if (a.kind !== b.kind || a.linked.has(b.id) || b.linked.has(a.id)) return null;
+  // Two remakes or ports of different games, or of one game on other platforms (the NES and the
+  // Game Boy Tetris), are not one game.
+  if (a.parent !== undefined && b.parent !== undefined) {
+    if (a.parent !== b.parent) return null;
+    if (a.platforms.size > 0 && b.platforms.size > 0 && !shares(a.platforms, b.platforms)) return null;
+  }
   const reasons: DuplicateReason[] = [];
   const conflicts: DuplicateConflict[] = [];
   let score = 0;

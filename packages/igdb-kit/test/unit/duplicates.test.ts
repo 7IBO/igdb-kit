@@ -148,6 +148,19 @@ describe("duplicateCandidates()", () => {
     expect(pairs[0]?.score).toBe(0.55);
   });
 
+  test("remakes of one game on other platforms, or of different games, do not pair up", () => {
+    const remake = (id: number, parent: number, platforms: number[]) =>
+      game(id, "Tetris", {
+        game_type: GameType.Remake,
+        parent_game: parent,
+        platforms,
+        first_release_date: y(1989),
+      });
+    expect(duplicateCandidates([remake(1, 9, [18]), remake(2, 9, [33])], { minScore: 0 })).toEqual([]);
+    expect(duplicateCandidates([remake(1, 9, [18]), remake(2, 8, [18])], { minScore: 0 })).toEqual([]);
+    expect(ids(duplicateCandidates([remake(1, 9, [18]), remake(2, 9, [18])]))).toEqual([[1, 2]]);
+  });
+
   test("two remakes of one game pair up", () => {
     const at = { game_type: GameType.Remake, first_release_date: y(2023) };
     expect(ids(duplicateCandidates([game(1, "Dead Space", at), game(2, "Dead Space", at)]))).toEqual([
