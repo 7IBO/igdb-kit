@@ -87,6 +87,81 @@ describe("tokens", () => {
     }
   });
 
+  test("hooks.onAuthError reports refused credentials once per refusal, and until when the token works", async () => {
+    const start = Date.now();
+    try {
+      const { fetch } = twitch(() => 400);
+      const store = memoryTokenStore();
+      await store.set({ token: "stored", expiresAt: start + 86_400_000 }); // a day left: renewed ahead
+      const seen: { path: string; expiresAt: number | null; error: unknown }[] = [];
+      const igdb = testClient(fetch, {
+        tokenStore: store,
+        hooks: {
+          onAuthError: (info) => {
+            seen.push(info);
+            throw new Error("ignored");
+          },
+        },
+      });
+      for (const id of [1, 2, 3]) await igdb.games.where(`id = ${id}`);
+      await Bun.sleep(0);
+      expect(seen).toEqual([
+        { path: "oauth2/token", expiresAt: start + 86_400_000, error: expect.any(AuthError) },
+      ]);
+
+      // Expired: five requests wait for one token request, which Twitch refuses.
+      setSystemTime(start + 86_400_000);
+      const results = await Promise.allSettled(
+        [4, 5, 6, 7, 8].map((id) => igdb.games.where(`id = ${id}`).execute({ batch: false })),
+      );
+      expect(results.every((r) => r.status === "rejected" && r.reason instanceof AuthError)).toBe(true);
+      expect(seen.slice(1)).toEqual([
+        { path: "oauth2/token", expiresAt: null, error: expect.any(AuthError) },
+      ]);
+    } finally {
+      setSystemTime();
+    }
+  });
+
+  test("hooks.onAuthError: a 401 that joins a renewal ahead of expiry makes its refusal one that fails now", async () => {
+    const store = memoryTokenStore();
+    await store.set({ token: "stored", expiresAt: Date.now() + 86_400_000 });
+    const fetch = (async (input: string | URL | Request) => {
+      if (!String(input).startsWith("https://id.twitch.tv"))
+        return Response.json({ message: "Authorization Failure" }, { status: 401 });
+      await Bun.sleep(20);
+      return Response.json({ status: 400, message: "invalid client secret" }, { status: 400 });
+    }) as unknown as typeof globalThis.fetch;
+    const seen: { path: string; expiresAt: number | null }[] = [];
+    const igdb = testClient(fetch, {
+      tokenStore: store,
+      hooks: {
+        onAuthError: async ({ path, expiresAt }) => {
+          seen.push({ path, expiresAt });
+          throw new Error("rejected, and ignored");
+        },
+      },
+    });
+    await expect(igdb.games.where("id = 1").execute()).rejects.toBeInstanceOf(AuthError);
+    expect(seen).toEqual([{ path: "oauth2/token", expiresAt: null }]);
+  });
+
+  test("hooks.onAuthError reports a fixed accessToken IGDB refuses, per request", async () => {
+    const fetch = (async () =>
+      Response.json(
+        { message: "Authorization Failure" },
+        { status: 401 },
+      )) as unknown as typeof globalThis.fetch;
+    const seen: string[] = [];
+    const igdb = testClient(fetch, {
+      accessToken: "fixed",
+      clientSecret: undefined,
+      hooks: { onAuthError: (i) => seen.push(i.path) },
+    });
+    await expect(igdb.games.where("id = 1").execute()).rejects.toBeInstanceOf(AuthError);
+    expect(seen).toEqual(["games"]);
+  });
+
   test("a token request that fails is retried like IGDB, then rejects each query with its endpoint and query", async () => {
     const random = spyOn(Math, "random").mockReturnValue(0); // no wait between tries
     try {
