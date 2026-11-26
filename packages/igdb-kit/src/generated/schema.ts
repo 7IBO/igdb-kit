@@ -3408,6 +3408,12 @@ export const PlatformFamily = {
   Nintendo: 5,
   /** Atari */
   Atari: 6,
+  /** SNK */
+  SNK: 7,
+  /** NEC */
+  NEC: 8,
+  /** Commodore */
+  Commodore: 9,
 } as const;
 
 /**
