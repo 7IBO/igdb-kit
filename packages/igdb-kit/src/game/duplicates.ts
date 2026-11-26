@@ -76,18 +76,22 @@ export type DuplicateReason =
   | "platforms"
   | "developer";
 
-/** What two games disagree on: release years two or more apart, or developers with none in common. */
-export type DuplicateConflict = "year" | "developer";
+/**
+ * What weakens a pair: release years two or more apart, developers with none in common, or a
+ * name that three games or more of those passed share ("Abyss", "Survivors").
+ */
+export type DuplicateConflict = "year" | "developer" | "common_name";
 
 /** A pair from {@link duplicateCandidates}. */
 export interface DuplicateCandidate<G> {
   /** The two games, the lower id first. */
   games: [G, G];
   /**
-   * 0 to 1: 0.5 for the same name (0.4 the same once the edition label is left out, or one's
-   * alternative name), 0.6 for a store id with no name in common, plus 0.3 for a shared store id,
-   * 0.2 for the same release year (0.1 a year apart), 0.1 for a platform and 0.15 for a developer
-   * in common. Times 0.5 for years two or more apart, 0.7 for developers with none in common.
+   * 0 to 1: 0.5 for the same name (0.4 when three games or more share it, the same once the
+   * edition label is left out, or one's alternative name), 0.6 for a store id with no name in
+   * common, plus 0.3 for a shared store id, 0.2 for the same release year (0.05 a year apart), 0.1
+   * for a platform and 0.15 for a developer in common. Times 0.5 for years two or more apart, 0.7
+   * for developers with none in common.
    */
   score: number;
   reasons: DuplicateReason[];
@@ -95,7 +99,10 @@ export interface DuplicateCandidate<G> {
 }
 
 export interface DuplicateOptions {
-  /** Lowest score returned, 0 to 1. Default 0.6: a name alone (0.5) is not enough. */
+  /**
+   * Lowest score returned, 0 to 1. Default 0.7: a name needs the same year, or a platform and a
+   * developer, or a store id.
+   */
   minScore?: number | undefined;
   /**
    * Games sharing one name or store id above this count are left out of that group, since a
@@ -157,7 +164,7 @@ export function duplicateCandidates<G extends { id: number }>(
   games: Iterable<G & DuplicateRequires<G>>,
   options: DuplicateOptions = {},
 ): DuplicateCandidate<G>[] {
-  const { minScore = 0.6, maxGroup = 50 } = options;
+  const { minScore = 0.7, maxGroup = 50 } = options;
   if (typeof minScore !== "number" || !(minScore >= 0 && minScore <= 1))
     throw new TypeError(`duplicateCandidates(): minScore must be between 0 and 1, got ${minScore}`);
   if (!Number.isInteger(maxGroup) || maxGroup < 2)
@@ -192,7 +199,7 @@ export function duplicateCandidates<G extends { id: number }>(
         const key = a.id < b.id ? `${a.id} ${b.id}` : `${b.id} ${a.id}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const pair = compare(a, b);
+        const pair = compare(a, b, (groups.get(`n ${a.name}`)?.length ?? 0) > 2);
         if (pair && pair.score >= minScore) pairs.push(pair);
       }
     }
@@ -247,14 +254,15 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
   };
 }
 
-function compare<G>(a: Prepared<G>, b: Prepared<G>): DuplicateCandidate<G> | null {
+function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateCandidate<G> | null {
   if (a.kind !== b.kind || a.linked.has(b.id) || b.linked.has(a.id)) return null;
   const reasons: DuplicateReason[] = [];
   const conflicts: DuplicateConflict[] = [];
   let score = 0;
   if (a.name === b.name) {
     reasons.push("name");
-    score = 0.5;
+    score = common ? 0.4 : 0.5;
+    if (common) conflicts.push("common_name");
   } else if (a.base === b.base) {
     reasons.push("name_without_edition");
     score = 0.4;
@@ -275,7 +283,7 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>): DuplicateCandidate<G> | nul
     const apart = Math.abs(a.year - b.year);
     if (apart <= 1) {
       reasons.push("year");
-      score += apart === 0 ? 0.2 : 0.1;
+      score += apart === 0 ? 0.2 : 0.05;
     } else {
       conflicts.push("year");
       factor *= 0.5;

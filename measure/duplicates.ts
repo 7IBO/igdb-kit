@@ -29,9 +29,9 @@ for (const [label, seeds] of [["random", random], ["recent", [...recent, ...rece
     }
   }
   const all = duplicateCandidates([...games.values()], { minScore: 0 });
-  const kept = all.filter((p) => p.score >= 0.6);
+  const kept = all.filter((p) => p.score >= 0.7);
   const buckets = [0.6, 0.7, 0.8, 0.9, 1.01].map((t, i, a) => [i ? a[i - 1] : 0, t]).map(([lo, hi]) => `${lo}-${hi}: ${all.filter((p) => p.score >= lo! && p.score < hi!).length}`);
-  console.log("SUMMARY", label, "seeds", seeds.length, "names", names.length, "games read", games.size, "pairs>=0.6", kept.length, buckets.join(" | "));
+  console.log("SUMMARY", label, "seeds", seeds.length, "names", names.length, "games read", games.size, "pairs>=0.7", kept.length, buckets.join(" | "));
   for (const p of kept) {
     const show = (g: any) => ({
       id: g.id,

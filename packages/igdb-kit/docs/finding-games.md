@@ -101,7 +101,7 @@ const [pair] = duplicateCandidates(games);
 // { games: [a, b], score: 0.95, reasons: ["name", "year", "platforms", "developer"], conflicts: [] }
 ```
 
-Two games pair up when they share a name (compared as `games.match()` compares titles), the name without its edition label, an alternative name, or a store id from `websites` or `external_games`. The score then adds a release year (the same, or a year apart), a platform and a developer in common, and drops for years two or more apart (the 1993 Doom and the 2016 one) and for developers with none in common. A name alone gives 0.5, under the default `minScore` of 0.6. `reasons` and `conflicts` say what counted.
+Two games pair up when they share a name (compared as `games.match()` compares titles), the name without its edition label, an alternative name, or a store id from `websites` or `external_games`. The score then adds a release year (the same, or a little for a year apart), a platform and a developer in common, and drops for years two or more apart (the 1993 Doom and the 2016 one), for developers with none in common, and for a name three games or more share ("Abyss" names many small games). A name alone gives 0.5 and the default `minScore` is 0.7: a name needs the same year, or a platform and a developer, or a store id. `reasons` and `conflicts` say what counted.
 
 Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game, and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
 

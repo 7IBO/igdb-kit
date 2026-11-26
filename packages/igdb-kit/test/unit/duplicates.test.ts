@@ -76,19 +76,22 @@ describe("duplicateCandidates()", () => {
   });
 
   test("finds a pair by edition label, alternative name or a shared store id", () => {
-    const pairs = duplicateCandidates([
-      game(1, "NieR:Automata - Game of the Year Edition (PS4)", { first_release_date: y(2017) }),
-      game(2, "NieR:Automata", { first_release_date: y(2017) }),
-      game(3, "Pokémon Sword", { first_release_date: y(2019) }),
-      game(4, "Pokemon Epee", {
-        first_release_date: y(2019),
-        alternative_names: [{ name: "Pokémon Sword" }],
-      }),
-      game(5, "Cool Game", { websites: [{ url: "https://store.steampowered.com/app/42/Cool/" }] }),
-      game(6, "Kuuru Geemu", {
-        external_games: [{ external_game_source: 1, uid: "42" }],
-      }),
-    ]);
+    const pairs = duplicateCandidates(
+      [
+        game(1, "NieR:Automata - Game of the Year Edition (PS4)", { first_release_date: y(2017) }),
+        game(2, "NieR:Automata", { first_release_date: y(2017) }),
+        game(3, "Pokémon Sword", { first_release_date: y(2019) }),
+        game(4, "Pokemon Epee", {
+          first_release_date: y(2019),
+          alternative_names: [{ name: "Pokémon Sword" }],
+        }),
+        game(5, "Cool Game", { websites: [{ url: "https://store.steampowered.com/app/42/Cool/" }] }),
+        game(6, "Kuuru Geemu", {
+          external_games: [{ external_game_source: 1, uid: "42" }],
+        }),
+      ],
+      { minScore: 0.5 },
+    );
     const byPair = Object.fromEntries(pairs.map((p) => [p.games.map((g) => g.id).join("-"), p]));
     expect(byPair["1-2"]?.reasons).toEqual(["name_without_edition", "year"]);
     expect(byPair["3-4"]?.reasons).toEqual(["alternative_name", "year"]);
@@ -128,6 +131,23 @@ describe("duplicateCandidates()", () => {
     ]);
   });
 
+  test("a name three games share counts less", () => {
+    const at = { first_release_date: y(2023), platforms: [6] };
+    const two = duplicateCandidates([game(1, "Abyss", at), game(2, "Abyss", at)]);
+    expect(two[0]?.score).toBe(0.8);
+    const three = duplicateCandidates([game(1, "Abyss", at), game(2, "Abyss", at), game(3, "Abyss", at)]);
+    expect(three.map((p) => p.score)).toEqual([0.7, 0.7, 0.7]);
+    expect(three[0]?.conflicts).toEqual(["common_name"]);
+  });
+
+  test("a year apart adds little", () => {
+    const pairs = duplicateCandidates(
+      [game(1, "Mire", { first_release_date: y(2021) }), game(2, "Mire", { first_release_date: y(2022) })],
+      { minScore: 0 },
+    );
+    expect(pairs[0]?.score).toBe(0.55);
+  });
+
   test("two remakes of one game pair up", () => {
     const at = { game_type: GameType.Remake, first_release_date: y(2023) };
     expect(ids(duplicateCandidates([game(1, "Dead Space", at), game(2, "Dead Space", at)]))).toEqual([
@@ -137,8 +157,8 @@ describe("duplicateCandidates()", () => {
 
   test("skips groups larger than maxGroup, and throws for bad options", () => {
     const many = Array.from({ length: 4 }, (_, i) => game(i + 1, "Tetris", { first_release_date: y(1990) }));
-    expect(duplicateCandidates(many)).toHaveLength(6);
-    expect(duplicateCandidates(many, { maxGroup: 3 })).toEqual([]);
+    expect(duplicateCandidates(many, { minScore: 0 })).toHaveLength(6);
+    expect(duplicateCandidates(many, { minScore: 0, maxGroup: 3 })).toEqual([]);
     expect(() => duplicateCandidates(many, { minScore: 2 })).toThrow(TypeError);
     expect(() => duplicateCandidates(many, { maxGroup: 1 })).toThrow(TypeError);
   });
