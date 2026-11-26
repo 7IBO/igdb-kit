@@ -138,8 +138,10 @@ describe("duplicateCandidates()", () => {
     const at = { first_release_date: y(2023), platforms: [6] };
     const two = duplicateCandidates([game(1, "Abyss", at), game(2, "Abyss", at)]);
     expect(two[0]?.score).toBe(0.8);
-    const three = duplicateCandidates([game(1, "Abyss", at), game(2, "Abyss", at), game(3, "Abyss", at)]);
-    expect(three.map((p) => p.score)).toEqual([0.7, 0.7, 0.7]);
+    const abyss = [game(1, "Abyss", at), game(2, "Abyss", at), game(3, "Abyss", at)];
+    expect(duplicateCandidates(abyss)).toEqual([]);
+    const three = duplicateCandidates(abyss, { minScore: 0 });
+    expect(three.map((p) => p.score)).toEqual([0.6, 0.6, 0.6]);
     expect(three[0]?.conflicts).toEqual(["common_name"]);
   });
 
@@ -196,6 +198,12 @@ describe("duplicateCandidates()", () => {
     });
     expect(duplicateCandidates([row(1, null), row(2, null)], { minScore: 0 })[0]?.reasons).toEqual(["name"]);
     expect(duplicateCandidates([row(1, null), row(2, y(2020))], { minScore: 0 })[0]?.score).toBe(0.5);
+    expect(duplicateCandidates([row(1, 0), row(2, y(2020))], { minScore: 0 })[0]?.score).toBe(0.5);
+  });
+
+  test("the same game given twice never pairs with itself", () => {
+    const at = { first_release_date: y(2020), platforms: [6] };
+    expect(duplicateCandidates([game(1, "Hades", at), game(1, "Hades", at)], { minScore: 0 })).toEqual([]);
   });
 
   test("a common name counts only games that could pair, and empty keys never match", () => {

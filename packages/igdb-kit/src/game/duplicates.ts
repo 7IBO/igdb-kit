@@ -92,9 +92,9 @@ export interface DuplicateCandidate<G> {
   /** The two games, the lower id first. */
   games: [G, G];
   /**
-   * 0 to 1: 0.5 for the same name (0.4 when three games or more share it, the same once the
-   * edition label is left out, or one's alternative name), 0.6 for a store id with no name in
-   * common, plus 0.3 for a shared store id, 0.2 for the same release year (0.05 a year apart), 0.1
+   * 0 to 1: 0.5 for the same name (0.3 when three games or more share it), 0.4 for the same name
+   * once the edition label is left out or for one's alternative name, 0.6 for a store id with no
+   * name in common, plus 0.3 for a shared store id, 0.2 for the same release year (0.05 a year apart), 0.1
    * for a platform and 0.15 for a developer in common. Times 0.5 for years two or more apart, 0.6
    * for products of one store with no id in common, 0.7 for developers with none in common.
    */
@@ -246,7 +246,8 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
   for (const { storeId } of externalIds(input as never))
     if (storeId) stores.push(`${storeId.store} ${storeId.kind} ${storeId.id}`);
   const year =
-    typeof input.first_release_date === "number"
+    // IGDB has dates before 1970 (negative), but 0 is how some copies write a missing one.
+    typeof input.first_release_date === "number" && input.first_release_date !== 0
       ? new Date(input.first_release_date * 1000).getUTCFullYear()
       : undefined;
   const ids = (refs: readonly (Ref | null | undefined)[] | null | undefined) =>
@@ -282,8 +283,8 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
 }
 
 function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateCandidate<G> | null {
-  if (a.kind !== b.kind || a.linked.includes(b.id) || b.linked.includes(a.id)) return null;
-  // Two remakes or ports of different games, or of one game on other platforms (the NES and the
+  if (a.id === b.id || a.kind !== b.kind || a.linked.includes(b.id) || b.linked.includes(a.id)) return null;
+  // Two remakes or remasters of different games, or of one game on other platforms (the NES and the
   // Game Boy Tetris), are not one game.
   if (a.parent !== undefined && b.parent !== undefined) {
     if (a.parent !== b.parent) return null;
@@ -294,7 +295,7 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
   let score = 0;
   if (a.name === b.name) {
     reasons.push("name");
-    score = common ? 0.4 : 0.5;
+    score = common ? 0.3 : 0.5;
     if (common) conflicts.push("common_name");
   } else if (a.base === b.base) {
     reasons.push("name_without_edition");
