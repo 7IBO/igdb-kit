@@ -1,5 +1,6 @@
 import { WebsiteType } from "../generated/schema";
 import type { Selection } from "../links/selection";
+import { type Locale, resolveLocale } from "./locale";
 import { idOf, type Ref, type Requires } from "./select";
 
 /** Fields of `websites` that {@link websiteLinks} reads; `websites.trusted` too when selected. */
@@ -111,6 +112,54 @@ function parse(url: string): { key: string; path: string } | undefined {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return undefined;
   const path = `${parsed.pathname}${parsed.search}`.replace(/\/+$/, "");
   return { key: `${parsed.hostname.toLowerCase().replace(/^www\./, "")}${path}`, path };
+}
+
+/** A Wikipedia article of a game, from {@link wikipediaLink}. */
+export interface WikipediaLink {
+  url: string;
+  /** The language of the article, from its address: `"ja"` for ja.wikipedia.org. */
+  language: string;
+}
+
+/**
+ * The game's Wikipedia article in the language of `locale`, else in English, among its websites;
+ * null when it has neither. IGDB lists the English article of most games: about 4% of its
+ * Wikipedia links are in another language, most of them Japanese. A mobile address
+ * (`ja.m.wikipedia.org`) counts as its language.
+ *
+ * ```ts
+ * const game = await igdb.games.select("websites.type", "websites.url").findByIdOrThrow(1942);
+ * wikipediaLink(game, "ja-JP"); // { url: "https://en.wikipedia.org/wiki/The_Witcher_3:_Wild_Hunt", language: "en" }
+ * ```
+ */
+export function wikipediaLink<G extends object>(
+  game: G & Requires<G, WebsiteLinkFields>,
+  locale: Locale,
+): WikipediaLink | null {
+  const own = resolveLocale(locale).language;
+  // Norwegian Bokmål writes on no.wikipedia.org.
+  const wanted = own === "nb" ? "no" : own;
+  const found = new Map<string, string>();
+  for (const row of (game as WebsiteLinksInput).websites ?? []) {
+    const language = row.url ? wikipediaLanguage(row.url) : undefined;
+    if (language && row.url && !found.has(language)) found.set(language, row.url);
+  }
+  for (const language of [wanted, "en"]) {
+    const url = found.get(language);
+    if (url) return { url, language };
+  }
+  return null;
+}
+
+/** `"ja"` for `https://ja.wikipedia.org/...` or `https://ja.m.wikipedia.org/...`, else undefined. */
+function wikipediaLanguage(url: string): string | undefined {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return undefined;
+  }
+  return /^([a-z]{2,3}(?:-[a-z]+)*)\.(?:m\.)?wikipedia\.org$/.exec(host)?.[1];
 }
 
 /** Fields of `videos` that {@link videoLinks} reads. */

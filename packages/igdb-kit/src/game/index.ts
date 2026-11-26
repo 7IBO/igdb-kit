@@ -59,8 +59,10 @@ export {
   type WebsiteLink,
   type WebsiteLinkFields,
   type WebsiteLinksOptions,
+  type WikipediaLink,
   websiteLinkFields,
   websiteLinks,
+  wikipediaLink,
 } from "./links";
 export { type Locale, type ResolvedLocale, resolveLocale } from "./locale";
 export {

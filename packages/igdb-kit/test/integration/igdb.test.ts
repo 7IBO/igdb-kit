@@ -60,6 +60,7 @@ import {
   timeToBeat,
   videoLinks,
   websiteLinks,
+  wikipediaLink,
 } from "../../src/game";
 import { en, type LabelTable } from "../../src/i18n";
 import { fr } from "../../src/i18n/fr";
@@ -955,6 +956,17 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     // Every website type has a kind.
     const websites = websiteTypes.map((t) => ({ id: t.id, type: t.id, url: `https://example.com/${t.id}` }));
     expect(websiteLinks({ websites }).filter((l) => l.kind === "other")).toEqual([]);
+  });
+
+  test("wikipediaLink() finds Japanese articles and falls back on English ones", async () => {
+    const rows = await igdb.websites.select("game").where('url ~ *"ja.wikipedia.org"*').limit(10).execute();
+    const ids = [...new Set(rows.map((r) => r.game).filter((id): id is number => typeof id === "number"))];
+    expect(ids.length).toBeGreaterThan(0);
+    const games = await igdb.games.select("websites.type", "websites.url").where((g) => g.id.any(...ids));
+    for (const game of games) expect(wikipediaLink(game, "ja-JP")?.language).toBe("ja");
+    const witcher3 = await igdb.games.select("websites.type", "websites.url").findByIdOrThrow(1942);
+    expect(wikipediaLink(witcher3, "fr-FR")).toMatchObject({ language: expect.stringMatching(/^(fr|en)$/) });
+    expect(wikipediaLink(witcher3, "en")?.url).toContain("en.wikipedia.org");
   });
 
   test("igdb-kit/i18n has a label for every row of the tables it translates", async () => {
