@@ -176,8 +176,9 @@ export interface NamedFilter {
    * `g.franchises.named("The Witcher")`. A platform also matches by its abbreviation or alternative
    * name. The client looks the names up before sending the query and filters on their ids: a
    * reference table (platforms, genres, themes, game modes...) is read whole and cached for a day,
-   * any other is one cached request per name. A name that matches nothing throws a `NotFoundError`
-   * listing close names.
+   * any other is one cached request per name. On a reference table, accents are ignored too, and
+   * the labels of the client's `labels` dictionaries match (`labels: [fr]`: `g.genres.named("Jeu de
+   * rôle")`). A name that matches nothing throws a `NotFoundError` listing close names.
    */
   named(...names: string[]): Condition;
 }

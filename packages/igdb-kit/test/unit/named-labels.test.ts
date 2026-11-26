@@ -41,13 +41,16 @@ describe("named() with the client's labels", () => {
     expect(error).toBeInstanceOf(NotFoundError);
   });
 
-  test("suggests the label in the language typed", async () => {
+  test("suggests IGDB's name when it contains the text, else the label that does", async () => {
     const igdb = testClient(api().fetch, { labels: [fr] });
-    const error = await igdb.games
-      .where((g) => g.genres.named("rôle"))
-      .execute()
-      .catch((e: unknown) => e);
-    expect((error as NotFoundError).suggestions).toEqual(["Jeu de rôle (RPG)"]);
+    const suggest = (name: string) =>
+      igdb.games
+        .where((g) => g.genres.named(name))
+        .execute()
+        .catch((e: NotFoundError) => e.suggestions);
+    expect(await suggest("aventur")).toEqual(["Aventure"]);
+    expect(await suggest("rôle")).toEqual(["Role-playing (RPG)"]);
+    expect(await suggest("ＲＰ")).toEqual(["Role-playing (RPG)"]);
   });
 
   test("without labels, only IGDB's English names match", async () => {

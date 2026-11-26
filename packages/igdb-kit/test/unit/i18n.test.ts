@@ -11,6 +11,7 @@ import { pl } from "../../src/i18n/pl";
 import { ptBR } from "../../src/i18n/pt-BR";
 import { ru } from "../../src/i18n/ru";
 import { zhCN } from "../../src/i18n/zh-CN";
+import { foldName } from "../../src/query/lookups";
 
 type Texts = Record<string, Record<string, string>>;
 const reference: Record<string, { id: number }[]> = JSON.parse(
@@ -129,16 +130,10 @@ describe("igdb-kit/i18n", () => {
 });
 
 describe("labels matched by named()", () => {
-  // named() folds accents and case: a label shared by two ids of a table would filter on both. The
-  // content descriptors are left out: "Violence" is one descriptor per rating body, in English too.
-  test("no label, in any language or English, names two ids of one table", () => {
-    const fold = (text: string) =>
-      text
-        .trim()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .normalize("NFC")
-        .toLowerCase();
+  // named() folds accents and case: a full label shared by two ids of a table would filter on both.
+  // The content descriptors have no name, so named() never reads them (and "Violence" is one
+  // descriptor per rating body). A part in parentheses may name several ids, as in English.
+  test("no full label, in any language or English, names two ids of one table", () => {
     const clashes: string[] = [];
     for (const table of Object.keys(en.labels)) {
       if (table === "age_rating_content_descriptions_v2") continue;
@@ -146,7 +141,7 @@ describe("labels matched by named()", () => {
       for (const dictionary of [en, ...Object.values(dictionaries)]) {
         const texts = (dictionary.labels as Texts)[table] ?? {};
         for (const [id, text] of Object.entries(texts)) {
-          const key = fold(text);
+          const key = foldName(text);
           owners.set(key, (owners.get(key) ?? new Set()).add(id));
         }
       }

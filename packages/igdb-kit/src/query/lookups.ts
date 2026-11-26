@@ -161,14 +161,14 @@ async function fromTable(
       const all = shown(row);
       // "Role-playing (RPG)" also answers to "Role-playing" and "RPG", "PC (Microsoft Windows)" to "PC".
       const parts = all.flatMap((text) => /^(.+?)\s*\((.+)\)$/.exec(text.trim())?.slice(1) ?? []);
-      return [row, [...all, ...parts].map(fold).filter((text) => text !== "")];
+      return [row, [...all, ...parts].map(foldName).filter((text) => text !== "")];
     }),
   );
   const ids = new Map<string, number[]>();
   const missing: string[] = [];
   const suggestions: string[] = [];
   for (const name of names) {
-    const wanted = fold(name);
+    const wanted = foldName(name);
     const matching = rows.filter((row) => texts.get(row)?.includes(wanted));
     ids.set(
       name,
@@ -179,8 +179,9 @@ async function fromTable(
     for (const row of rows) {
       if (suggestions.length >= SUGGESTIONS * missing.length) break;
       if (!row.name || !texts.get(row)?.some((text) => text.includes(wanted))) continue;
-      // In the language the user typed: "rôle" suggests "Jeu de rôle (RPG)".
-      suggestions.push(ownLabels(row).find((label) => fold(label).includes(wanted)) ?? row.name);
+      // IGDB's name when it contains the text, else the label that does: "aventur" suggests "Aventure".
+      const label = ownLabels(row).find((text) => foldName(text).includes(wanted));
+      suggestions.push(foldName(row.name).includes(wanted) || !label ? row.name : label);
     }
   }
   return { ids, missing, suggestions };
@@ -197,13 +198,14 @@ function translations(dictionaries: readonly LabelDictionary[], endpoint: Endpoi
 }
 
 /**
- * Lower case, without Latin accents: "jeu de role" finds "Jeu de rôle". Only the combining marks
- * of Latin letters go, so that kana keep their voicing marks (ガ is not カ).
+ * @internal Lower case, in compatibility form ("ＲＰＧ" is "RPG"), without combining diacritics:
+ * "jeu de role" finds "Jeu de rôle", as "и" finds "й". Kana voicing marks are not in that range,
+ * so ガ stays apart from カ.
  */
-function fold(text: string): string {
+export function foldName(text: string): string {
   return text
     .trim()
-    .normalize("NFD")
+    .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .normalize("NFC")
     .toLowerCase();
