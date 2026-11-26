@@ -1,4 +1,5 @@
 import { idOf, type Ref, type Requires } from "./game/select";
+import type { KeptDeprecated } from "./generated/schema";
 
 /** Image sizes served by IGDB. */
 export type ImageSize =
@@ -91,8 +92,14 @@ const IMAGE_TYPE_OF_ARTWORK_TYPE: Record<number, number> = {
   15: 16, // Historical artwork
 };
 
-/** Fields of `artworks` that {@link artworkType} reads. */
-export type ArtworkTypeFields = "image_type" | "artwork_type";
+/**
+ * Fields of `artworks` that {@link artworkType} reads: `image_type`, and `artwork_type` while IGDB's
+ * schema still has it. Once IGDB removes it, the schema regenerated without it drops it from this
+ * type too, so code that spreads `bestImageFields()` keeps compiling.
+ */
+export type ArtworkTypeFields =
+  | "image_type"
+  | (KeptDeprecated extends { Artwork: infer F extends string } ? F & "artwork_type" : never);
 
 interface ArtworkTypeInput {
   image_type?: Ref | undefined;
@@ -107,9 +114,13 @@ interface ArtworkTypeInput {
  * `artwork_type` added to IGDB after this version: `artworkType(artwork) === ImageType.ConceptArt`.
  */
 export function artworkType<A extends object>(artwork: A & Requires<A, ArtworkTypeFields>): number | null {
-  const input = artwork as ArtworkTypeInput;
-  const image = idOf(input.image_type);
+  return imageTypeOf(artwork as ArtworkTypeInput);
+}
+
+/** {@link artworkType} for any row with an `image_type`: artworks, covers, logos. */
+export function imageTypeOf(row: ArtworkTypeInput): number | null {
+  const image = idOf(row.image_type);
   if (image !== undefined) return image;
-  const legacy = idOf(input.artwork_type);
+  const legacy = idOf(row.artwork_type);
   return (legacy === undefined ? undefined : IMAGE_TYPE_OF_ARTWORK_TYPE[legacy]) ?? null;
 }

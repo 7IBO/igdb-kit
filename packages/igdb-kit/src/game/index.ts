@@ -32,10 +32,13 @@ export {
 } from "./external-ids";
 export {
   type BestImage,
+  type BestImageFields,
   type BestImageOptions,
   type BestImageRequires,
   bestImage,
   bestImageFields,
+  type CoverFields,
+  coverFields,
 } from "./images";
 export {
   type GameLanguage,
@@ -60,6 +63,14 @@ export {
   websiteLinks,
 } from "./links";
 export { type Locale, type ResolvedLocale, resolveLocale } from "./locale";
+export {
+  type BestLogo,
+  type BestLogoOptions,
+  type BestLogoRequires,
+  bestLogo,
+  type LogoFields,
+  logoFields,
+} from "./logos";
 export { type Multiplayer, type MultiplayerFields, multiplayer, multiplayerFields } from "./multiplayer";
 export {
   type AlternativeNameFields,

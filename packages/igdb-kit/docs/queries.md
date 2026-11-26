@@ -128,7 +128,7 @@ igdb.games.where((g) => g.first_release_date.between("2026-01-01", "2027-01-01")
 
 ### Replaced fields and slow filters
 
-IGDB replaced several fields with reference tables: `games.category` became `game_type`, `release_dates.region` became `release_region`, `external_games.category` became `external_game_source`, and so on. IGDB still accepts the old names but leaves them empty or no longer updates them, so `where category = 0` silently matches nothing. igdb-kit leaves them out of the types and throws a `QueryError` that names the replacement. One exception stays, marked deprecated: IGDB still fills `artworks.artwork_type` on 99.5% of artworks, where its replacement `image_type` is on about half (see [`artworkType()`](display.md#image-urls)).
+IGDB replaced several fields with reference tables: `games.category` became `game_type`, `release_dates.region` became `release_region`, `external_games.category` became `external_game_source`, and so on. IGDB still accepts the old names but leaves them empty or no longer updates them, so `where category = 0` silently matches nothing. igdb-kit leaves them out of the types and throws a `QueryError` that names the replacement. One exception stays, marked deprecated: IGDB still fills `artworks.artwork_type` on 99.5% of artworks, where its replacement `image_type` is on about half (see [`artworkType()`](display.md#image-urls)), until IGDB removes it as announced.
 
 Avoid filters three levels deep, such as `involved_companies.company.name`: IGDB takes 10 to 25 seconds and can time out after about 27. Look the id up first, then filter on `involved_companies.company`; `developedBy()` and `publishedBy()` do it for you.
 

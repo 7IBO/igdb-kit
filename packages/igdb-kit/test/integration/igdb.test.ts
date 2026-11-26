@@ -35,7 +35,9 @@ import {
   ageRating,
   alternativeTitles,
   bestImage,
+  bestLogo,
   companies,
+  coverFields,
   eventTime,
   externalId,
   externalIds,
@@ -45,6 +47,7 @@ import {
   languages,
   localizedCover,
   localizedName,
+  logoFields,
   parentGame,
   platformVersions,
   relatedGameFields,
@@ -304,6 +307,33 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(both).toHaveLength(500);
     for (const a of both)
       expect(artworkType({ image_type: undefined, artwork_type: a.artwork_type })).toBe(a.image_type ?? null);
+  });
+
+  test("covers and logos are typed by image_type, and read by game for bestImage() and bestLogo()", async () => {
+    const [extra, logo] = await Promise.all([
+      igdb.covers
+        .select("game")
+        .where((c) =>
+          and(c.game.notNull(), c.image_type.in(ImageType.AlternativeCover, ImageType.HistoricalCover)),
+        )
+        .limit(1),
+      igdb.logos
+        .select("game")
+        .where((l) => and(l.game.notNull(), l.image_type.eq(ImageType.GameLogoColor)))
+        .limit(1),
+    ]);
+    const coverGame = extra[0]?.game;
+    const logoGame = logo[0]?.game;
+    if (coverGame === undefined || logoGame === undefined) throw new Error("no typed cover or logo");
+    const [covers, logos] = await Promise.all([
+      igdb.covers.select(...coverFields()).findByGames([coverGame]),
+      igdb.logos.select(...logoFields()).findByGames([logoGame]),
+    ]);
+    // A game's other covers point to it, so findByGames() gets more than its main cover.
+    const rows = covers.get(coverGame) ?? [];
+    expect(rows.some((c) => c.image_type !== ImageType.MainCover)).toBe(true);
+    expect(bestImage({ id: coverGame, cover: undefined }, { covers: rows })?.source).toBe("cover");
+    expect(bestLogo(logos.get(logoGame) ?? [])).toMatchObject({ type: ImageType.GameLogoColor });
   });
 
   test("popularitySnapshot() returns ranked rows with their calculation time; IGDB keeps no history", async () => {
