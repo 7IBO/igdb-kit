@@ -2321,6 +2321,18 @@
     {
       "id": 6,
       "name": "Atari"
+    },
+    {
+      "id": 7,
+      "name": "SNK"
+    },
+    {
+      "id": 8,
+      "name": "NEC"
+    },
+    {
+      "id": 9,
+      "name": "Commodore"
     }
   ],
   "image_types": [
