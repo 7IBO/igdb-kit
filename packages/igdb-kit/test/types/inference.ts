@@ -882,7 +882,9 @@ import {
   relatedGameFields,
   relatedGames,
   videoLinks,
+  type WikipediaLink,
   websiteLinks,
+  wikipediaLink,
 } from "../../src/game";
 
 const relatedIds = await igdb.games.select("name", ...relatedGameFields()).findByIdOrThrow(1942);
@@ -941,6 +943,11 @@ externalId(linked, ExternalGameSource.Steam) satisfies string | null;
 externalIds(linked)[0]?.url satisfies string | null | undefined;
 expectType<Equal<ReturnType<typeof externalIds>[number]["storeId"], StoreId | null>>();
 websiteLinks(linked, { kinds: ["official", "social"] });
+wikipediaLink(linked, { locale: "fr-FR" }) satisfies WikipediaLink | null;
+// @ts-expect-error a locale is required
+wikipediaLink(linked, {});
+// @ts-expect-error websites.url is not selected
+wikipediaLink(await igdb.games.select("websites.type").findByIdOrThrow(1), { locale: "fr" });
 videoLinks(linked)[0]?.kind satisfies "trailer" | "gameplay" | "teaser" | "intro" | "other" | undefined;
 // @ts-expect-error external_games.uid is not selected
 externalIds(await igdb.games.select("external_games.external_game_source").findByIdOrThrow(1));

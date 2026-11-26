@@ -61,6 +61,7 @@ import {
   videoLinks,
   websiteLinks,
   wikipediaLink,
+  wikipediaLinkFields,
 } from "../../src/game";
 import { en, type LabelTable } from "../../src/i18n";
 import { fr } from "../../src/i18n/fr";
@@ -959,14 +960,29 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
   });
 
   test("wikipediaLink() finds Japanese articles and falls back on English ones", async () => {
-    const rows = await igdb.websites.select("game").where('url ~ *"ja.wikipedia.org"*').limit(10).execute();
-    const ids = [...new Set(rows.map((r) => r.game).filter((id): id is number => typeof id === "number"))];
+    const rows = await igdb.websites
+      .select("game", "url")
+      .where('url ~ *"ja.wikipedia.org"*')
+      .limit(20)
+      .execute();
+    // The search also finds addresses that hold the host in their path, such as archives.
+    const japanese = rows.filter((r) => /^https?:\/\/ja\.wikipedia\.org\//i.test(r.url ?? ""));
+    const ids = [
+      ...new Set(japanese.map((r) => r.game).filter((id): id is number => typeof id === "number")),
+    ];
     expect(ids.length).toBeGreaterThan(0);
-    const games = await igdb.games.select("websites.type", "websites.url").where((g) => g.id.in(...ids));
-    for (const game of games) expect(wikipediaLink(game, "ja-JP")?.language).toBe("ja");
-    const witcher3 = await igdb.games.select("websites.type", "websites.url").findByIdOrThrow(1942);
-    expect(wikipediaLink(witcher3, "fr-FR")).toMatchObject({ language: expect.stringMatching(/^(fr|en)$/) });
-    expect(wikipediaLink(witcher3, "en")?.url).toContain("en.wikipedia.org");
+    const games = await igdb.games
+      .select(...wikipediaLinkFields())
+      .where((g) => g.id.in(...ids))
+      .limit(20);
+    expect(games.length).toBeGreaterThan(0);
+    for (const game of games) {
+      expect(wikipediaLink(game, { locale: "ja-JP" })).toMatchObject({ language: "ja", match: "locale" });
+      const fallback = wikipediaLink(game, { locale: "ko", english: false });
+      expect(fallback === null || fallback.language === "ko").toBe(true);
+    }
+    const witcher3 = await igdb.games.select(...wikipediaLinkFields()).findByIdOrThrow(1942);
+    expect(wikipediaLink(witcher3, { locale: "en" })).toMatchObject({ language: "en", match: "locale" });
   });
 
   test("igdb-kit/i18n has a label for every row of the tables it translates", async () => {

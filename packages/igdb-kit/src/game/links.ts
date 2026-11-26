@@ -114,52 +114,86 @@ function parse(url: string): { key: string; path: string } | undefined {
   return { key: `${parsed.hostname.toLowerCase().replace(/^www\./, "")}${path}`, path };
 }
 
-/** A Wikipedia article of a game, from {@link wikipediaLink}. */
-export interface WikipediaLink {
-  url: string;
-  /** The language of the article, from its address: `"ja"` for ja.wikipedia.org. */
-  language: string;
+/** Fields of `websites` that {@link wikipediaLink} reads. */
+export type WikipediaLinkFields = "websites.url";
+
+/** The fields {@link wikipediaLink} reads, to spread into `select()`. */
+export function wikipediaLinkFields(): Selection<"games", WikipediaLinkFields> {
+  return Object.freeze(["websites.url"] as const);
 }
 
+/** A Wikipedia article of a game, from {@link wikipediaLink}. */
+export interface WikipediaLink {
+  /** `https://<language>.wikipedia.org/...`, the desktop address even for a mobile link. */
+  url: string;
+  /** Wikipedia's code of the article's language, from its address: `"ja"`, `"no"` for Bokmål. */
+  language: string;
+  /** `"locale"` when the article is in the language of the locale, `"english"` for the fallback. */
+  match: "locale" | "english";
+}
+
+export interface WikipediaLinkOptions {
+  locale: Locale;
+  /** Fall back on the English article. Default true. */
+  english?: boolean | undefined;
+}
+
+/** Locales whose Wikipedia is not at their language code. */
+const wikipediaCodes: Record<string, string> = {
+  nb: "no",
+  fil: "tl",
+  yue: "zh-yue",
+  lzh: "zh-classical",
+  gsw: "als",
+  iw: "he",
+  in: "id",
+  ji: "yi",
+};
+
 /**
- * The game's Wikipedia article in the language of `locale`, else in English, among its websites;
- * null when it has neither. IGDB lists the English article of most games: about 4% of its
- * Wikipedia links are in another language, most of them Japanese. A mobile address
- * (`ja.m.wikipedia.org`) counts as its language.
+ * The game's Wikipedia article in the language of the locale, else in English, among its websites
+ * of any type (IGDB files some under another type); null when it has neither. In October 2026,
+ * about 4% of IGDB's Wikipedia links were in another language than English, most of them Japanese.
  *
  * ```ts
- * const game = await igdb.games.select("websites.type", "websites.url").findByIdOrThrow(1942);
- * wikipediaLink(game, "ja-JP"); // { url: "https://en.wikipedia.org/wiki/The_Witcher_3:_Wild_Hunt", language: "en" }
+ * const game = await igdb.games.select(...wikipediaLinkFields()).findByIdOrThrow(id);
+ * wikipediaLink(game, { locale: "ja-JP" }); // { url: "https://ja.wikipedia.org/wiki/…", language: "ja", match: "locale" }
  * ```
  */
 export function wikipediaLink<G extends object>(
-  game: G & Requires<G, WebsiteLinkFields>,
-  locale: Locale,
+  game: G & Requires<G, WikipediaLinkFields>,
+  options: WikipediaLinkOptions,
 ): WikipediaLink | null {
-  const own = resolveLocale(locale).language;
-  // Norwegian Bokmål writes on no.wikipedia.org.
-  const wanted = own === "nb" ? "no" : own;
+  const own = resolveLocale(options.locale).language;
+  const wanted = wikipediaCodes[own] ?? own;
   const found = new Map<string, string>();
   for (const row of (game as WebsiteLinksInput).websites ?? []) {
-    const language = row.url ? wikipediaLanguage(row.url) : undefined;
-    if (language && row.url && !found.has(language)) found.set(language, row.url);
+    const article = row.url ? wikipediaArticle(row.url) : undefined;
+    if (article && !found.has(article.language)) found.set(article.language, article.url);
   }
-  for (const language of [wanted, "en"]) {
-    const url = found.get(language);
-    if (url) return { url, language };
-  }
-  return null;
+  const url = found.get(wanted);
+  if (url) return { url, language: wanted, match: "locale" };
+  const english = found.get("en");
+  return english && options.english !== false ? { url: english, language: "en", match: "english" } : null;
 }
 
-/** `"ja"` for `https://ja.wikipedia.org/...` or `https://ja.m.wikipedia.org/...`, else undefined. */
-function wikipediaLanguage(url: string): string | undefined {
-  let host: string;
+/** The language and desktop https address of a Wikipedia page (`ja.m.wikipedia.org` is `ja`). */
+function wikipediaArticle(url: string): { language: string; url: string } | undefined {
+  let parsed: URL;
   try {
-    host = new URL(url).hostname.toLowerCase();
+    parsed = new URL(url.trim());
   } catch {
     return undefined;
   }
-  return /^([a-z]{2,3}(?:-[a-z]+)*)\.(?:m\.)?wikipedia\.org$/.exec(host)?.[1];
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return undefined;
+  const language = /^([a-z]{2,3}(?:-[a-z]+)*)\.(?:m\.)?wikipedia\.org$/.exec(
+    parsed.hostname.toLowerCase(),
+  )?.[1];
+  if (!language || language === "www") return undefined;
+  return {
+    language,
+    url: `https://${language}.wikipedia.org${parsed.pathname}${parsed.search}${parsed.hash}`,
+  };
 }
 
 /** Fields of `videos` that {@link videoLinks} reads. */
