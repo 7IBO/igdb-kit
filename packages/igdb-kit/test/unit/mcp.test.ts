@@ -50,7 +50,8 @@ describe("MCP server", () => {
     expect(await mcp.handle({ jsonrpc: "2.0", id: 2, method: "resources/list" })).toMatchObject({
       error: { code: -32601 },
     });
-    expect(await mcp.handle({ id: 3 })).toMatchObject({ error: { code: -32600 } });
+    expect(await mcp.handle({ id: 3, method: "ping" })).toMatchObject({ id: 3, error: { code: -32600 } });
+    expect(await mcp.handle({ jsonrpc: "2.0", id: 4, result: {} })).toBeUndefined();
     expect(await mcp.handle(call("nope"))).toMatchObject({ error: { code: -32602 } });
   });
 
@@ -75,14 +76,29 @@ describe("MCP server", () => {
     }
   });
 
-  test("get_game reads the game by slug, then its time to beat", async () => {
+  test("get_game reads the game by slug, then its time to beat, and caches both", async () => {
     const { mcp, api } = server((c) =>
       Response.json(c.url.endsWith("/games") ? [GAME] : [{ id: 5, normally: 3600, completely: 7200 }]),
     );
-    const out = JSON.parse((await text(mcp, "get_game", { slug: 'the-witcher-3"' })).text);
+    const out = JSON.parse((await text(mcp, "get_game", { slug: GAME.slug })).text);
     expect(out).toMatchObject({ ...GAME, time_to_beat: { normally: 3600 } });
-    expect(api.calls[0]?.body).toContain('where slug = "the-witcher-3\\"";');
+    expect(api.calls[0]?.body).toContain(`where slug = "${GAME.slug}";`);
     expect(api.calls[1]?.body).toContain("where game_id = 1942;");
+    await text(mcp, "get_game", { slug: GAME.slug });
+    expect(api.calls).toHaveLength(2);
+    expect(await text(mcp, "get_game", { slug: 'a"; fields *' })).toMatchObject({ isError: true });
+  });
+
+  test("get_game by id reads the game and its time to beat together", async () => {
+    const { mcp, api } = server((c) => Response.json(c.url.endsWith("/games") ? [GAME] : []));
+    expect(JSON.parse((await text(mcp, "get_game", { id: 1942 })).text)).toMatchObject({
+      id: 1942,
+      time_to_beat: null,
+    });
+    expect(api.calls.map((c) => c.body.match(/where [^;]+/)?.[0]).sort()).toEqual([
+      "where game_id = 1942",
+      "where id = 1942",
+    ]);
   });
 
   test("get_game says null for an unknown game", async () => {
@@ -106,6 +122,12 @@ describe("MCP server", () => {
     expect(await text(mcp, "search_games", { query: "zelda", limit: 500 })).toMatchObject({ isError: true });
     expect(await text(mcp, "upcoming_releases", { from: "tomorrow" })).toMatchObject({ isError: true });
     expect(await text(mcp, "popular_games", { metric: "Loudest" })).toMatchObject({ isError: true });
+    expect(await text(mcp, "popular_games", { metric: "toString" })).toMatchObject({ isError: true });
+    expect(await text(mcp, "query", { endpoint: "constructor", body: "fields *;" })).toMatchObject({
+      isError: true,
+    });
+    expect(await text(mcp, "describe_endpoint", { endpoint: "__proto__" })).toMatchObject({ isError: true });
+    expect(await text(mcp, "upcoming_releases", { from: "2025-02-30" })).toMatchObject({ isError: true });
     expect(api.calls).toHaveLength(0);
   });
 
@@ -132,11 +154,15 @@ describe("MCP server", () => {
       yield "";
       yield "{not json";
       yield '{"jsonrpc":"2.0","method":"notifications/initialized"}';
+      yield '[{"jsonrpc":"2.0","id":2,"method":"ping"},{"jsonrpc":"2.0","method":"notifications/initialized"}]';
+      yield "[]";
     }
     await serveLines(mcp, lines(), (line) => out.push(line));
     expect(out.map((l) => JSON.parse(l))).toEqual([
       { jsonrpc: "2.0", id: 1, result: {} },
       { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } },
+      [{ jsonrpc: "2.0", id: 2, result: {} }],
+      { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request: empty batch" } },
     ]);
   });
 });

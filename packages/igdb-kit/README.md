@@ -129,7 +129,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | `igdb-kit/proxy` | `igdbProxy()`, to query IGDB from the browser through your server |
 | `igdb-kit/redis` | A token store, a rate limiter and a cache shared through Redis |
 | `igdb-kit/webhooks` | `webhookHandler()` and `parseWebhook()` |
-| `igdb-kit/mcp` | `createMcpServer()`, the server `npx igdb-kit mcp` runs |
+| `igdb-kit/mcp` | `createMcpServer()` and `serveLines()`, the server `npx igdb-kit mcp` runs |
 
 ## Compatibility
 
