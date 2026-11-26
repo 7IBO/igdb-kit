@@ -34,5 +34,12 @@ describe("ratingOf()", () => {
   test("lists the fields of the sources asked, all three by default", () => {
     expect(ratingFields("critics")).toEqual(["aggregated_rating", "aggregated_rating_count"]);
     expect(ratingFields()).toHaveLength(6);
+    expect(ratingFields("total", "total")).toHaveLength(2);
+  });
+
+  test("throws for a minCount that is not a finite number", () => {
+    const game = { id: 2, total_rating: 70, total_rating_count: 3 };
+    expect(() => ratingOf(game, { minCount: Number.NaN })).toThrow(TypeError);
+    expect(() => ratingOf(game, { minCount: { total: Number.POSITIVE_INFINITY } })).toThrow(TypeError);
   });
 });

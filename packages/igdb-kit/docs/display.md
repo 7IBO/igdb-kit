@@ -74,7 +74,7 @@ Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the co
 
 ## Ratings
 
-- **`ratingOf(game, { prefer?, minCount? })`** returns `{ value, count, source }`: the first source of `prefer` (`"total"` by default, then any order of `"total"`, `"critics"`, `"users"`) with a value and at least `minCount` votes (1 by default; a number, or one per source such as `{ critics: 3, users: 20 }`), else null. `total` is IGDB's combined rating (`total_rating`), `critics` the press average (`aggregated_rating`), `users` IGDB's users (`rating`). The value goes from 0 to 100, not rounded. Set `minCount`: a game with one vote can have a total of 100. Only the fields of the sources in `prefer` are required; `ratingFields("critics", "users")` selects them.
+- **`ratingOf(game, { prefer?, minCount? })`** returns `{ value, count, source }`: the first source of `prefer` (`["total"]` by default; any order of `"total"`, `"critics"`, `"users"`) with a value and at least `minCount` votes (a number, or one per source such as `{ critics: 3, users: 20 }`; 1 by default, and a value below 1 counts as 1), else null. `total` is IGDB's combined rating (`total_rating`), `critics` the press average (`aggregated_rating`), `users` IGDB's users (`rating`). The value goes from 0 to 100, not rounded. Set `minCount`: a game with one vote can have a total of 100. Only the fields of the sources in `prefer` are required; `ratingFields("critics", "users")` selects them. In a stored row they must be numbers: a `numeric` column read as a string does not compile.
 
 To rank games by rating, filter on the count in the query, before the sort: `.where((g) => g.total_rating_count.gte(50)).sort("total_rating", "desc")`.
 
