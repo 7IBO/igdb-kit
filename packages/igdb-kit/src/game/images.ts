@@ -39,10 +39,13 @@ export type BestImageRequires<G> = RequiresIfSelected<G, "cover", "cover.image_i
 
 type ImageFields = "image_id" | "width" | "height";
 
-type BestImageFields = Selection<
+export type BestImageFields = Selection<
   "games",
   `cover.${ImageFields}` | `artworks.${ImageFields | ArtworkTypeFields}` | `screenshots.${ImageFields}`
 >;
+
+// IGDB announced the end of `artwork_type`: the list drops it once the schema no longer has it.
+const hasArtworkType = "artwork_type" in (entities.Artwork ?? {});
 
 /**
  * The fields {@link bestImage} reads, to spread into `select()`: the cover, the artworks with their
@@ -64,16 +67,13 @@ export function bestImageFields(): BestImageFields {
   ] as const) as BestImageFields;
 }
 
-// IGDB announced the end of `artwork_type`: the list drops it once the schema no longer has it.
-const hasArtworkType = "artwork_type" in (entities.Artwork ?? {});
-
 export interface BestImage {
   /** For `imageUrl()` and `imageSrcSet()`. */
   image_id: string;
-  /** `"cover"` for `game.cover` and the rows of `covers`, `"logo"` for the rows of `logos`. */
-  source: "cover" | "artwork" | "screenshot" | "logo";
+  /** `"cover"` for `game.cover` and the rows of the `covers` option. */
+  source: "cover" | "artwork" | "screenshot";
   /**
-   * `ImageType` id of an artwork, a row of `covers` or a logo, from `artworkType()`; null for a
+   * `ImageType` id of an artwork or a row of the `covers` option, from `artworkType()`; null for a
    * screenshot, `game.cover` and a cover IGDB has not typed.
    */
   type: number | null;
@@ -84,7 +84,7 @@ export interface BestImage {
   ratio: number | null;
 }
 
-export interface BestImageOptions {
+export interface BestImageOptions<C extends object = CoverRow> {
   /**
    * `"cover"` (default): the box art, else an artwork that is a cover, then key art or another
    * artwork, then a screenshot. `"background"`: a landscape artwork (key art without logo first),
@@ -96,11 +96,22 @@ export interface BestImageOptions {
    * only the main one, and IGDB moves alternative, square and historical covers out of `artworks`
    * at the end of 2026. Without a main cover, these come before the artworks.
    */
-  covers?: readonly CoverRow[] | undefined;
+  covers?: readonly (C & Requires<C, "image_id" | "image_type">)[] | undefined;
 }
 
 interface CoverRow extends ImageRow {
   image_type?: number | { id: number } | undefined;
+}
+
+/** Fields of `covers` that the `covers` option of {@link bestImage} reads. */
+export type CoverFields = "image_id" | "image_type" | "width" | "height";
+
+/**
+ * The fields the `covers` option of {@link bestImage} reads, for `igdb.covers`:
+ * `igdb.covers.select(...coverFields()).findByGames(ids)`.
+ */
+export function coverFields(): Selection<"covers", CoverFields> {
+  return Object.freeze(["image_id", "image_type", "width", "height"] as const);
 }
 
 // Artwork types, best first, for each use.
@@ -133,20 +144,18 @@ const backgroundTypes: readonly (number | null)[] = [
  * `prefer: "background"`, a wide image for a banner. Null when the game has no image at all.
  *
  * ```ts
- * const game = await igdb.games.select("cover.image_id", "cover.width", "cover.height",
- *   "artworks.image_id", "artworks.image_type", "artworks.artwork_type", "artworks.width", "artworks.height",
- *   "screenshots.image_id").findByIdOrThrow(119133);
+ * const game = await igdb.games.select(...bestImageFields()).findByIdOrThrow(119133);
  * const hero = bestImage(game, { prefer: "background" });
  * imageUrl(hero?.image_id, "1080p"); // the 1920x620 artwork of Elden Ring, not one of its logos
  * ```
  */
-export function bestImage<G extends object>(
+export function bestImage<G extends object, C extends object = CoverRow>(
   game: G & BestImageRequires<G>,
-  options: BestImageOptions = {},
+  options: BestImageOptions<C> = {},
 ): BestImage | null {
   const input = game as BestImageInput;
   const artworks = typed(input.artworks);
-  const covers = typed(options.covers);
+  const covers = typed(options.covers as readonly CoverRow[] | undefined);
   const cover = input.cover?.image_id ? input.cover : undefined;
   const screenshot = input.screenshots?.find((row) => row.image_id);
   const artwork = (types: readonly (number | null)[], landscape: boolean) => pick(artworks, types, landscape);

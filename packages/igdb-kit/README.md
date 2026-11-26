@@ -109,7 +109,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | [Linked data](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/linked-data.md) | `findByGames()`, `findBy()`, `family()`, `series()`, `catalog()`, views, `expand()`, reusable selections |
 | [Popularity](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/popularity.md) | `popular()`, `weightedPopular()`, `popularitySnapshot()` |
 | [Release calendar](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/releases.md) | `releases()`, date precision, regions and statuses |
-| [Displaying a game](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/display.md) | Every helper of `igdb-kit/game`, image URLs |
+| [Displaying a game](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/display.md) | Every helper of `igdb-kit/game`: dates, companies, stores, the hero image, the logo, image URLs |
 | [Languages](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/languages.md) | Everything that follows a locale, `resolveLocale()`, translated labels in `igdb-kit/i18n` |
 | [Keeping a local copy](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/local-copy.md) | `sync()`, webhooks, `removed()`, `igdb-kit/schema` |
 | [Client, batching and servers](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/client.md) | Rate limit and tokens, options, hooks, `batch()`, caching, Redis, browser proxy, errors |

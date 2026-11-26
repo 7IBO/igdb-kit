@@ -79,8 +79,22 @@ Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the co
 
 ## Pictures and platform versions
 
-- **`bestImage(game, { prefer?, covers? })`** returns `{ image_id, source, type, width, height, ratio }`: the cover, else a cover artwork, key art or a screenshot (13% of complete games have no cover). `prefer: "background"` gives a wide image for a banner. Never a logo or an icon. `game.cover` is only the main cover: pass the game's other covers (alternative, square, historical) as `covers`, read with `igdb.covers.select(...coverFields()).findByGames(ids)`, and they come before the artworks.
-- **`bestLogo(logos, { on?, historical? })`** returns the same shape for a game's logo, from its rows of `logos` (`igdb.logos.select(...logoFields()).findByGames(ids)`; a game does not list its logos). `on: "dark"` takes the white logo, else the color one; `on: "light"` the black one, else the color one; by default the color one first. A historical logo comes last, unless `historical: false`. Artworks typed as logos work too.
+- **`bestImage(game, { prefer?, covers? })`** returns `{ image_id, source, type, width, height, ratio }`: the cover, else a cover artwork, key art or a screenshot (13% of complete games have no cover). `prefer: "background"` gives a wide image for a banner. Never a logo or an icon. `game.cover` is only the main cover: pass the game's other covers (alternative, square, historical) as `covers`, from `covers.findByGames()` with `coverFields()`, and they come right after it.
+- **`bestLogo(logos, { on?, includeHistorical? })`** returns `{ image_id, type, width, height, ratio }` for a game's logo, from its rows of `logos` (a game does not list its logos). `on: "dark"` takes the white logo, else the color one; `on: "light"` the black one, else the color one; without `on`, the color one, then white, then black. A historical logo comes last, without `on` only (IGDB does not say its colors): `includeHistorical` sets it. Artworks typed as logos work too.
+
+A game page's hero image and logo take one multiquery:
+
+```ts
+import { bestImage, bestImageFields, bestLogo, coverFields, logoFields } from "igdb-kit/game";
+
+const { game, covers, logos } = await igdb.batch({
+  game: igdb.games.select("name", ...bestImageFields()).findById(1942),
+  covers: igdb.covers.select(...coverFields()).findByGames([1942]),
+  logos: igdb.logos.select(...logoFields()).findByGames([1942]),
+});
+const hero = game && bestImage(game, { prefer: "background", covers: covers.get(1942) ?? [] });
+const logo = bestLogo(logos.get(1942) ?? [], { on: "dark" });
+```
 - **`platformVersions(platform, { locale? })`** returns `[{ version, release, releases }]`: the versions of a console (Slim, Pro, OLED) earliest first, with the date for the user's region.
 
 ## Missing data
@@ -98,13 +112,13 @@ imageUrl(game.cover?.url, "cover_big"); // the url field IGDB returns (always t_
 imageSrcSet(game.cover?.image_id, "cover_big"); // "…/t_cover_big/co1wyy.jpg 1x, …/t_cover_big_2x/co1wyy.jpg 2x"
 ```
 
-`artworkType()` gives the `ImageType` of an artwork. IGDB fills `image_type` on about half of the artworks and the deprecated `artwork_type` on nearly all, numbered differently (8 is "Infographic" in `artwork_types` and "Main cover" in `image_types`), so it reads `image_type` and falls back to `artwork_type` converted. IGDB announced in August 2026 that covers and logos move out of `artworks` into `covers` and `logos`, that the cover and logo types of `artwork_type` stop at the end of 2026, and that the field goes later: once IGDB's schema drops it, the next igdb-kit version stops asking for it (`bestImageFields()` and the fields `artworkType()` requires), and `image_type` alone is read:
+`artworkType()` gives the `ImageType` of an artwork. IGDB fills `image_type` on about half of the artworks and the deprecated `artwork_type` on nearly all, numbered differently (8 is "Infographic" in `artwork_types` and "Main cover" in `image_types`), so it reads `image_type` and falls back to `artwork_type` converted. IGDB announced in August 2026 that covers and logos move out of `artworks` into `covers` and `logos`, that the cover and logo types of `artwork_type` stop at the end of 2026, and that the field goes later: once IGDB's schema drops it, the next igdb-kit version stops asking for it (`bestImageFields()` and the fields `artworkType()` requires), and `image_type` alone is read. Versions released before that keep asking for `artwork_type`: upgrade igdb-kit when IGDB removes it.
 
 ```ts
 import { artworkType, ImageType } from "igdb-kit";
 
 const artworks = await igdb.artworks
-  .select("image_id", "image_type", "artwork_type")
+  .select("image_id", "image_type", "artwork_type") // drop artwork_type once IGDB removes it
   .where((a) => a.game.eq(1942));
 const conceptArt = artworks.filter((a) => artworkType(a) === ImageType.ConceptArt);
 ```

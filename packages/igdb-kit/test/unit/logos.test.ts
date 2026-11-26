@@ -17,7 +17,6 @@ describe("bestLogo", () => {
     expect(bestLogo(rows)?.image_id).toBe("white");
     expect(bestLogo([...rows, logo("color", ImageType.GameLogoColor)])).toEqual({
       image_id: "color",
-      source: "logo",
       type: ImageType.GameLogoColor,
       width: 400,
       height: 100,
@@ -33,11 +32,19 @@ describe("bestLogo", () => {
     expect(bestLogo(rows, { on: "light" })?.image_id).toBe("black");
   });
 
-  test("falls back to a historical logo unless told not to", () => {
+  test("falls back to a historical logo without a background, or when asked", () => {
     const rows = [logo("old", ImageType.HistoricalLogo)];
     expect(bestLogo(rows)?.image_id).toBe("old");
-    expect(bestLogo(rows, { historical: false })).toBeNull();
+    expect(bestLogo(rows, { includeHistorical: false })).toBeNull();
+    // Its colors are unknown, so a background leaves it out unless asked.
+    expect(bestLogo(rows, { on: "dark" })).toBeNull();
+    expect(bestLogo(rows, { on: "dark", includeHistorical: true })?.image_id).toBe("old");
     expect(bestLogo([...rows, logo("now", ImageType.GameLogoColor)])?.image_id).toBe("now");
+  });
+
+  test("needs image_id and image_type selected", () => {
+    // @ts-expect-error image_type not selected
+    expect(bestLogo([{ id: 1, image_id: "x" }])).toBeNull();
   });
 
   test("reads artworks typed by artwork_type, which numbers logos the same", () => {
@@ -47,7 +54,7 @@ describe("bestLogo", () => {
 
   test("leaves out key art, untyped rows and rows without an image", () => {
     expect(bestLogo([logo("art", ImageType.KeyArtWithLogo), logo("none", undefined)])).toBeNull();
-    expect(bestLogo([{ id: 3, image_type: ImageType.GameLogoColor }])).toBeNull();
+    expect(bestLogo([{ id: 3, image_id: undefined, image_type: ImageType.GameLogoColor }])).toBeNull();
     expect(bestLogo([])).toBeNull();
   });
 });
