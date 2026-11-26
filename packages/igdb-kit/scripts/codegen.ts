@@ -184,7 +184,9 @@ const endpointOf = new Map<string, string>(); // message name -> endpoint path
 const warnings: string[] = [];
 const docsByMessage = new Map<string, DocEntity>();
 for (const d of docs) {
+  // The first entry wins: the page's own, before one kept from a previous version (docs-fields.ts).
   const message = d.name.replace(/\s+/g, "");
+  if (docsByMessage.has(message)) continue;
   docsByMessage.set(message, d);
   if (messages.has(message)) endpointOf.set(message, d.path);
 }

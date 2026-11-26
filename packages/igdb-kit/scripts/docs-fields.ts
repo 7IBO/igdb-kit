@@ -55,7 +55,8 @@ function entity(m: string, e: string): string {
 /** The text of an HTML fragment: tags dropped, entities decoded, spaces collapsed. */
 export function textOf(html: string): string {
   return html
-    .replace(/<[^>]+>/g, " ")
+    .replace(/<(?:br|\/?(?:p|li|td|th|tr|div))\b[^>]*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
     .replace(/&(#?\w+);/g, entity)
     .replace(/\s+/g, " ")
     .replace(/ ([.,;:!?)])/g, "$1")
@@ -125,11 +126,16 @@ export function changes(before: DocEndpoint[], after: DocEndpoint[]): string[] {
 
 /**
  * The new file: the endpoints the page gives, plus the previous entry of each one it no longer
- * gives, so that a changed layout never takes an endpoint out of the library on its own.
+ * gives, so that a changed layout never takes an endpoint out of the library on its own. A renamed
+ * section keeps its previous name, which codegen matches to the proto: the rename is only reported.
  */
 export function merged(before: DocEndpoint[], after: DocEndpoint[]): DocEndpoint[] {
+  const old = new Map(before.map((e) => [e.path, e]));
   const paths = new Set(after.map((e) => e.path));
-  return [...after, ...before.filter((e) => !paths.has(e.path))];
+  return [
+    ...after.map((e) => ({ ...e, name: old.get(e.path)?.name ?? e.name })),
+    ...before.filter((e) => !paths.has(e.path)),
+  ];
 }
 
 async function main(): Promise<number> {
@@ -149,15 +155,18 @@ async function main(): Promise<number> {
   }
   const after = parseDocs(html);
   const before: DocEndpoint[] = JSON.parse(readFileSync(OUT, "utf8"));
-  if (after.length < before.length - MAX_MISSING) {
+  const paths = new Set(after.map((e) => e.path));
+  const missing = before.filter((e) => !paths.has(e.path)).length;
+  if (missing > MAX_MISSING) {
     console.log(
-      `\n**IGDB's API docs gave ${after.length} endpoints, against ${before.length} before: codegen/docs-fields.json was left as it was.**`,
+      `\n**IGDB's API docs miss ${missing} of the ${before.length} endpoints: codegen/docs-fields.json was left as it was.**`,
     );
     return 1;
   }
+  const next = `${JSON.stringify(merged(before, after), null, 1)}\n`;
+  if (next !== readFileSync(OUT, "utf8")) writeFileSync(OUT, next);
   const diff = changes(before, after);
   if (diff.length) {
-    writeFileSync(OUT, `${JSON.stringify(merged(before, after), null, 1)}\n`);
     console.log(`\n## IGDB's API docs\n\nRead each change before merging.\n\n${diff.join("\n")}`);
   }
   return 0;

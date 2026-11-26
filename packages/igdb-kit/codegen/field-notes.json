@@ -69,7 +69,6 @@
     "popularity_type": "The metric this value measures",
     "value": "The game's value for the metric; each metric has its own scale",
     "external_popularity_source": "Where the metric comes from: IGDB, Steam, Twitch...",
-    "checksum": "Never filled by IGDB",
     "calculated_at": "When IGDB computed the value"
   },
   "PopularityType": {

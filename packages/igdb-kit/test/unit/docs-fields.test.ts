@@ -53,6 +53,7 @@ describe("API docs", () => {
     expect(textOf("A&nbsp;<b>bold</b>\n  &#39;word&#39; &lt;3")).toBe("A bold 'word' <3");
     expect(textOf("It&#x27;s one&hellip; &rsquo;")).toBe("It's one\u2026 \u2019");
     expect(textOf("line<br>break, <code>a</code>.")).toBe("line break, a.");
+    expect(textOf("<code>game</code>&#39;s <b>bold</b>er")).toBe("game's bolder");
     expect(textOf("&unknown; &#0;")).toBe("&unknown; &#0;");
   });
 
@@ -60,6 +61,10 @@ describe("API docs", () => {
     const before = parseDocs(PAGE);
     const after = before.slice(1);
     expect(merged(before, after).map((e) => e.path)).toEqual(["covers", "age_ratings"]);
+    expect(merged(before, [{ ...after[0], name: "Covers" } as never]).map((e) => e.name)).toEqual([
+      "Cover",
+      "Age Rating",
+    ]);
     const [first] = before;
     if (!first) throw new Error("no endpoint");
     const renamed = [{ ...first, name: "Age Rating Old" }, ...after];
