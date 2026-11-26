@@ -24,6 +24,17 @@ export {
   releaseRegionName,
 } from "./display";
 export {
+  type DuplicateCandidate,
+  type DuplicateConflict,
+  type DuplicateExtraFields,
+  type DuplicateFields,
+  type DuplicateInput,
+  type DuplicateOptions,
+  type DuplicateReason,
+  duplicateCandidates,
+  duplicateFields,
+} from "./duplicates";
+export {
   type ExternalId,
   type ExternalIdFields,
   externalId,
