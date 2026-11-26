@@ -1,7 +1,8 @@
 name: Schema update
 
 # Weekly: downloads the latest igdbapi.proto and reference tables, regenerates the types, reads IGDB's
-# blog feed, and opens a PR if anything changed or a new article came out.
+# blog feed, and opens a PR if anything changed or a new article came out. A scheduled session finishes
+# that PR the same afternoon, following .github/schema-update.md.
 on:
   schedule:
     - cron: "0 6 * * 1"
