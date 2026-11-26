@@ -1,5 +1,12 @@
 # igdb-kit
 
+## 0.8.1
+
+### Patch Changes
+
+- 0964d3f: `PlatformFamily` gains SNK (7), NEC (8) and Commodore (9), added by IGDB.
+- da038b0: Built with tsdown 0.23.7: the published files are split into chunks differently, with the same exports and behaviour.
+
 ## 0.8.0
 
 ### Minor Changes
