@@ -1,5 +1,14 @@
 # igdb-kit
 
+## 0.11.0
+
+### Minor Changes
+
+- e3567b5: The client option `labels` takes dictionaries of `igdb-kit/i18n`, whose labels `named()` then matches on reference tables: with `labels: [fr]`, `g.genres.named("Jeu de rôle")` filters on the RPG genre. It sends no request more. On reference tables, `named()` now also ignores accents and full-width forms (kana keep their voicing marks), and a name that matches nothing suggests the label that contains it when IGDB's name does not.
+- 8998633: `ratingOf(game, { prefer?, minCount? })` of `igdb-kit/game` returns the rating to show, as `{ value, count, source }`: the first of IGDB's total, critics' and users' ratings (`prefer`, total by default) with at least `minCount` votes, else null. `ratingFields(...sources)` lists the fields it reads. New types `GameRating`, `RatingFields`, `RatingOptions` and `RatingSource`.
+- d47c73f: `webhookRouter({ secret })` of `igdb-kit/webhooks` routes IGDB's deliveries with `.on(endpoint, operation | operations, handler)`: a create or an update gets the entity, a delete its `{ id }`, typed by endpoint. `hooks.handler` answers deliveries like `webhookHandler`, `hooks.dispatch(event)` runs the handlers of an event from `parseWebhook()`, and `igdb.webhooks.ensure({ url, secret, routes: hooks.routes })` registers only the pairs the router handles. `ensure()` now throws a `TypeError` when given both `endpoints` and `routes`, neither, or `operations` with `routes`, registers a pair given twice once, and `EnsureWebhooksOptions.endpoints` is optional. `parseWebhook()` refuses an endpoint named after an object property (`constructor`). `webhookHandler`'s `onEvent` may return any value, which is awaited. New class `WebhookRouter`, new types `WebhookData`, `WebhookRoute`, `WebhookRouteEvent`, `WebhookRouteHandler` and `WebhookRouterOptions`.
+- 54f6cae: `wikipediaLink(game, { locale, english? })` of `igdb-kit/game` returns the game's Wikipedia article in the language of the locale, else in English, as `{ url, language, match }`, from its websites of any type; null when it has neither. `wikipediaLinkFields()` lists the field it reads. New types `WikipediaLink`, `WikipediaLinkFields` and `WikipediaLinkOptions`.
+
 ## 0.10.0
 
 ### Minor Changes
