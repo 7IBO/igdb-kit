@@ -110,6 +110,14 @@ export {
   timeToBeatFields,
 } from "./playtime";
 export {
+  type GameRating,
+  type RatingFields,
+  type RatingOptions,
+  type RatingSource,
+  ratingFields,
+  ratingOf,
+} from "./rating";
+export {
   type FranchiseFields,
   franchiseFields,
   franchisesOf,

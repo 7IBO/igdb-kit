@@ -35,7 +35,7 @@ const igdb = createIGDB({
 
 const games = await igdb.games
   .select("name", "rating", "cover.image_id", "platforms.name", "genres")
-  .where((g) => g.rating.gte(80).and(g.platforms.named("PS5", "Switch")))
+  .where((g) => g.rating.gte(80).and(g.rating_count.gte(20), g.platforms.named("PS5", "Switch")))
   .sort("rating", "desc")
   .limit(10);
 // {

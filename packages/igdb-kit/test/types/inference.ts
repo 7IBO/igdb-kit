@@ -874,11 +874,14 @@ import {
   franchisesOf,
   type GameKind,
   type GameKindFields,
+  type GameRating,
   gameKind,
   gameKindFields,
   groupByParent,
   type ParentRelation,
   platformVersions,
+  ratingFields,
+  ratingOf,
   relatedGameFields,
   relatedGames,
   videoLinks,
@@ -944,6 +947,18 @@ externalIds(linked)[0]?.url satisfies string | null | undefined;
 expectType<Equal<ReturnType<typeof externalIds>[number]["storeId"], StoreId | null>>();
 websiteLinks(linked, { kinds: ["official", "social"] });
 wikipediaLink(linked, { locale: "fr-FR" }) satisfies WikipediaLink | null;
+// ratingOf() needs the fields of the sources it tries, only those.
+const rated = await igdb.games.select("total_rating", "total_rating_count").findByIdOrThrow(1942);
+ratingOf(rated) satisfies GameRating | null;
+ratingOf(rated, { minCount: 10 });
+// @ts-expect-error the critics' fields are not selected
+ratingOf(rated, { prefer: ["critics"] });
+// @ts-expect-error total_rating_count is not selected
+ratingOf(await igdb.games.select("total_rating").findByIdOrThrow(1));
+// @ts-expect-error not a source of prefer
+ratingOf(rated, { prefer: ["total"], minCount: { critics: 3 } });
+const fullyRated = await igdb.games.select(...ratingFields()).findByIdOrThrow(1942);
+ratingOf(fullyRated, { prefer: ["critics", "users", "total"], minCount: { critics: 3 } });
 // @ts-expect-error a locale is required
 wikipediaLink(linked, {});
 // @ts-expect-error websites.url is not selected
