@@ -698,6 +698,9 @@ import {
   ageRating,
   alternativeTitles,
   companies,
+  type DuplicateCandidate,
+  duplicateCandidates,
+  duplicateFields,
   eventTime,
   type FormatReleaseDateInput,
   formatPlaytime,
@@ -976,6 +979,32 @@ externalIds(linked)[0]?.url satisfies string | null | undefined;
 expectType<Equal<ReturnType<typeof externalIds>[number]["storeId"], StoreId | null>>();
 websiteLinks(linked, { kinds: ["official", "social"] });
 wikipediaLink(linked, { locale: "fr-FR" }) satisfies WikipediaLink | null;
+// duplicateCandidates() needs its core fields, and the others only as selected.
+const dupes = await igdb.games.select(...duplicateFields()).execute();
+duplicateCandidates(dupes)[0]?.games[0].id satisfies number | undefined;
+duplicateCandidates(dupes) satisfies DuplicateCandidate<(typeof dupes)[number]>[];
+const core = await igdb.games
+  .select("name", "game_type", "version_parent", "parent_game", "first_release_date", "platforms")
+  .execute();
+duplicateCandidates(core, { minScore: 0.8 });
+const noPlatforms = await igdb.games
+  .select("name", "game_type", "version_parent", "parent_game", "first_release_date")
+  .execute();
+// @ts-expect-error platforms is not selected
+duplicateCandidates(noPlatforms);
+const noDeveloper = await igdb.games
+  .select(
+    "name",
+    "game_type",
+    "version_parent",
+    "parent_game",
+    "first_release_date",
+    "platforms",
+    "involved_companies.company",
+  )
+  .execute();
+// @ts-expect-error involved_companies.developer is not selected
+duplicateCandidates(noDeveloper);
 // ratingOf() needs the fields of the sources it tries, only those.
 const rated = await igdb.games.select("total_rating", "total_rating_count").findByIdOrThrow(1942);
 ratingOf(rated) satisfies GameRating | null;

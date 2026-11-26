@@ -102,3 +102,39 @@ It looks in names, alternative names and localized titles ("Pokémon Épée" fin
 - The query's `limit` (default 5) caps the candidates and `minScore` (0.5) drops the weakest.
 
 It costs two to four requests: the title searched as is and without punctuation or edition (IGDB's search finds nothing for "NieR:Automata"), a multiquery for the equal names, alternative names and localized titles, then the candidates when you select fields beyond `name`, `game_type`, `version_parent`, `first_release_date`, `platforms` and `total_rating_count`, or filter with `where`.
+
+## Duplicate games: duplicateCandidates()
+
+IGDB has duplicates: one game entered twice, or a port entered as a game of its own. `duplicateCandidates()` from `igdb-kit/game` proposes the pairs that are likely one game, best first, for a person to check and report to IGDB. It sends no request: pass games read with `duplicateFields()`.
+
+```ts
+import { duplicateCandidates, duplicateFields } from "igdb-kit/game";
+
+const games = await igdb.games.select(...duplicateFields()).where('name = ("Hades", "HADES")').execute();
+const [pair] = duplicateCandidates(games);
+// { games: [a, b], score: 0.95, reasons: ["name", "year", "platforms", "developer"], conflicts: [] }
+```
+
+Two games pair up when they share a name (compared as `games.match()` compares titles), the name without its edition label, an alternative name, or a store id from `websites` or `external_games`. The score then adds a release year (the same, or a little for a year apart), a platform and a developer in common, and drops for years two or more apart (the 1993 Doom and the 2016 one), for developers with none in common, for two products of one store with no id in common (two Steam apps), and for a name three games or more share ("Abyss" names many small games). A name alone gives 0.5 and the default `minScore` is 0.7: a name needs the same year, or a platform and a developer, or a store id. `reasons` and `conflicts` say what counted. A name three games share needs a store id and the year or a platform, or the year, a platform and a developer.
+
+Treat the pairs as proposals for a person to check, not as merges. On two samples of about 4,000 IGDB games each (November 2026), every pair at 0.85 or more was one game; between 0.7 and 0.85, about half were two games that share a short, generic name, such as two small itch.io games or one board game released on two consoles. A pair whose developers are unknown on one side gets no developer conflict, which is where most of these come from.
+
+Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game (so a port entered twice under one game is not proposed either), and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
+
+Pairs are found only among the games you pass, so a batch by id finds almost nothing: duplicates lie far apart. Pass the whole catalogue at once, read with `sync()`, which sends its pages in parallel at `background` priority under the client's limiter (about 760 pages of 500 games):
+
+```ts
+import { GameType } from "igdb-kit";
+
+const kinds = [GameType.MainGame, GameType.StandaloneExpansion, GameType.Remake, GameType.Remaster, GameType.ExpandedGame, GameType.Port];
+const games = [];
+for await (const page of igdb.games
+  .select(...duplicateFields())
+  .where(`version_parent = null & game_type = (${kinds.join(",")})`)
+  .sync()) games.push(...page);
+const pairs = duplicateCandidates(games);
+```
+
+On 380,000 games, the comparison takes about 10 seconds and 1 to 2 GB of memory with every field (measured on generated games of that size); leaving out `websites` and `alternative_names` roughly halves it, at the cost of the store ids and alternative names. For a nightly run, pass `only` with the games added or changed since the last one: every game is still read for its names and ids, but only the pairs that hold one of them are compared and returned.
+
+With a local copy of IGDB, pass its rows instead: the same fields, single references (`game_type`, `parent_game`, `version_parent`) and lists of games or platforms as ids, `alternative_names`, `involved_companies`, `websites` and `external_games` as rows with their fields. A null reads as missing.

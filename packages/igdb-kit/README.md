@@ -107,7 +107,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | Page | Covers |
 |---|---|
 | [Queries](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/queries.md) | Selecting fields, filters, relations by name, named filters on games, reference ids, dates, reading and paging results |
-| [Finding games](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/finding-games.md) | `searchAll()`, titles in other languages, `findByExternalIds()`, `games.match()` |
+| [Finding games](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/finding-games.md) | `searchAll()`, titles in other languages, `findByExternalIds()`, `games.match()`, `duplicateCandidates()` |
 | [Linked data](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/linked-data.md) | `findByGames()`, `findBy()`, `family()`, `series()`, `catalog()`, views, `expand()`, reusable selections |
 | [Popularity](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/popularity.md) | `popular()`, `weightedPopular()`, `popularitySnapshot()`, `rankChanges()` |
 | [Release calendar](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/releases.md) | `releases()`, date precision, regions and statuses |
