@@ -109,7 +109,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | [Queries](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/queries.md) | Selecting fields, filters, relations by name, named filters on games, reference ids, dates, reading and paging results |
 | [Finding games](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/finding-games.md) | `searchAll()`, titles in other languages, `findByExternalIds()`, `games.match()` |
 | [Linked data](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/linked-data.md) | `findByGames()`, `findBy()`, `family()`, `series()`, `catalog()`, views, `expand()`, reusable selections |
-| [Popularity](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/popularity.md) | `popular()`, `weightedPopular()`, `popularitySnapshot()` |
+| [Popularity](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/popularity.md) | `popular()`, `weightedPopular()`, `popularitySnapshot()`, `rankChanges()` |
 | [Release calendar](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/releases.md) | `releases()`, date precision, regions and statuses |
 | [Displaying a game](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/display.md) | Every helper of `igdb-kit/game`: dates, companies, stores, the hero image, the logo, image URLs |
 | [Languages](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/languages.md) | Everything that follows a locale, `resolveLocale()`, translated labels in `igdb-kit/i18n` |

@@ -27,6 +27,7 @@ import {
   Region,
   ReleaseDateRegion,
   ReleaseDateStatus,
+  rankChanges,
   Theme,
   TierError,
   toDate,
@@ -334,6 +335,23 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(rows.some((c) => c.image_type !== ImageType.MainCover)).toBe(true);
     expect(bestImage({ id: coverGame, cover: undefined }, { covers: rows })?.source).toBe("cover");
     expect(bestLogo(logos.get(logoGame) ?? [])).toMatchObject({ type: ImageType.GameLogoColor });
+  });
+
+  test("rankChanges() compares two snapshots read from the API", async () => {
+    const read = async (limit: number) => {
+      const rows = [];
+      for await (const page of igdb.popularitySnapshot({ types: PopularityType.IGDBVisits, limit }))
+        rows.push(...page);
+      return rows;
+    };
+    const [top, wider] = await Promise.all([read(20), read(40)]);
+    const moves = rankChanges(top, wider);
+    // The same computation, read twice: the top 20 stay, the next 20 enter the stored top.
+    expect(moves).toHaveLength(40);
+    expect(moves.slice(0, 20).every((m) => m.status === "same" && m.change === 0)).toBe(true);
+    expect(moves.slice(20).every((m) => m.status === "entered" && m.before === null)).toBe(true);
+    expect(moves.map((m) => m.after?.rank)).toEqual(wider.map((r) => r.rank));
+    expect(rankChanges(wider, top).filter((m) => m.status === "left")).toHaveLength(20);
   });
 
   test("popularitySnapshot() returns ranked rows with their calculation time; IGDB keeps no history", async () => {
