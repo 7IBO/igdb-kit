@@ -1,4 +1,4 @@
-import type { EndpointName } from "../generated/schema";
+import { type EndpointName, endpoints } from "../generated/schema";
 import type { WebhookOperation } from "./api";
 import { type WebhookEntity, type WebhookEvent, webhookHandler } from "./receive";
 
@@ -7,37 +7,49 @@ export type WebhookData<N extends EndpointName, O extends WebhookOperation> = O 
   ? { id: number }
   : WebhookEntity<N>;
 
-/** A handler of {@link WebhookRouter.on}, with the event it came in. */
-export type WebhookRoute<N extends EndpointName, O extends WebhookOperation> = (
+/** The event of a delivery of `endpoint` and one of the operations `O`. */
+export type WebhookRouteEvent<N extends EndpointName, O extends WebhookOperation> = O extends WebhookOperation
+  ? { endpoint: N; operation: O; data: WebhookData<N, O> }
+  : never;
+
+/**
+ * A handler of {@link WebhookRouter.on}: the data, then the event it came in. What it returns is
+ * awaited, so a handler may return a database client's promise as it is.
+ */
+export type WebhookRouteHandler<N extends EndpointName, O extends WebhookOperation> = (
   data: WebhookData<N, O>,
-  event: Extract<WebhookEvent<N>, { operation: O }>,
-) => void | Promise<void>;
+  event: WebhookRouteEvent<N, O>,
+) => unknown;
+
+/** An endpoint and operation a router handles, as `igdb.webhooks.ensure({ routes })` takes them. */
+export interface WebhookRoute {
+  readonly endpoint: EndpointName;
+  readonly operation: WebhookOperation;
+}
 
 export interface WebhookRouterOptions {
   secret: string;
   /** Largest delivery body read, in bytes, as in `webhookHandler`. Default 1 MB. */
   maxBodyBytes?: number | undefined;
   /**
-   * Called for a verified delivery no `.on()` handles. Default: nothing, and the delivery is
-   * answered 200 so that IGDB does not retry it.
+   * Called for a verified delivery no `.on()` handles, the place to log webhooks still registered
+   * for pairs you no longer handle. Such a delivery is answered 200, so that IGDB does not retry
+   * it, unless `onUnhandled` throws: then 500, and IGDB retries.
    */
-  onUnhandled?: ((event: WebhookEvent) => void | Promise<void>) | undefined;
+  onUnhandled?: ((event: WebhookEvent) => unknown) | undefined;
 }
 
-/** An endpoint and operation a router handles, the shape `igdb.webhooks.ensure({ routes })` takes. */
-export interface WebhookRouteKey {
-  endpoint: EndpointName;
-  operation: WebhookOperation;
-}
+const OPERATIONS: readonly string[] = ["create", "update", "delete"];
 
 /**
- * Deliveries of IGDB sent to a handler per endpoint and operation. Build it with {@link webhookRouter}.
- * The handlers of a delivery run in the order they were added, one after the other; when one throws,
- * the delivery is answered 500 and IGDB retries it.
+ * Deliveries of IGDB sent to handlers by endpoint and operation. Build it with {@link webhookRouter}.
+ * The handlers of a delivery run in the order they were added, one after the other, and their time
+ * adds up against the 15 s IGDB waits; when one throws, the next do not run and the delivery is
+ * answered 500, so that IGDB retries it.
  */
 export class WebhookRouter {
-  private readonly routesBy = new Map<string, WebhookRoute<EndpointName, WebhookOperation>[]>();
-  private readonly order: WebhookRouteKey[] = [];
+  private readonly handlersBy = new Map<string, WebhookRouteHandler<EndpointName, WebhookOperation>[]>();
+  private readonly order: WebhookRoute[] = [];
 
   /** Answers IGDB's deliveries: `(request: Request) => Promise<Response>`, like `webhookHandler`. */
   readonly handler: (request: Request) => Promise<Response>;
@@ -53,28 +65,34 @@ export class WebhookRouter {
 
   /**
    * Handles one endpoint's creates, updates or deletes, or several operations at once. Returns the
-   * router, so calls chain.
+   * router, so calls chain. Throws a `TypeError` for an unknown endpoint or operation, adding
+   * nothing.
    *
    * ```ts
-   * webhookRouter({ secret }).on("games", ["create", "update"], (game) => db.saveGame(game)).on("games", "delete", ({ id }) => db.removeGame(id));
+   * router
+   *   .on("games", ["create", "update"], (game) => db.saveGame(game))
+   *   .on("games", "delete", ({ id }) => db.removeGame(id));
    * ```
    */
   on<N extends EndpointName, O extends WebhookOperation>(
     endpoint: N,
     operation: O | readonly O[],
-    handler: WebhookRoute<N, O>,
+    handler: WebhookRouteHandler<N, O>,
   ): this {
-    const operations = typeof operation === "string" ? [operation] : operation;
+    if (!Object.hasOwn(endpoints, endpoint)) {
+      throw new TypeError(`WebhookRouter.on(): unknown endpoint "${String(endpoint)}"`);
+    }
+    const operations = [...new Set(typeof operation === "string" ? [operation] : operation)];
     if (operations.length === 0) throw new TypeError("WebhookRouter.on(): no operation given");
+    const unknown = operations.find((op) => !OPERATIONS.includes(op));
+    if (unknown !== undefined)
+      throw new TypeError(`WebhookRouter.on(): unknown operation "${String(unknown)}"`);
     for (const op of operations) {
-      if (op !== "create" && op !== "update" && op !== "delete") {
-        throw new TypeError(`WebhookRouter.on(): unknown operation "${String(op)}"`);
-      }
       const key = `${endpoint} ${op}`;
-      const list = this.routesBy.get(key);
+      const list = this.handlersBy.get(key);
       if (list) list.push(handler as never);
       else {
-        this.routesBy.set(key, [handler as never]);
+        this.handlersBy.set(key, [handler as never]);
         this.order.push({ endpoint, operation: op });
       }
     }
@@ -82,22 +100,24 @@ export class WebhookRouter {
   }
 
   /** The endpoints and operations handled, in the order first added: what to register on IGDB. */
-  get routes(): readonly WebhookRouteKey[] {
-    return [...this.order];
+  get routes(): readonly WebhookRoute[] {
+    return this.order.map((route) => ({ ...route }));
   }
 
   /**
    * Runs the handlers of an event already checked, from `parseWebhook()` (Express, Fastify). Resolves
-   * once they have all run; rejects with the first one that throws.
+   * once they have all run; rejects with the first one that throws. Bound to the router, so it can
+   * be passed on as it is.
    */
-  async dispatch(event: WebhookEvent): Promise<void> {
-    const handlers = this.routesBy.get(`${event.endpoint} ${event.operation}`);
+  readonly dispatch = async (event: WebhookEvent): Promise<void> => {
+    const handlers = this.handlersBy.get(`${event.endpoint} ${event.operation}`);
     if (!handlers) {
       await this.options.onUnhandled?.(event);
       return;
     }
-    for (const handler of handlers) await handler(event.data as never, event as never);
-  }
+    // A copy: a handler added by a handler waits for the next delivery.
+    for (const handler of [...handlers]) await handler(event.data as never, event as never);
+  };
 }
 
 /**

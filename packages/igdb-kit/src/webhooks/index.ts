@@ -11,7 +11,8 @@ export {
 export {
   type WebhookData,
   type WebhookRoute,
-  type WebhookRouteKey,
+  type WebhookRouteEvent,
+  type WebhookRouteHandler,
   WebhookRouter,
   type WebhookRouterOptions,
   webhookRouter,

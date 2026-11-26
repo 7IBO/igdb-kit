@@ -515,6 +515,8 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     } finally {
       await Promise.all(hooks.map((h) => igdb.webhooks.delete(h.id)));
     }
+    const left = await igdb.webhooks.list();
+    expect(left.some((l) => hooks.some((h) => h.id === l.id))).toBe(false);
     // A delivery carries the entity with every field, as `select("*")` reads it.
     const platform = await igdb.platforms.select("*").findByIdOrThrow(6);
     const deliver = (operation: string, body: unknown) =>

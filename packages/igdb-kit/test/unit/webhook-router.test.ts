@@ -56,10 +56,35 @@ describe("webhookRouter", () => {
     );
   });
 
-  test("refuses no operation or an unknown one", () => {
+  test("refuses no operation, an unknown one or an unknown endpoint, adding nothing", () => {
     const hooks = webhookRouter({ secret: "s" });
     expect(() => hooks.on("games", [], () => {})).toThrow(TypeError);
-    expect(() => hooks.on("games", "upsert" as "update", () => {})).toThrow('unknown operation "upsert"');
+    expect(() => hooks.on("games", ["update", "upsert" as "update"], () => {})).toThrow(
+      'unknown operation "upsert"',
+    );
+    expect(() => hooks.on("gamez" as "games", "update", () => {})).toThrow('unknown endpoint "gamez"');
+    expect(hooks.routes).toEqual([]);
+  });
+
+  test("runs a handler once for a repeated operation, and not one added while it runs", async () => {
+    const seen: string[] = [];
+    const hooks = webhookRouter({ secret: "s3cret" }).on("games", ["update", "update"], () => {
+      seen.push("a");
+      hooks.on("games", "update", () => void seen.push("b"));
+    });
+    const { dispatch } = hooks;
+    await dispatch({ endpoint: "games", operation: "update", data: { id: 1 } });
+    expect(seen).toEqual(["a"]);
+  });
+
+  test("answers 500 when onUnhandled throws", async () => {
+    const hooks = webhookRouter({
+      secret: "s3cret",
+      onUnhandled: () => {
+        throw new Error("log failed");
+      },
+    });
+    expect((await hooks.handler(post("games", "update", '{"id":1}'))).status).toBe(500);
   });
 
   test("routes are what ensure() registers", async () => {
@@ -79,5 +104,21 @@ describe("webhookRouter", () => {
     });
     expect(registered.map((h) => h.operation)).toEqual(["delete"]);
     expect(mock.calls.map((c) => c.url)).toEqual([expect.stringContaining("/games/webhooks")]);
+    const twice = [...hooks.routes, ...hooks.routes];
+    expect(
+      await igdb.webhooks.ensure({ url: "https://x.test/igdb", secret: "s", routes: twice }),
+    ).toHaveLength(1);
+  });
+
+  test("ensure() takes endpoints or routes, one of them, with something to register", async () => {
+    const igdb = testClient(mockFetch(() => Response.json([])).fetch);
+    const base = { url: "https://x.test/igdb", secret: "s" };
+    const routes = [{ endpoint: "games", operation: "update" }] as const;
+    await expect(igdb.webhooks.ensure({ ...base, routes, endpoints: ["games"] })).rejects.toThrow(TypeError);
+    await expect(igdb.webhooks.ensure(base)).rejects.toThrow("either endpoints or routes");
+    await expect(igdb.webhooks.ensure({ ...base, routes: [] })).rejects.toThrow("nothing to register");
+    await expect(igdb.webhooks.ensure({ ...base, routes, operations: ["create"] })).rejects.toThrow(
+      TypeError,
+    );
   });
 });

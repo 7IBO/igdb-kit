@@ -60,28 +60,17 @@ export interface RegisterWebhookOptions {
   operation: WebhookOperation;
 }
 
-interface EnsureBase {
+export interface EnsureWebhooksOptions<N extends EndpointName> {
   /** Base URL of your handler. `endpoint` and `operation` query parameters are added to it. */
   url: string;
   secret: string;
+  /** Each of these endpoints with each of `operations`. Give `endpoints` or `routes`, not both. */
+  endpoints?: readonly N[] | undefined;
+  /** Default: create, update and delete. With `endpoints` only. */
+  operations?: readonly WebhookOperation[] | undefined;
+  /** The endpoint and operation pairs to register, such as a `webhookRouter()`'s `routes`. */
+  routes?: readonly { readonly endpoint: N; readonly operation: WebhookOperation }[] | undefined;
 }
-
-/** Each endpoint with each operation, or the routes of a `webhookRouter()` (`hooks.routes`). */
-export type EnsureWebhooksOptions<N extends EndpointName> = EnsureBase &
-  (
-    | {
-        endpoints: readonly N[];
-        /** Default: create, update and delete. */
-        operations?: readonly WebhookOperation[] | undefined;
-        routes?: undefined;
-      }
-    | {
-        /** The endpoint and operation pairs to register, such as a router's `routes`. */
-        routes: readonly { endpoint: N; operation: WebhookOperation }[];
-        endpoints?: undefined;
-        operations?: undefined;
-      }
-  );
 
 /** Registers, lists and removes the webhooks of your Twitch app. */
 export class Webhooks {
@@ -101,13 +90,22 @@ export class Webhooks {
   /**
    * Registers every endpoint and operation on one handler, adding `?endpoint=…&operation=…` to the
    * URL. Call it at startup: it is idempotent and brings back webhooks IGDB deactivated. With
-   * `routes`, only those pairs are registered.
+   * `routes`, only those pairs are registered. It never removes a webhook: pairs registered before
+   * and no longer wanted stay until `delete()`. Throws a `TypeError` when given both `endpoints`
+   * and `routes`, or neither, or nothing to register.
    */
   async ensure<N extends EndpointName>(options: EnsureWebhooksOptions<N>): Promise<Webhook[]> {
+    const { endpoints, routes } = options;
+    if ((endpoints === undefined) === (routes === undefined)) {
+      throw new TypeError("webhooks.ensure(): give either endpoints or routes");
+    }
+    if (routes && options.operations) throw new TypeError("webhooks.ensure(): operations go with endpoints");
     const operations = options.operations ?? ["create", "update", "delete"];
-    const pairs =
-      options.routes ??
-      options.endpoints.flatMap((endpoint) => operations.map((operation) => ({ endpoint, operation })));
+    const all =
+      routes ??
+      (endpoints ?? []).flatMap((endpoint) => operations.map((operation) => ({ endpoint, operation })));
+    const pairs = [...new Map(all.map((pair) => [`${pair.endpoint} ${pair.operation}`, pair])).values()];
+    if (pairs.length === 0) throw new TypeError("webhooks.ensure(): nothing to register");
     const jobs = pairs.map(({ endpoint, operation }) => {
       const url = new URL(options.url);
       url.searchParams.set("endpoint", endpoint);

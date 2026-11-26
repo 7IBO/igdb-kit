@@ -127,7 +127,7 @@ Bun.serve({ routes: { "/igdb": { POST: handler } } }); // or Hono: app.post("/ig
 
 It checks the secret before reading the body, and answers 401 when it is wrong, 413 on a body above `maxBodyBytes` (1 MB by default), and 500 when `onEvent` throws, so IGDB retries. With Express, use `parseWebhook({ headers: req.headers, body: req.body, url: req.url }, secret)`. `igdb.webhooks` also has `register`, `list`, `get`, `delete` and `test`.
 
-With one handler per endpoint and operation, use `webhookRouter`. Each handler gets the entity (every field, relations as ids) for a create or an update, `{ id }` for a delete, and the event second. Its `routes` registers only what it handles:
+With one handler per endpoint and operation, use `webhookRouter`. Each handler gets the entity (every field, relations as ids) for a create or an update, `{ id }` for a delete, and the event second; what it returns is awaited. Pass its `routes` to `ensure()` to register only what it handles:
 
 ```ts
 import { webhookRouter } from "igdb-kit/webhooks";
@@ -141,7 +141,20 @@ await igdb.webhooks.ensure({ url: "https://example.com/igdb", secret: process.en
 Bun.serve({ routes: { "/igdb": { POST: hooks.handler } } });
 ```
 
-The handlers of a delivery run in the order they were added, one after the other; when one throws, the next do not run and the delivery is answered 500, so IGDB retries it. A delivery no handler takes is answered 200 and passed to `onUnhandled`, if given. `hooks.handler` answers like `webhookHandler`; with Express, `hooks.dispatch(parseWebhook(...))`.
+The handlers of a delivery run in the order they were added, one after the other, and their time adds up against the 15 s IGDB waits for an answer. When one throws, the next do not run and the delivery is answered 500, so IGDB retries it. A delivery no handler takes is answered 200 and passed to `onUnhandled`, if given (500 if that throws). `ensure()` never removes a webhook: when you stop handling a pair, or move from `ensure({ endpoints })` to a router, the old pairs keep coming. Log them in `onUnhandled`, and remove them with `igdb.webhooks.list()` and `delete(id)`. `hooks.handler` answers like `webhookHandler`; with Express:
+
+```ts
+import { parseWebhook, WebhookError } from "igdb-kit/webhooks";
+
+app.post("/igdb", express.json(), async (req, res) => {
+  try {
+    await hooks.dispatch(parseWebhook({ headers: req.headers, body: req.body, url: req.url }, secret));
+    res.sendStatus(200);
+  } catch (error) {
+    res.sendStatus(error instanceof WebhookError ? (error.status ?? 400) : 500);
+  }
+});
+```
 
 ## Deletions: removed()
 

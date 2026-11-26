@@ -88,7 +88,7 @@ function normalizeEndpoint(value: string): string {
 export interface WebhookHandlerOptions<N extends EndpointName> {
   secret: string;
   /** Called for each verified delivery. IGDB retries when this throws (the handler answers 500). */
-  onEvent: (event: WebhookEvent<N>) => void | Promise<void>;
+  onEvent: (event: WebhookEvent<N>) => unknown;
   /**
    * Largest delivery body read, in bytes; a larger one is answered 413. Default 1 MB (an entity
    * weighs a few KB).
