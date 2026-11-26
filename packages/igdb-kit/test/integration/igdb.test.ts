@@ -52,6 +52,8 @@ import {
   logoFields,
   parentGame,
   platformVersions,
+  ratingFields,
+  ratingOf,
   relatedGameFields,
   relatedGames,
   releaseDate,
@@ -957,6 +959,22 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     // Every website type has a kind.
     const websites = websiteTypes.map((t) => ({ id: t.id, type: t.id, url: `https://example.com/${t.id}` }));
     expect(websiteLinks({ websites }).filter((l) => l.kind === "other")).toEqual([]);
+  });
+
+  test("ratingOf() on the real API: a vote threshold keeps the one-vote 100s out", async () => {
+    const games = await igdb.games
+      .select("name", ...ratingFields())
+      .where("total_rating = 100 & total_rating_count = 1")
+      .limit(5);
+    expect(games.length).toBeGreaterThan(0);
+    for (const game of games) {
+      expect(ratingOf(game)).toMatchObject({ value: 100, count: 1, source: "total" });
+      expect(ratingOf(game, { minCount: 5 })).toBeNull();
+    }
+    const witcher3 = await igdb.games.select(...ratingFields()).findByIdOrThrow(1942);
+    const critics = ratingOf(witcher3, { prefer: ["critics"], minCount: 10 });
+    expect(critics?.value).toBeGreaterThan(80);
+    expect(ratingOf(witcher3, { prefer: ["users"], minCount: 100 })?.count).toBeGreaterThan(100);
   });
 
   test("wikipediaLink() finds Japanese articles and falls back on English ones", async () => {

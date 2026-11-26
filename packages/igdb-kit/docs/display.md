@@ -3,7 +3,7 @@
 IGDB returns raw rows: several release dates per platform and region, companies with role flags, store ids, rating category ids. `igdb-kit/game` turns a query result into what a page shows, with no request.
 
 - [Using the helpers](#using-the-helpers)
-- [Release dates](#release-dates) · [Companies, stores and links](#companies-stores-and-links) · [Age ratings](#age-ratings) · [Names and languages](#names-and-languages) · [Related games](#related-games) · [Multiplayer and playtime](#multiplayer-and-playtime) · [Pictures and platform versions](#pictures-and-platform-versions)
+- [Release dates](#release-dates) · [Companies, stores and links](#companies-stores-and-links) · [Age ratings](#age-ratings) · [Names and languages](#names-and-languages) · [Related games](#related-games) · [Ratings](#ratings) · [Multiplayer and playtime](#multiplayer-and-playtime) · [Pictures and platform versions](#pictures-and-platform-versions)
 - [Missing data](#missing-data)
 - [Image URLs](#image-urls)
 
@@ -29,7 +29,7 @@ storeLinks(game);                                    // [{ store: "epic", url, t
 ageRating(game, [AgeRatingOrganization.PEGI, AgeRatingOrganization.ESRB]); // { label: "18", minimumAge: 18, ... }
 ```
 
-A list holds everything its helper reads, where the compile-time check only asks for what the helper cannot do without: `localizedName()` compiles with `name` alone and then always returns it, and `storeLinks()` with `websites` alone misses the store pages of `external_games`. The fields you name in a list go on the rows its helper returns as selected: `companyFields("name")` selects `involved_companies.company.name`, and `companyFields()` the companies as ids (a `string[]` that may be empty does not compile, since its type cannot say which). The lists are `releaseDateFields()`, `companyFields(...fields)`, `storeLinkFields()`, `externalIdFields()`, `websiteLinkFields()`, `wikipediaLinkFields()`, `videoLinkFields()`, `ageRatingFields()`, `localizedNameFields()` (for `localization()` too), `localizedCoverFields()`, `alternativeNameFields()`, `languageFields(...fields)`, `parentGameFields(...fields)` (for `groupByParent()` too), `gameKindFields()`, `relatedGameFields(...fields)`, `franchiseFields(...fields)`, `multiplayerFields()` and `bestImageFields()` for games, `timeToBeatFields()` for `game_time_to_beats`, `coverFields()` for `covers`, `logoFields()` for `logos`, `eventTimeFields()` for `events` and `platformVersionFields(...fields)` for `platforms`.
+A list holds everything its helper reads, where the compile-time check only asks for what the helper cannot do without: `localizedName()` compiles with `name` alone and then always returns it, and `storeLinks()` with `websites` alone misses the store pages of `external_games`. The fields you name in a list go on the rows its helper returns as selected: `companyFields("name")` selects `involved_companies.company.name`, and `companyFields()` the companies as ids (a `string[]` that may be empty does not compile, since its type cannot say which). The lists are `releaseDateFields()`, `companyFields(...fields)`, `storeLinkFields()`, `externalIdFields()`, `websiteLinkFields()`, `wikipediaLinkFields()`, `videoLinkFields()`, `ageRatingFields()`, `localizedNameFields()` (for `localization()` too), `localizedCoverFields()`, `alternativeNameFields()`, `languageFields(...fields)`, `parentGameFields(...fields)` (for `groupByParent()` too), `gameKindFields()`, `relatedGameFields(...fields)`, `franchiseFields(...fields)`, `multiplayerFields()`, `ratingFields(...sources)` and `bestImageFields()` for games, `timeToBeatFields()` for `game_time_to_beats`, `coverFields()` for `covers`, `logoFields()` for `logos`, `eventTimeFields()` for `events` and `platformVersionFields(...fields)` for `platforms`.
 
 Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the content descriptors as ids, which `ageRating()` reads as text: add `age_ratings.rating_content_descriptions.description`.
 
@@ -71,6 +71,12 @@ Wildcards such as `release_dates.*` work too, but `age_ratings.*` selects the co
 - **`relatedGames(game)`** and **`relatedGameFields(...fields)`** return `{ parent, dlcs, expansions, standalone_expansions, remakes, remasters, expanded_games, ports, forks, bundles }`. Lists are empty rather than undefined; `relatedGameFields("name")` selects them all with their names. A game's own fields cannot show its editions, mods, episodes, seasons, packs and updates: they point to it and no array lists them (see [`family()`](linked-data.md#related-games-family-series-catalog)).
 - **`groupByParent(games, { relations? })`** returns `{ groups: [{ game, members }], missingParents }`: the editions and ports of a list (a company's catalog, search results, a library) under their original. A parent missing from the list is an id to load.
 - **`franchisesOf(game)`** returns `{ main, others }`. IGDB sets `franchise` on 1,348 games and `franchises` on 29,259.
+
+## Ratings
+
+- **`ratingOf(game, { prefer?, minCount? })`** returns `{ value, count, source }`: the first source of `prefer` (`"total"` by default, then any order of `"total"`, `"critics"`, `"users"`) with a value and at least `minCount` votes (1 by default; a number, or one per source such as `{ critics: 3, users: 20 }`), else null. `total` is IGDB's combined rating (`total_rating`), `critics` the press average (`aggregated_rating`), `users` IGDB's users (`rating`). The value goes from 0 to 100, not rounded. Set `minCount`: a game with one vote can have a total of 100. Only the fields of the sources in `prefer` are required; `ratingFields("critics", "users")` selects them.
+
+To rank games by rating, filter on the count in the query, before the sort: `.where((g) => g.total_rating_count.gte(50)).sort("total_rating", "desc")`.
 
 ## Multiplayer and playtime
 
