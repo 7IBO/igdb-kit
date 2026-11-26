@@ -45,6 +45,30 @@ export interface TransportHooks {
   onRetry?: (info: { path: string; attempt: number; delayMs: number; reason: unknown }) => void;
   /** IGDB answered 429. */
   onRateLimited?: (info: { path: string }) => void;
+  /**
+   * The credentials were refused: Twitch refused the client id or secret, IGDB refused the token
+   * after a renewal or a fixed `accessToken`, or a proxy refused its own. Retrying will not help, so
+   * this is the hook to alert on. `tokenValid` is true when only the renewal ahead of expiry was
+   * refused: requests still work until the token expires. Called once per refusal of the token
+   * endpoint, and once per request IGDB refuses. An error thrown here is ignored.
+   */
+  onAuthError?: (info: AuthErrorInfo) => void;
+}
+
+export interface AuthErrorInfo {
+  /** `oauth2/token` for Twitch, else the IGDB path of the refused request. */
+  path: string;
+  error: AuthError;
+  tokenValid: boolean;
+}
+
+/** @internal Calls `hooks.onAuthError`, ignoring what it throws. */
+export function reportAuthError(hooks: TransportHooks | undefined, info: AuthErrorInfo): void {
+  try {
+    hooks?.onAuthError?.(info);
+  } catch {
+    // ignored
+  }
 }
 
 /** @internal Calls `hooks.onRequest`, ignoring what it throws: a log must not fail a request. */
@@ -231,6 +255,7 @@ export class Transport {
         this.options.hooks?.onRateLimited?.({ path });
       }
       // A proxy's 502 for its own refused credentials is an AuthError: retrying will not help.
+      if (error instanceof AuthError) reportAuthError(this.options.hooks, { path, error, tokenValid: false });
       if (!RETRYABLE.has(status) || error instanceof AuthError || splits?.(error)) throw error;
       deadline ??= Date.now() + budget;
       if (!(await this.backoff(path, attempt, deadline, error, signal))) {

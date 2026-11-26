@@ -32,7 +32,7 @@ createIGDB({
   multiquery: true,           // false sends every query alone, for igdbProxy({ multiquery: false })
   cache,                      // CacheStore for cache()d queries; default in memory
   cacheTtlMs,                 // cache every query this long; default only cache()d ones
-  hooks: { onRequest, onRetry, onRateLimited, onTokenRefresh },
+  hooks: { onRequest, onRetry, onRateLimited, onTokenRefresh, onAuthError },
 });
 ```
 
@@ -51,6 +51,16 @@ const igdb = createIGDB({
 ```
 
 `hooks.onRetry` is called before each retry with `{ path, attempt, delayMs, reason }`. It is also called with the path `oauth2/token` when renewing the token ahead of its expiry fails, in the last 5% of its life (about 3 days): requests keep using the token, and the renewal is tried again after 1 minute, then 2, 4 and so on up to 30. This is the warning that once the token expires, a changed client secret will fail every request with an `AuthError`, and a Twitch outage with a `NetworkError`.
+
+`hooks.onAuthError` is the one to alert on: it is called when the credentials are refused, which no retry fixes, with `{ path, error, tokenValid }`. Twitch refusing the client id or secret gives the path `oauth2/token`, once per token request however many queries waited for it; `tokenValid` is `true` when only the renewal ahead of expiry was refused, so requests still work until the token expires (the early warning of a changed secret). IGDB refusing a token after its renewal, a fixed `accessToken`, or a proxy's own credentials gives the request's path, once per request. What it throws is ignored.
+
+```ts
+const igdb = createIGDB({
+  clientId,
+  clientSecret,
+  hooks: { onAuthError: ({ error, tokenValid }) => alert(tokenValid ? `Twitch secret refused, token expires soon: ${error.message}` : error.message) },
+});
+```
 
 ## Batching
 

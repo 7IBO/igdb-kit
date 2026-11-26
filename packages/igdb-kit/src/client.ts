@@ -342,6 +342,7 @@ function directTransport(options: IGDBServerClientOptions): Transport {
     fetch: options.fetch,
     onTokenRefresh: options.hooks?.onTokenRefresh,
     onRetry: options.hooks?.onRetry,
+    onAuthError: options.hooks?.onAuthError,
   });
   return new Transport({
     clientId: options.clientId,

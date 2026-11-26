@@ -18,7 +18,7 @@ export {
   type Priority,
   sharedLimiter,
 } from "./core/limiter";
-export type { RequestLog, TransportHooks } from "./core/transport";
+export type { AuthErrorInfo, RequestLog, TransportHooks } from "./core/transport";
 export type { Locale } from "./game/locale";
 export * from "./generated/schema";
 export {
