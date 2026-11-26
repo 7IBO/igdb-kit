@@ -1,4 +1,5 @@
-// The helpers of igdb-kit/game read rows from a local copy, with no cast (docs/local-copy.md).
+// The helpers of igdb-kit/game, and rankChanges(), read rows from a local copy, with no cast (docs/local-copy.md).
+import { type PopularitySnapshotRow, rankChanges } from "../../src";
 import { externalIds, releaseDate, storeLinks } from "../../src/game";
 
 // A row as a database client types it.
@@ -25,3 +26,12 @@ declare const typed: { id: number; name: string; release_dates?: StoredReleaseDa
 releaseDate(typed);
 // @ts-expect-error the stored release dates have no platform
 releaseDate({ id: 1, release_dates: [{ id: 2, date: 0, date_format: 0, release_region: 8, status: 6 }] });
+
+// rankChanges() reads stored popularity rows, extra columns included.
+declare const snapshot: readonly (PopularitySnapshotRow & { id: number; stored_at: Date })[];
+declare const fresh: PopularitySnapshotRow[];
+rankChanges(snapshot, fresh);
+// @ts-expect-error a bigint column read as a string must be converted
+rankChanges([{ game_id: 1, popularity_type: 1, rank: "1", value: 1 }], fresh);
+// @ts-expect-error a value may not be null
+rankChanges([{ game_id: 1, popularity_type: 1, rank: 1, value: null }], fresh);

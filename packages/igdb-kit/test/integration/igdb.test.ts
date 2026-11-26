@@ -27,6 +27,7 @@ import {
   Region,
   ReleaseDateRegion,
   ReleaseDateStatus,
+  rankChanges,
   Theme,
   TierError,
   toDate,
@@ -334,6 +335,27 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(rows.some((c) => c.image_type !== ImageType.MainCover)).toBe(true);
     expect(bestImage({ id: coverGame, cover: undefined }, { covers: rows })?.source).toBe("cover");
     expect(bestLogo(logos.get(logoGame) ?? [])).toMatchObject({ type: ImageType.GameLogoColor });
+  });
+
+  test("rankChanges() compares two snapshots read from the API", async () => {
+    const read = async (limit: number) => {
+      const rows = [];
+      for await (const page of igdb.popularitySnapshot({ types: PopularityType.IGDBVisits, limit }))
+        rows.push(...page);
+      return rows;
+    };
+    const [top, wider] = await Promise.all([read(20), read(40)]);
+    const moves = rankChanges(top, wider);
+    // The same computation, read twice: the games of the top 20 stay, the others enter the stored
+    // top. A tie running past the 40th place can leave a game of the shorter read out of the longer.
+    const inTop = new Set(top.map((r) => r.game_id));
+    for (const move of moves) {
+      const expected = !inTop.has(move.game_id) ? "entered" : move.after ? "same" : "left";
+      expect(move.status).toBe(expected);
+      if (expected === "same") expect(move.change).toBe(0);
+    }
+    expect(moves.filter((m) => m.after).map((m) => m.after?.rank)).toEqual(wider.map((r) => r.rank));
+    expect(moves.filter((m) => m.status === "same" || m.status === "left")).toHaveLength(top.length);
   });
 
   test("popularitySnapshot() returns ranked rows with their calculation time; IGDB keeps no history", async () => {

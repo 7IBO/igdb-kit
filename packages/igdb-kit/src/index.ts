@@ -58,6 +58,12 @@ export {
   type SyncOptions,
   WithCount,
 } from "./query/query";
+export {
+  type RankChange,
+  type RankChangeRow,
+  type RankChangeStatus,
+  rankChanges,
+} from "./query/rank-changes";
 export type {
   CatalogGame,
   CatalogOptions,
