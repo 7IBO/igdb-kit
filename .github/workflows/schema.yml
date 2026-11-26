@@ -1,6 +1,7 @@
 name: Schema update
 
-# Weekly: downloads the latest igdbapi.proto, regenerates the types and opens a PR if anything changed.
+# Weekly: downloads the latest igdbapi.proto and reference tables, regenerates the types, reads IGDB's
+# blog feed, and opens a PR if anything changed or a new article came out.
 on:
   schedule:
     - cron: "0 6 * * 1"
@@ -14,10 +15,10 @@ jobs:
   regenerate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       # --fetch also downloads the reference tables (GameType, Platform...), which needs credentials.
       - run: bun run --filter igdb-kit codegen -- --fetch
@@ -25,6 +26,15 @@ jobs:
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
       - run: bun run typecheck && bun run test:types
+      # The unit tests check the conversions against the fresh tables (artwork_types to image_types).
+      # The PR this run opens gets no CI of its own, so a failure is written in its body and fails the
+      # run at its end.
+      - name: Unit tests on the fresh tables
+        id: unit
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bun run test 2>&1 | tee "$RUNNER_TEMP/unit.log"
       # Field-by-field check against the live API; the report goes in the PR body.
       - run: |
           cd packages/igdb-kit
@@ -32,10 +42,25 @@ jobs:
             echo "Regenerated from the latest igdbapi.proto and reference tables."
             echo
             bun run audit || echo "**The audit found problems: fix them before merging.**"
+            if [ "$UNIT" = failure ]; then
+              echo
+              echo "**The unit tests fail on the fresh tables: fix them before merging.**"
+              echo '```'
+              grep -E "\(fail\)|error:" "$RUNNER_TEMP/unit.log" | head -30
+              echo '```'
+            fi
           } > ../../audit.md
         env:
+          UNIT: ${{ steps.unit.outcome }}
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      # A new article is recorded in codegen/blog-feed.json, so it opens the PR on its own. A feed that
+      # cannot be read, or holds no article, fails the run at its end, once the schema's PR is open.
+      - name: IGDB's blog
+        id: blog
+        continue-on-error: true
+        working-directory: packages/igdb-kit
+        run: bun run --silent blog-feed >> ../../audit.md
       - uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/schema-update
@@ -43,3 +68,6 @@ jobs:
           commit-message: Update IGDB schema from igdbapi.proto
           body-path: audit.md
           add-paths: packages/igdb-kit
+      - name: Fail when the unit tests failed or the blog feed could not be read
+        if: steps.unit.outcome == 'failure' || steps.blog.outcome == 'failure'
+        run: exit 1

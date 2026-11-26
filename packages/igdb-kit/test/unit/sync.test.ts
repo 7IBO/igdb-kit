@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { artworkType, ImageType, imageUrl, LocalLimiter, QueryError } from "../../src";
+import { ArtworkType, artworkType, ImageType, imageUrl, LocalLimiter, QueryError } from "../../src";
 import { apicalypseError, type Call, mockFetch, noAnswer, testClient } from "./helpers";
 
 /** A fake endpoint holding `ids` (in increasing order, read at each call), answering the queries sync() sends. */
@@ -452,6 +452,14 @@ describe("artworkType", () => {
     expect(artworkType(artwork(undefined, 4))).toBe(ImageType.ConceptArt);
     expect(artworkType(artwork(undefined, undefined))).toBeNull();
     expect(artworkType(artwork(undefined, 99))).toBeNull();
+  });
+
+  // The weekly schema update regenerates both tables: a type IGDB adds to artwork_types fails here,
+  // in that update's pull request, until the conversion knows it.
+  test("converts every artwork_types id to the image_types id of the same name", () => {
+    const imageTypes: Record<string, number> = ImageType;
+    for (const [name, id] of Object.entries(ArtworkType))
+      expect([name, artworkType(artwork(undefined, id))]).toEqual([name, imageTypes[name] ?? -1]);
   });
 
   test("needs both fields selected", () => {

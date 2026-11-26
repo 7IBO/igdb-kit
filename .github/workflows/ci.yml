@@ -5,8 +5,10 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Nightly, so a change on IGDB's side shows up even without commits.
-    - cron: "0 3 * * *"
+    # Weekly, for the integration tests alone, so a change on IGDB's side shows up even without
+    # commits. GitHub starts schedules hours late here, so this one is kept a day before schema.yml's
+    # (the two share the Twitch quota).
+    - cron: "0 5 * * 0"
   # Manual runs. The "Version packages" PR, opened by github-actions, gets its required checks
   # once a maintainer approves or re-runs its pull_request run: dispatched runs don't count.
   workflow_dispatch:
@@ -17,12 +19,13 @@ permissions:
 jobs:
   check:
     name: Lint, typecheck, unit tests, build
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       - run: bun run lint
       - name: Generated schema is up to date
@@ -34,6 +37,7 @@ jobs:
 
   redis:
     name: Redis adapters
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     services:
       redis:
@@ -41,10 +45,10 @@ jobs:
         ports: ["6379:6379"]
         options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       - run: bun run --filter igdb-kit test:redis
         env:
@@ -52,16 +56,17 @@ jobs:
 
   types:
     name: Type tests on TypeScript ${{ matrix.ts }}
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         ts: ["5.9", "6.0", "7.0"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       - name: tsc ${{ matrix.ts }}
         working-directory: packages/igdb-kit
@@ -74,17 +79,18 @@ jobs:
 
   node:
     name: Built package on Node ${{ matrix.node }}
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         node: [20, 22, 24]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
-      - uses: actions/setup-node@v4
+          bun-version: 1.4.5
+      - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node }}
       - run: bun install --frozen-lockfile
@@ -117,9 +123,9 @@ jobs:
       TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
       TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       - run: bun run --filter igdb-kit test:integration

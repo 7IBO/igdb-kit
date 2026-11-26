@@ -4,6 +4,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   AgeRatingCategory,
   AgeRatingOrganization,
+  ArtworkType,
   and,
   artworkType,
   createIGDB,
@@ -291,9 +292,14 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
         .sort("id", "desc")
         .limit(500),
     ]);
-    // IGDB still fills artwork_type where image_type is missing.
+    // Where image_type is missing, an artwork_type this version knows converts, and any other gives
+    // null. A type IGDB adds is caught by the unit test once the schema update fetches the tables.
     expect(missing).toHaveLength(50);
-    expect(missing.every((a) => artworkType(a) !== null)).toBe(true);
+    const known = new Set<number>(Object.values(ArtworkType));
+    for (const a of missing) {
+      const legacy = a.artwork_type;
+      expect(artworkType(a) === null).toBe(legacy === undefined || !known.has(legacy));
+    }
     // Where both are filled, the conversion gives IGDB's own image_type.
     expect(both).toHaveLength(500);
     for (const a of both)

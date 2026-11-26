@@ -185,6 +185,7 @@
     "build": "bun --bun tsdown",
     "codegen": "bun scripts/codegen.ts",
     "audit": "bun scripts/audit-schema.ts",
+    "blog-feed": "bun scripts/blog-feed.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test test/unit",
     "test:integration": "bun test test/integration",
@@ -195,9 +196,9 @@
     "prepublishOnly": "bun run build"
   },
   "devDependencies": {
-    "ioredis": "6.0.0",
-    "redis": "6.3.0",
-    "tsdown": "0.23.0"
+    "ioredis": "6.1.0",
+    "redis": "6.4.0",
+    "tsdown": "0.23.7"
   },
   "repository": {
     "type": "git",
