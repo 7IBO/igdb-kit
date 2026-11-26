@@ -11,6 +11,7 @@ import { pl } from "../../src/i18n/pl";
 import { ptBR } from "../../src/i18n/pt-BR";
 import { ru } from "../../src/i18n/ru";
 import { zhCN } from "../../src/i18n/zh-CN";
+import { foldName } from "../../src/query/lookups";
 
 type Texts = Record<string, Record<string, string>>;
 const reference: Record<string, { id: number }[]> = JSON.parse(
@@ -125,5 +126,27 @@ describe("igdb-kit/i18n", () => {
     expect(sizes.map((entry) => entry.id)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
     expect(sizes[0]?.label).toBe(de.labels.company_sizes?.[1] as string);
     expect(entries("genres", "en")).toContainEqual({ id: 12, label: "Role-playing (RPG)" });
+  });
+});
+
+describe("labels matched by named()", () => {
+  // named() folds accents and case: a full label shared by two ids of a table would filter on both.
+  // The content descriptors have no name, so named() never reads them (and "Violence" is one
+  // descriptor per rating body). A part in parentheses may name several ids, as in English.
+  test("no full label, in any language or English, names two ids of one table", () => {
+    const clashes: string[] = [];
+    for (const table of Object.keys(en.labels)) {
+      if (table === "age_rating_content_descriptions_v2") continue;
+      const owners = new Map<string, Set<string>>();
+      for (const dictionary of [en, ...Object.values(dictionaries)]) {
+        const texts = (dictionary.labels as Texts)[table] ?? {};
+        for (const [id, text] of Object.entries(texts)) {
+          const key = foldName(text);
+          owners.set(key, (owners.get(key) ?? new Set()).add(id));
+        }
+      }
+      for (const [text, ids] of owners) if (ids.size > 1) clashes.push(`${table}: "${text}" (${[...ids]})`);
+    }
+    expect(clashes).toEqual([]);
   });
 });

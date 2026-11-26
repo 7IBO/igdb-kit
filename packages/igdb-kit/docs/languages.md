@@ -13,6 +13,7 @@ Every function that takes a locale types it as `Locale`: editors suggest the loc
 | Show the age rating of the user's country | `ageRating(game, { locale })` | [`igdb-kit/game`](display.md#age-ratings) |
 | Link to stores in the user's language | `storeLinks(game, { locale })` | [`igdb-kit/game`](display.md#companies-stores-and-links) |
 | Say whether a game has audio, subtitles or interface in the user's language | `supportsLanguage(game, locale)`, `languages(game, { locale })` | [`igdb-kit/game`](display.md#names-and-languages) |
+| Filter on a genre or theme typed in the user's language | `createIGDB({ ..., labels: [fr] })`, then `g.genres.named("Jeu de rôle")` | [Queries](queries.md#relations-by-name) |
 | Keep only games with a French voice-over | `where((g) => g.supportsLanguage("fr-FR", "audio"))` | [Queries](queries.md#named-filters-on-games) |
 | Name regions, countries and languages | `releaseRegionName()`, `countryName()`, `languageName()` | [`igdb-kit/game`](display.md#names-and-languages) |
 | Show an event's time in the user's zone | `eventTime(event, { locale, timeZone })` | [`igdb-kit/game`](display.md#names-and-languages) |
@@ -54,4 +55,5 @@ entries("themes", "fr");                              // [{ id: 1, label: "Actio
 - **Locales:** a locale reads the dictionaries of its language and script, the one of its country first (`fr-CA` reads `fr`, `pt-PT` reads `pt-BR`, `zh-TW` does not read `zh-CN`), then English.
 - **Types:** `label()` takes the tables above only, and `description()` only release statuses and collection types. A known id, such as `Genre.RolePlayingRPG` or `AgeRatingContentDescriptionV2.PEGI_Fear`, returns a `string`, since English has every one; any other number or a row returns `string | null`. `entries("genres", locale)` returns the ids of genres (type the list as `LabelEntry[]` to add an "All" option), and a `LabelDictionary` only takes each table's ids.
 - **New rows:** a row passed as an object (`{ id, name }`) keeps its own English label when its id was added to IGDB after this version; an id alone gives `null`.
+- **Filters:** pass the same dictionaries to `createIGDB({ labels: [fr, ja] })`, and `named()` matches them on reference tables: `g.genres.named("Jeu de rôle")` (see [Relations by name](queries.md#relations-by-name)). IGDB's English names match without them; add `en` to also match its fixed spellings.
 - **Your own texts:** a `LabelDictionary` is a plain object. Pass one for another language, or before a built-in one to change some labels: an id it leaves out comes from the next dictionary.

@@ -32,6 +32,7 @@ createIGDB({
   multiquery: true,           // false sends every query alone, for igdbProxy({ multiquery: false })
   cache,                      // CacheStore for cache()d queries; default in memory
   cacheTtlMs,                 // cache every query this long; default only cache()d ones
+  labels: [fr],               // named() also matches these labels of igdb-kit/i18n ("Jeu de rôle")
   hooks: { onRequest, onRetry, onRateLimited, onTokenRefresh, onAuthError },
 });
 ```

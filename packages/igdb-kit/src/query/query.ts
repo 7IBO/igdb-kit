@@ -7,6 +7,7 @@ import {
   entities,
   type SearchableEndpoint,
 } from "../generated/schema";
+import type { LabelDictionary } from "../i18n/types";
 import {
   findByGames,
   findByLink,
@@ -149,6 +150,8 @@ export interface QueryRunner {
    * and what such a page should weigh, from the sizes learned so far.
    */
   pageSize?(endpoint: EndpointName, fields: readonly string[]): { rows: number; bytes: number };
+  /** Dictionaries whose labels `named()` also matches on reference tables. */
+  labels?: readonly LabelDictionary[] | undefined;
 }
 
 export interface PopularOptions {

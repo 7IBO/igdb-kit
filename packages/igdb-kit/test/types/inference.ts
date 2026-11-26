@@ -1208,6 +1208,11 @@ description("genres", 12, "fr");
 // @ts-expect-error a locale is a string
 label("genres", 12, 12);
 ({ locale: "fr", labels: { genres: { 12: "RPG" } } }) satisfies LabelDictionary;
+// named() matches the labels the client is given, through a proxy too.
+createIGDB({ clientId: "x", clientSecret: "y", labels: [fr] });
+createIGDB({ proxyUrl: "/api/igdb", labels: [fr] });
+// @ts-expect-error a list of dictionaries
+createIGDB({ proxyUrl: "/api/igdb", labels: fr });
 // @ts-expect-error not a genre id
 ({ locale: "fr", labels: { genres: { 999: "RPG" } } }) satisfies LabelDictionary;
 // @ts-expect-error not a descriptor id

@@ -15,6 +15,7 @@ import {
   endpoints,
   type GameLinkedQuery,
   GameType,
+  Genre,
   gameLink,
   ImageType,
   Language,
@@ -61,6 +62,8 @@ import {
   websiteLinks,
 } from "../../src/game";
 import { en, type LabelTable } from "../../src/i18n";
+import { fr } from "../../src/i18n/fr";
+import { ja } from "../../src/i18n/ja";
 import { igdbProxy } from "../../src/proxy";
 
 // A test sends several requests, each of which IGDB can take seconds to answer when loaded: 5 s, the
@@ -873,6 +876,25 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
       .count()
       .catch((e: unknown) => e);
     expect(missing).toBeInstanceOf(NotFoundError);
+  });
+
+  test("named() matches translated labels on the real API", async () => {
+    const translated = createIGDB({
+      clientId: clientId as string,
+      clientSecret: clientSecret as string,
+      labels: [fr, ja],
+    });
+    const counts = await translated.batch({
+      french: translated.games.where((g) => g.genres.named("Jeu de rôle", "aventure")).count(),
+      japanese: translated.games.where((g) => g.themes.named("ホラー")).count(),
+      rpgOrAdventure: translated.games
+        .where((g) => g.genres.any(Genre.RolePlayingRPG, Genre.Adventure))
+        .count(),
+      horror: translated.games.where((g) => g.themes.any(Theme.Horror)).count(),
+    });
+    expect(counts.french).toBe(counts.rpgOrAdventure);
+    expect(counts.japanese).toBe(counts.horror);
+    expect(counts.horror).toBeGreaterThan(1000);
   });
 
   test("grouping helpers read real games and platforms", async () => {

@@ -55,9 +55,20 @@ Each field only offers the operators that fit its type, and enum fields only acc
 
 ### Relations by name
 
-`named()` works on any relation to a table with names: platforms (also by abbreviation or alternative name: "PS5", "Switch", "PSX"), genres ("RPG" matches "Role-playing (RPG)"), themes, game modes, franchises, collections, keywords, companies... A name matches in full, ignoring case.
+`named()` works on any relation to a table with names: platforms (also by abbreviation or alternative name: "PS5", "Switch", "PSX"), genres ("RPG" matches "Role-playing (RPG)"), themes, game modes, franchises, collections, keywords, companies... A name matches in full, ignoring case, and on reference tables, accents and full-width forms too (kana keep their voicing marks).
 
-igdb-kit looks the names up before sending the query and filters on their ids: a reference table is read whole once and cached for a day, any other table costs one cached request per name. A name that matches nothing throws a `NotFoundError` whose `suggestions` lists close names.
+With the client's `labels` option, a reference table with names (genres, themes, game modes, player perspectives...) also answers to its labels in those languages of [`igdb-kit/i18n`](languages.md#translated-labels-igdb-kiti18n), so a name typed by the user can go straight to the filter. The table is read as before, so this sends no request more:
+
+```ts
+import { fr } from "igdb-kit/i18n/fr";
+
+const igdb = createIGDB({ clientId, clientSecret, labels: [fr] });
+igdb.games.where((g) => g.genres.named("Jeu de rôle", "aventure")); // genres = (12,31)
+```
+
+No full label of the built-in dictionaries names two rows of a table, in any language or in English. A part in parentheses can: "Logo du jeu" names the three game logos of `artwork_types`, as "Game Logo" does, and the German "24 h" two popularity metrics.
+
+igdb-kit looks the names up before sending the query and filters on their ids: a reference table is read whole once and cached for a day, any other table costs one cached request per name. A name that matches nothing throws a `NotFoundError` whose `suggestions` lists close names. With `labels`, a suggestion is IGDB's name when it contains the text typed, else the label that does: "aventur" suggests "Aventure".
 
 ### Named filters on games
 
