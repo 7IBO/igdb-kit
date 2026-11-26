@@ -1,5 +1,5 @@
-// Refused credentials on the real Twitch endpoint. Skipped unless TWITCH_CLIENT_ID is set. Sends one
-// token request, with a wrong secret.
+// Refused credentials on the real Twitch endpoint. Skipped unless TWITCH_CLIENT_ID is set. Two
+// requests sent alone wait for one token request, with a wrong secret.
 import { describe, expect, test } from "bun:test";
 import { AuthError, type AuthErrorInfo, createIGDB } from "../../src";
 
@@ -14,13 +14,13 @@ describe.skipIf(!clientId)("refused credentials", () => {
       hooks: { onAuthError: (info) => seen.push(info) },
     });
     const results = await Promise.allSettled(
-      [1942, 1020].map((id) => igdb.games.select("name").findById(id)),
+      [1942, 1020].map((id) => igdb.games.select("name").where(`id = ${id}`).execute({ batch: false })),
     );
     expect(results.map((r) => r.status === "rejected" && r.reason instanceof AuthError)).toEqual([
       true,
       true,
     ]);
     expect(seen).toHaveLength(1);
-    expect(seen[0]).toMatchObject({ path: "oauth2/token", tokenValid: false });
+    expect(seen[0]).toMatchObject({ path: "oauth2/token", expiresAt: null });
   });
 });

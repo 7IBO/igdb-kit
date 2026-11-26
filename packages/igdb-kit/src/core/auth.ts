@@ -1,4 +1,5 @@
 import { AuthError, IGDBError, NetworkError } from "./errors";
+import { reportAuthError, type TransportHooks } from "./transport";
 import { backoffDelay, sleep } from "./util";
 
 export interface StoredToken {
@@ -48,8 +49,8 @@ export interface TokenProviderOptions {
   /** Renew in the background when less than this share of the lifetime is left. Default 0.05 (~3 days). */
   refreshThreshold?: number | undefined;
   onTokenRefresh?: ((info: { expiresAt: number }) => void) | undefined;
-  /** Twitch refused the credentials; `tokenValid` when only a renewal ahead of expiry was refused. */
-  onAuthError?: ((info: { path: string; error: AuthError; tokenValid: boolean }) => void) | undefined;
+  /** Twitch refused the credentials. */
+  onAuthError?: TransportHooks["onAuthError"] | undefined;
   /** A renewal ahead of expiry failed: the next one waits `delayMs`. */
   onRetry?: ((info: { path: string; attempt: number; delayMs: number; reason: unknown }) => void) | undefined;
   tokenUrl?: string | undefined;
@@ -64,6 +65,8 @@ export class TokenProvider {
   private readonly store: TokenStore;
   private readonly fetchFn: typeof fetch;
   private inflight: Promise<StoredToken> | null = null;
+  /** Until when the token in use works, while `inflight` is a renewal ahead of expiry. */
+  private validUntil: number | null = null;
   private lifetime = 60 * 24 * 3600 * 1000;
   /** Renewals ahead of expiry that failed in a row, and when the next one may start. */
   private renewalFailures = 0;
@@ -89,7 +92,7 @@ export class TokenProvider {
       const threshold = this.options.refreshThreshold ?? 0.05;
       if (stored.expiresAt - now < this.lifetime * threshold && now >= this.renewAfter && !this.inflight) {
         // Renew ahead of time without making this request wait.
-        this.refresh(undefined, true).catch((error: unknown) => this.renewalFailed(error));
+        this.refresh(undefined, stored.expiresAt).catch((error: unknown) => this.renewalFailed(error));
       }
       return stored.token;
     }
@@ -120,21 +123,26 @@ export class TokenProvider {
     return (await this.refresh(signal)).token;
   }
 
-  /** `ahead`: a renewal before expiry, while the stored token still works. */
-  private refresh(signal?: AbortSignal, ahead = false): Promise<StoredToken> {
+  /**
+   * `validUntil`: a renewal ahead of expiry, while the stored token works until then. A request that
+   * needs a new token now and joins it makes its refusal one that fails requests.
+   */
+  private refresh(signal?: AbortSignal, validUntil?: number): Promise<StoredToken> {
+    if (this.inflight) {
+      if (validUntil === undefined) this.validUntil = null;
+    } else this.validUntil = validUntil ?? null;
     this.inflight ??= this.refreshWithLock()
       .then((token) => {
         this.renewalFailures = 0;
         return token;
       })
       .catch((error: unknown) => {
-        if (error instanceof AuthError) {
-          try {
-            this.options.onAuthError?.({ path: "oauth2/token", error, tokenValid: ahead });
-          } catch {
-            // ignored
-          }
-        }
+        if (error instanceof AuthError)
+          reportAuthError(this.options.onAuthError, {
+            path: "oauth2/token",
+            error,
+            expiresAt: this.validUntil,
+          });
         throw error;
       })
       .finally(() => {

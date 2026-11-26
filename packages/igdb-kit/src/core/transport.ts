@@ -46,26 +46,31 @@ export interface TransportHooks {
   /** IGDB answered 429. */
   onRateLimited?: (info: { path: string }) => void;
   /**
-   * The credentials were refused: Twitch refused the client id or secret, IGDB refused the token
-   * after a renewal or a fixed `accessToken`, or a proxy refused its own. Retrying will not help, so
-   * this is the hook to alert on. `tokenValid` is true when only the renewal ahead of expiry was
-   * refused: requests still work until the token expires. Called once per refusal of the token
-   * endpoint, and once per request IGDB refuses. An error thrown here is ignored.
+   * The credentials were refused, which no retry fixes: Twitch refused the client id or secret, or
+   * IGDB answered 401 or 403 (a token refused after its renewal, a fixed `accessToken`, a proxy's
+   * own credentials). Called once per token request Twitch refuses, in each process, and once per
+   * request IGDB refuses: it repeats until the credentials are fixed. What it throws or rejects is
+   * ignored.
    */
-  onAuthError?: (info: AuthErrorInfo) => void;
+  onAuthError?: (info: AuthErrorInfo) => unknown;
 }
 
 export interface AuthErrorInfo {
   /** `oauth2/token` for Twitch, else the IGDB path of the refused request. */
   path: string;
+  /** The error the waiting requests fail with, or would fail with once the token expires. */
   error: AuthError;
-  tokenValid: boolean;
+  /**
+   * When requests start to fail: the expiry of the token in use, when only its renewal ahead of
+   * expiry was refused. `null` when requests fail now.
+   */
+  expiresAt: number | null;
 }
 
-/** @internal Calls `hooks.onAuthError`, ignoring what it throws. */
-export function reportAuthError(hooks: TransportHooks | undefined, info: AuthErrorInfo): void {
+/** @internal Calls `onAuthError`, ignoring what it throws or rejects. */
+export function reportAuthError(hook: TransportHooks["onAuthError"], info: AuthErrorInfo): void {
   try {
-    hooks?.onAuthError?.(info);
+    void Promise.resolve(hook?.(info)).catch(() => {});
   } catch {
     // ignored
   }
@@ -255,7 +260,8 @@ export class Transport {
         this.options.hooks?.onRateLimited?.({ path });
       }
       // A proxy's 502 for its own refused credentials is an AuthError: retrying will not help.
-      if (error instanceof AuthError) reportAuthError(this.options.hooks, { path, error, tokenValid: false });
+      if (error instanceof AuthError)
+        reportAuthError(this.options.hooks?.onAuthError, { path, error, expiresAt: null });
       if (!RETRYABLE.has(status) || error instanceof AuthError || splits?.(error)) throw error;
       deadline ??= Date.now() + budget;
       if (!(await this.backoff(path, attempt, deadline, error, signal))) {

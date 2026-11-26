@@ -2,4 +2,4 @@
 "igdb-kit": minor
 ---
 
-`hooks.onAuthError({ path, error, tokenValid })` is called when the credentials are refused, which no retry fixes: Twitch refusing the client id or secret (once per token request, `tokenValid: true` when only the renewal ahead of expiry was refused, so the token still works for a while), or IGDB refusing a token after its renewal, a fixed `accessToken` or a proxy's credentials (once per request). New type `AuthErrorInfo`.
+`hooks.onAuthError({ path, error, expiresAt })` is called when the credentials are refused, which no retry fixes. Twitch refusing the client id or secret reports `oauth2/token`, once per token request; `expiresAt` is when the token in use expires when only its renewal ahead of expiry was refused, else `null`. IGDB answering 401 or 403 (a token refused after its renewal, a fixed `accessToken`, a proxy's credentials) reports the request's path, once per request. New type `AuthErrorInfo`.
