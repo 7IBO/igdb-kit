@@ -88,3 +88,32 @@ It looks in names, alternative names and localized titles ("Pokémon Épée" fin
 - The query's `limit` (default 5) caps the candidates and `minScore` (0.5) drops the weakest.
 
 It costs two to four requests: the title searched as is and without punctuation or edition (IGDB's search finds nothing for "NieR:Automata"), a multiquery for the equal names, alternative names and localized titles, then the candidates when you select fields beyond `name`, `game_type`, `version_parent`, `first_release_date`, `platforms` and `total_rating_count`, or filter with `where`.
+
+## Duplicate games: duplicateCandidates()
+
+IGDB has duplicates: one game entered twice, or a port entered as a game of its own. `duplicateCandidates()` from `igdb-kit/game` proposes the pairs that are likely one game, best first, for a person to check and report to IGDB. It sends no request: pass games read with `duplicateFields()`.
+
+```ts
+import { duplicateCandidates, duplicateFields } from "igdb-kit/game";
+
+const games = await igdb.games.select(...duplicateFields()).where('name = ("Hades", "HADES")').execute();
+const [pair] = duplicateCandidates(games);
+// { games: [a, b], score: 0.95, reasons: ["name", "year", "platforms", "developer"], conflicts: [] }
+```
+
+Two games pair up when they share a name (compared as `games.match()` compares titles), the name without its edition label, an alternative name, or a store id from `websites` or `external_games`. The score then adds a release year (the same, or a year apart), a platform and a developer in common, and drops for years two or more apart (the 1993 Doom and the 2016 one) and for developers with none in common. A name alone gives 0.5, under the default `minScore` of 0.6. `reasons` and `conflicts` say what counted.
+
+Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game, and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
+
+Pairs are found only among the games you pass. For the whole catalogue, read it once with `iterate()`, which pages by id at 500 rows a request under the client's limiter (about 800 requests for the 380,000 games, a few minutes at IGDB's 4 requests a second), then compare everything at once:
+
+```ts
+const games = [];
+for await (const game of igdb.games
+  .select(...duplicateFields())
+  .where("version_parent = null & game_type = (0,4,8,9,10,11)")
+  .iterate()) games.push(game);
+const pairs = duplicateCandidates(games);
+```
+
+With a local copy of IGDB, pass its rows instead: the same fields, the relations as ids.
