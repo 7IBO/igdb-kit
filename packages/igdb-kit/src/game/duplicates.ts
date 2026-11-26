@@ -112,8 +112,14 @@ export interface DuplicateOptions {
   /**
    * Games sharing one name or store id above this count are left out of that group, since a
    * name such as "Tetris" or "Snake" names many games: default 50. Their other groups still count.
+   * A group costs its size squared over two comparisons: 1,225 at 50.
    */
   maxGroup?: number | undefined;
+  /**
+   * Only the pairs that hold one of these games, such as the ones added or changed since the last
+   * run: the others are still read for their names and ids, and nothing else is compared.
+   */
+  only?: Iterable<number> | undefined;
 }
 
 type DuplicateRequires<G> = Requires<G, DuplicateFields> &
@@ -142,12 +148,12 @@ interface Prepared<G> {
   kind: string;
   name: string;
   base: string;
-  alternatives: Set<string>;
-  stores: Set<string>;
+  alternatives: string[];
+  stores: string[];
   year: number | undefined;
-  platforms: Set<number>;
-  developers: Set<number>;
-  linked: Set<number>;
+  platforms: number[];
+  developers: number[];
+  linked: number[];
   parent: number | undefined;
 }
 
@@ -178,13 +184,16 @@ export function duplicateCandidates<G extends { id: number }>(
   if (!Number.isInteger(maxGroup) || maxGroup < 2)
     throw new TypeError(`duplicateCandidates(): maxGroup must be an integer of 2 or more, got ${maxGroup}`);
 
+  const only = options.only === undefined ? undefined : new Set(options.only);
   const prepared: Prepared<G>[] = [];
-  const groups = new Map<string, number[]>();
+  // A key seen once keeps its game's index; an array is made for the second game only.
+  const groups = new Map<string, number | number[]>();
   const group = (key: string, index: number) => {
     const members = groups.get(key);
-    if (members) {
-      if (members.at(-1) !== index) members.push(index);
-    } else groups.set(key, [index]);
+    if (members === undefined) groups.set(key, index);
+    else if (typeof members === "number") {
+      if (members !== index) groups.set(key, [members, index]);
+    } else if (members.at(-1) !== index) members.push(index);
   };
   for (const game of games) {
     const entry = prepare(game as G);
@@ -196,19 +205,19 @@ export function duplicateCandidates<G extends { id: number }>(
 
   // A name is common when three games or more that could pair carry it: same name, same kind.
   const named = new Map<string, number>();
-  for (const entry of prepared)
-    named.set(`${entry.kind} ${entry.name}`, (named.get(`${entry.kind} ${entry.name}`) ?? 0) + 1);
-  const seen = new Set<string>();
+  for (const { kind, name } of prepared)
+    named.set(`${kind} ${name}`, (named.get(`${kind} ${name}`) ?? 0) + 1);
+  const seen = new Set<number>();
   const pairs: DuplicateCandidate<G>[] = [];
   for (const members of groups.values()) {
-    if (members.length < 2 || members.length > maxGroup) continue;
+    if (typeof members === "number" || members.length > maxGroup) continue;
     for (let i = 0; i < members.length; i++) {
       for (let j = i + 1; j < members.length; j++) {
-        const [a, b] = [prepared[members[i] as number], prepared[members[j] as number]] as [
-          Prepared<G>,
-          Prepared<G>,
-        ];
-        const key = a.id < b.id ? `${a.id} ${b.id}` : `${b.id} ${a.id}`;
+        const [x, y] = [members[i] as number, members[j] as number];
+        const [a, b] = [prepared[x], prepared[y]] as [Prepared<G>, Prepared<G>];
+        if (only && !only.has(a.id) && !only.has(b.id)) continue;
+        // Indexes, in increasing order within a group, make one number per pair.
+        const key = x * 2 ** 26 + y;
         if (seen.has(key)) continue;
         seen.add(key);
         const pair = compare(a, b, (named.get(`${a.kind} ${a.name}`) ?? 0) > 2);
@@ -229,41 +238,43 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
   if (idOf(input.game_type) === GameType.Port && input.parent_game != null) return null;
   const name = titleKey(clean(input.name));
   if (name === "") return null;
-  const stores = new Set<string>();
+  const stores: string[] = [];
   for (const site of input.websites ?? []) {
     const id = site.url ? parseStoreUrl(site.url) : null;
-    if (id && id.store !== "igdb") stores.add(`${id.store} ${id.kind} ${id.id}`);
+    if (id && id.store !== "igdb") stores.push(`${id.store} ${id.kind} ${id.id}`);
   }
   for (const { storeId } of externalIds(input as never))
-    if (storeId) stores.add(`${storeId.store} ${storeId.kind} ${storeId.id}`);
+    if (storeId) stores.push(`${storeId.store} ${storeId.kind} ${storeId.id}`);
   const year =
     typeof input.first_release_date === "number"
       ? new Date(input.first_release_date * 1000).getUTCFullYear()
       : undefined;
   const ids = (refs: readonly (Ref | null | undefined)[] | null | undefined) =>
     (refs ?? []).flatMap((ref) => idOf(ref) ?? []);
-  const linked = new Set([
+  const linked = [
     ...ids(input.remakes),
     ...ids(input.remasters),
     ...ids(input.ports),
     ...ids([input.parent_game]),
-  ]);
+  ];
   return {
     game,
     id: game.id,
     kind,
     name,
     base: titleKey(withoutEdition(clean(input.name))) || name,
-    alternatives: new Set(
-      (input.alternative_names ?? [])
-        .flatMap((alt) => (alt.name ? [titleKey(clean(alt.name))] : []))
-        .filter(Boolean),
-    ),
+    alternatives: [
+      ...new Set(
+        (input.alternative_names ?? [])
+          .flatMap((alt) => (alt.name ? [titleKey(clean(alt.name))] : []))
+          .filter(Boolean),
+      ),
+    ],
     stores,
     year,
-    platforms: new Set(ids(input.platforms)),
-    developers: new Set(
-      (input.involved_companies ?? []).flatMap((row) => (row.developer ? (idOf(row.company) ?? []) : [])),
+    platforms: ids(input.platforms),
+    developers: (input.involved_companies ?? []).flatMap((row) =>
+      row.developer ? (idOf(row.company) ?? []) : [],
     ),
     linked,
     parent: idOf(input.parent_game) ?? undefined,
@@ -271,12 +282,12 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
 }
 
 function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateCandidate<G> | null {
-  if (a.kind !== b.kind || a.linked.has(b.id) || b.linked.has(a.id)) return null;
+  if (a.kind !== b.kind || a.linked.includes(b.id) || b.linked.includes(a.id)) return null;
   // Two remakes or ports of different games, or of one game on other platforms (the NES and the
   // Game Boy Tetris), are not one game.
   if (a.parent !== undefined && b.parent !== undefined) {
     if (a.parent !== b.parent) return null;
-    if (a.platforms.size > 0 && b.platforms.size > 0 && !shares(a.platforms, b.platforms)) return null;
+    if (a.platforms.length > 0 && b.platforms.length > 0 && !shares(a.platforms, b.platforms)) return null;
   }
   const reasons: DuplicateReason[] = [];
   const conflicts: DuplicateConflict[] = [];
@@ -289,8 +300,8 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
     reasons.push("name_without_edition");
     score = 0.4;
   } else if (
-    [a.name, a.base].some((key) => b.alternatives.has(key)) ||
-    [b.name, b.base].some((key) => a.alternatives.has(key))
+    [a.name, a.base].some((key) => b.alternatives.includes(key)) ||
+    [b.name, b.base].some((key) => a.alternatives.includes(key))
   ) {
     reasons.push("alternative_name");
     score = 0.4;
@@ -317,7 +328,7 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
     reasons.push("platforms");
     score += 0.1;
   }
-  if (a.developers.size > 0 && b.developers.size > 0) {
+  if (a.developers.length > 0 && b.developers.length > 0) {
     if (shares(a.developers, b.developers)) {
       reasons.push("developer");
       score += 0.15;
@@ -337,11 +348,11 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
 }
 
 /** The stores of a game's store ids: "steam app", "xbox product". */
-function storesOf(ids: ReadonlySet<string>): Set<string> {
-  return new Set([...ids].map((id) => id.slice(0, id.lastIndexOf(" "))));
+function storesOf(ids: readonly string[]): string[] {
+  return ids.map((id) => id.slice(0, id.lastIndexOf(" ")));
 }
 
-function shares<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
-  for (const value of a) if (b.has(value)) return true;
+function shares<T>(a: readonly T[], b: readonly T[]): boolean {
+  for (const value of a) if (b.includes(value)) return true;
   return false;
 }

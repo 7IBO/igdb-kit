@@ -105,15 +105,20 @@ Two games pair up when they share a name (compared as `games.match()` compares t
 
 Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game (so a port entered twice under one game is not proposed either), and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
 
-Pairs are found only among the games you pass. For the whole catalogue, read it once with `iterate()`, which pages by id at 500 rows a request under the client's limiter (about 800 requests for the 380,000 games, a few minutes at IGDB's 4 requests a second), then compare everything at once:
+Pairs are found only among the games you pass, so a batch by id finds almost nothing: duplicates lie far apart. Pass the whole catalogue at once, read with `sync()`, which sends its pages in parallel at `background` priority under the client's limiter (about 760 pages of 500 games):
 
 ```ts
+import { GameType } from "igdb-kit";
+
+const kinds = [GameType.MainGame, GameType.StandaloneExpansion, GameType.Remake, GameType.Remaster, GameType.ExpandedGame, GameType.Port];
 const games = [];
-for await (const game of igdb.games
+for await (const page of igdb.games
   .select(...duplicateFields())
-  .where("version_parent = null & game_type = (0,4,8,9,10,11)")
-  .iterate()) games.push(game);
+  .where(`version_parent = null & game_type = (${kinds.join(",")})`)
+  .sync()) games.push(...page);
 const pairs = duplicateCandidates(games);
 ```
+
+On 380,000 games, the comparison takes about 10 seconds and 1 to 2 GB of memory with every field (measured on generated games of that size); leaving out `websites` and `alternative_names` roughly halves it, at the cost of the store ids and alternative names. For a nightly run, pass `only` with the games added or changed since the last one: every game is still read for its names and ids, but only the pairs that hold one of them are compared and returned.
 
 With a local copy of IGDB, pass its rows instead: the same fields, single references (`game_type`, `parent_game`, `version_parent`) and lists of games or platforms as ids, `alternative_names`, `involved_companies`, `websites` and `external_games` as rows with their fields. A null reads as missing.

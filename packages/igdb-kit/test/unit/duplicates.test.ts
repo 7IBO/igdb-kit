@@ -218,6 +218,22 @@ describe("duplicateCandidates()", () => {
     expect(symbols).toEqual([]);
   });
 
+  test("only compares the pairs that hold one of the games given", () => {
+    const at = { first_release_date: y(2020), platforms: [6] };
+    const games = [
+      game(1, "Hades", at),
+      game(2, "Hades", at),
+      game(3, "Celeste", at),
+      game(4, "Celeste", at),
+    ];
+    expect(ids(duplicateCandidates(games))).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(ids(duplicateCandidates(games, { only: [4] }))).toEqual([[3, 4]]);
+    expect(duplicateCandidates(games, { only: new Set([9]) })).toEqual([]);
+  });
+
   test("two remakes of one game pair up", () => {
     const at = { game_type: GameType.Remake, first_release_date: y(2023) };
     expect(ids(duplicateCandidates([game(1, "Dead Space", at), game(2, "Dead Space", at)]))).toEqual([
