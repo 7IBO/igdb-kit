@@ -66,7 +66,7 @@ const igdb = createIGDB({ clientId, clientSecret, labels: [fr] });
 igdb.games.where((g) => g.genres.named("Jeu de rôle", "aventure")); // genres = (12,31)
 ```
 
-No full label of the built-in dictionaries names two rows of a table, in any language or in English. A part in parentheses can, as in English: "Logo du jeu" names the three game logos of `artwork_types`, as "Game Logo" does.
+No full label of the built-in dictionaries names two rows of a table, in any language or in English. A part in parentheses can: "Logo du jeu" names the three game logos of `artwork_types`, as "Game Logo" does, and the German "24 h" two popularity metrics.
 
 igdb-kit looks the names up before sending the query and filters on their ids: a reference table is read whole once and cached for a day, any other table costs one cached request per name. A name that matches nothing throws a `NotFoundError` whose `suggestions` lists close names. With `labels`, a suggestion is IGDB's name when it contains the text typed, else the label that does: "aventur" suggests "Aventure".
 

@@ -158,10 +158,17 @@ async function fromTable(
   ];
   const texts = new Map(
     rows.map((row) => {
-      const all = shown(row);
-      // "Role-playing (RPG)" also answers to "Role-playing" and "RPG", "PC (Microsoft Windows)" to "PC".
-      const parts = all.flatMap((text) => /^(.+?)\s*\((.+)\)$/.exec(text.trim())?.slice(1) ?? []);
-      return [row, [...all, ...parts].map(foldName).filter((text) => text !== "")];
+      const all = shown(row).map(foldName);
+      // "Role-playing (RPG)" also answers to "Role-playing" and "RPG", "PC (Microsoft Windows)" to "PC";
+      // folded first, so that "角色扮演（RPG）" splits too.
+      const parts = all.flatMap(
+        (text) =>
+          /^(.+?)\s*\((.+)\)$/
+            .exec(text)
+            ?.slice(1)
+            .map((p) => p.trim()) ?? [],
+      );
+      return [row, [...all, ...parts].filter((text) => text !== "")];
     }),
   );
   const ids = new Map<string, number[]>();

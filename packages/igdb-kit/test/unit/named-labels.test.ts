@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { NotFoundError } from "../../src";
 import { fr } from "../../src/i18n/fr";
 import { ja } from "../../src/i18n/ja";
+import { zhCN } from "../../src/i18n/zh-CN";
 import { mockFetch, testClient } from "./helpers";
 
 const GENRES = [
@@ -26,6 +27,13 @@ describe("named() with the client's labels", () => {
       "fields id,name; sort id asc; limit 500;",
     ]);
     expect(gamesBodies(mock.calls)).toEqual(["where genres = (12,31);", "where genres = (11,12,31);"]);
+  });
+
+  test("splits labels written with full-width parentheses", async () => {
+    const mock = api();
+    const igdb = testClient(mock.fetch, { labels: [zhCN] });
+    await igdb.games.where((g) => g.genres.named("角色扮演"));
+    expect(gamesBodies(mock.calls)).toEqual(["where genres = (12);"]);
   });
 
   test("ignores Latin accents and case, but keeps the kana voicing marks", async () => {
