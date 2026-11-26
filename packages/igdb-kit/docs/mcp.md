@@ -45,7 +45,7 @@ A wrong argument, or an error from IGDB, comes back as a tool error the assistan
 
 ## In your own server
 
-`igdb-kit/mcp` exports the same server for another transport, or for a client you configure yourself (a Redis token store and limiter, a shared cache through `cache` and `cacheTtlMs`):
+`igdb-kit/mcp` exports the same server for another transport, or for a client you configure yourself (a Redis token store, limiter and cache; `cacheTtlMs` sets how long get_game and query answers are kept):
 
 ```ts
 import { createIGDB } from "igdb-kit";
@@ -59,4 +59,4 @@ const answer = await mcp.handle(message); // a JSON-RPC message in, its answer o
 
 ## Next to IGDB's official server
 
-IGDB has offered an official MCP server, in beta, since June 2026. This one needs no beta access, runs on your machine with the credentials you already use, and answers with igdb-kit's handling of IGDB's data: search ranking that puts the original before its mods, release windows by date precision, and PopScore rankings with game names.
+IGDB announced an official MCP server, in beta, on its blog on 17 June 2026. This one needs no beta access, runs on your machine with the credentials you already use, and answers with igdb-kit's handling of IGDB's data: search ranking that puts the original before its mods, release windows by date precision, and PopScore rankings with game names.

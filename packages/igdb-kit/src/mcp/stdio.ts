@@ -6,6 +6,21 @@ import type { McpServer } from "./server";
 
 const error = (code: number, message: string) => ({ jsonrpc: "2.0", id: null, error: { code, message } });
 
+/** `server.handle()`, with an internal error for a request it fails to answer. */
+async function handle(server: McpServer, message: unknown): Promise<object | undefined> {
+  try {
+    return await server.handle(message);
+  } catch (e) {
+    const id = (message as { id?: unknown } | null)?.id;
+    if (typeof id !== "string" && typeof id !== "number") return undefined;
+    return {
+      jsonrpc: "2.0",
+      id,
+      error: { code: -32603, message: e instanceof Error ? e.message : String(e) },
+    };
+  }
+}
+
 async function answer(server: McpServer, line: string): Promise<object | undefined> {
   let message: unknown;
   try {
@@ -13,9 +28,9 @@ async function answer(server: McpServer, line: string): Promise<object | undefin
   } catch {
     return error(-32700, "Parse error");
   }
-  if (!Array.isArray(message)) return server.handle(message);
+  if (!Array.isArray(message)) return handle(server, message);
   if (message.length === 0) return error(-32600, "Invalid request: empty batch");
-  const answers = (await Promise.all(message.map((m) => server.handle(m)))).filter((a) => a !== undefined);
+  const answers = (await Promise.all(message.map((m) => handle(server, m)))).filter((a) => a !== undefined);
   return answers.length ? answers : undefined;
 }
 
@@ -32,7 +47,7 @@ export async function serveLines(
       .then((out) => {
         if (out) write(JSON.stringify(out));
       })
-      .catch(() => {}) // only `write` can throw, once the client has gone
+      .catch(() => {}) // `write` failing once the client has gone; `answer` does not reject
       .finally(() => pending.delete(task));
     pending.add(task);
   }

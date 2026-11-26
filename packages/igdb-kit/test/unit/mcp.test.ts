@@ -52,6 +52,10 @@ describe("MCP server", () => {
     });
     expect(await mcp.handle({ id: 3, method: "ping" })).toMatchObject({ id: 3, error: { code: -32600 } });
     expect(await mcp.handle({ jsonrpc: "2.0", id: 4, result: {} })).toBeUndefined();
+    expect(await mcp.handle({ jsonrpc: "2.0", id: {}, method: "ping" })).toMatchObject({
+      id: null,
+      error: { code: -32600 },
+    });
     expect(await mcp.handle(call("nope"))).toMatchObject({ error: { code: -32602 } });
   });
 
@@ -158,11 +162,15 @@ describe("MCP server", () => {
       yield "[]";
     }
     await serveLines(mcp, lines(), (line) => out.push(line));
-    expect(out.map((l) => JSON.parse(l))).toEqual([
-      { jsonrpc: "2.0", id: 1, result: {} },
-      { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } },
-      [{ jsonrpc: "2.0", id: 2, result: {} }],
-      { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request: empty batch" } },
-    ]);
+    // Answers go out as they are ready, in any order.
+    expect(out).toHaveLength(4);
+    expect(out.map((l) => JSON.parse(l))).toEqual(
+      expect.arrayContaining([
+        { jsonrpc: "2.0", id: 1, result: {} },
+        { jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } },
+        [{ jsonrpc: "2.0", id: 2, result: {} }],
+        { jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid request: empty batch" } },
+      ]),
+    );
   });
 });

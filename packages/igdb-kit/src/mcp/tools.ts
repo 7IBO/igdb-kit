@@ -1,9 +1,8 @@
 // The tools of the MCP server (server.ts). Each one reads; none writes. Reads built with the query
 // builder share the client's batching and cache; the two that send Apicalypse as it is (get_game and
-// query) are cached by the server itself, as `raw()` is not.
+// query) go through the client's cache too, as `raw()` does not.
 
-import type { CacheStore } from "../cache";
-import type { IGDBClient } from "../client";
+import { type Forward, forwardKey, type IGDBClient } from "../client";
 import { endpoints, PopularityType } from "../generated/schema";
 import { endpointSchema } from "../schema";
 
@@ -150,7 +149,7 @@ export const TOOLS: Tool[] = [
     name: "upcoming_releases",
     title: "Releases in a window",
     description:
-      "Games released, or to be released, between two days (UTC), one entry per game with its most precise release in the window: `start` is its first day (YYYY-MM-DD), `precision` day, month, quarter or year. Main games only (expansions, remakes, remasters and ports included) unless `include_all` is true. A month holds about a thousand games: page with `offset`, narrow with `platform`.",
+      "Games released, or to be released, between two days (UTC), one entry per game with its most precise release in the window: `start` is its first day (YYYY-MM-DD), `precision` day, month, quarter or year. Main games only (expansions, remakes, remasters and ports included) unless `include_all` is true. A month holds about a thousand games: page with `offset`, narrow with `platform`, and shorten `days` if the window holds too many release dates (the error says so; there is no maxRows here).",
     inputSchema: {
       type: "object",
       properties: {
@@ -238,7 +237,7 @@ export const TOOLS: Tool[] = [
     name: "describe_endpoint",
     title: "Describe an endpoint",
     description:
-      "Without `endpoint`, lists IGDB's endpoints. With it, the endpoint's fields: type, the endpoint a relation points to, description, and the fields of other endpoints that point to it. Ids such as platforms or genres are rows of their own endpoint: read them with query.",
+      "Without `endpoint`, lists IGDB's endpoints. With it, the endpoint's fields: type, the endpoint a relation points to, named values where IGDB has them, description, and the fields of other endpoints that point to it. Ids such as platforms or genres are rows of their own endpoint: read them with query.",
     inputSchema: {
       type: "object",
       properties: { endpoint: { type: "string", description: "Such as games, platforms or release_dates" } },
@@ -258,14 +257,16 @@ async function timeToBeat(raw: ToolContext["raw"], game: number): Promise<unknow
   return row ?? null;
 }
 
-/** `raw()` through `cache`, for the tools that send Apicalypse as it is. */
-export function cachedRaw(igdb: IGDBClient, cache: CacheStore, ttlMs: number): ToolContext["raw"] {
+/**
+ * `raw()` through the client's cache, for the tools that send Apicalypse as it is: the client's
+ * cache store and its handling of a slow or broken store (`igdb-kit/proxy` reads the same way).
+ */
+export function cachedRaw(igdb: IGDBClient, ttlMs: number): ToolContext["raw"] {
+  const forward = (igdb as unknown as Record<symbol, Forward | undefined>)[forwardKey];
   return async <T>(path: string, body: string, withCount = false): Promise<T> => {
-    const key = `mcp:${path}:${withCount ? 1 : 0}:${body}`;
-    const hit = ttlMs > 0 ? await cache.get(key) : null;
-    if (hit) return JSON.parse(hit) as T;
-    const value = withCount ? await igdb.raw(path, body, { withCount: true }) : await igdb.raw(path, body);
-    if (ttlMs > 0) await cache.set(key, JSON.stringify(value), ttlMs);
-    return value as T;
+    if (!forward)
+      return (withCount ? igdb.raw(path, body, { withCount: true }) : igdb.raw(path, body)) as Promise<T>;
+    const response = await forward(path, body, { cacheTtlMs: ttlMs });
+    return (withCount ? { data: response.data, total: response.total ?? null } : response.data) as T;
   };
 }

@@ -2,7 +2,6 @@
 // with no dependency. Messages are JSON-RPC 2.0; `stdio.ts` reads and writes them one per line.
 // Every call goes through the client's rate limit and token renewal, and is cached.
 
-import { type CacheStore, memoryCache } from "../cache";
 import type { IGDBClient } from "../client";
 import { cachedRaw, TOOLS } from "./tools";
 
@@ -28,10 +27,11 @@ export interface McpServer {
 export interface McpServerOptions {
   /** Reported to the client in `initialize`. */
   version: string;
-  /** How long get_game and query keep an answer; the client's `cacheTtlMs` covers the other tools. Default 10 minutes, 0 for none. */
+  /**
+   * How long get_game and query keep an answer in the client's cache; the client's own `cacheTtlMs`
+   * covers the other tools. Default 10 minutes, 0 for none.
+   */
   cacheTtlMs?: number | undefined;
-  /** Where they keep it; default in memory. */
-  cache?: CacheStore | undefined;
 }
 
 /**
@@ -41,7 +41,7 @@ export interface McpServerOptions {
 export function createMcpServer(igdb: IGDBClient, options: McpServerOptions): McpServer {
   const ctx = {
     igdb,
-    raw: cachedRaw(igdb, options.cache ?? memoryCache(), options.cacheTtlMs ?? 10 * 60_000),
+    raw: cachedRaw(igdb, options.cacheTtlMs ?? 10 * 60_000),
   };
   const reply = (id: Id, result: object) => ({ jsonrpc: "2.0", id, result });
   const fail = (id: Id, code: number, message: string) => ({ jsonrpc: "2.0", id, error: { code, message } });
@@ -49,6 +49,8 @@ export function createMcpServer(igdb: IGDBClient, options: McpServerOptions): Mc
     async handle(message) {
       const req = (message && typeof message === "object" ? message : {}) as Request;
       const id = typeof req.id === "string" || typeof req.id === "number" ? req.id : null;
+      if (req.id !== undefined && id === null)
+        return fail(null, -32600, "Invalid request: the id must be a string or a number");
       // A response from the client: this server sends no requests, so there is nothing to match.
       if (req.method === undefined && ("result" in req || "error" in req)) return undefined;
       if (req.jsonrpc !== "2.0" || typeof req.method !== "string") return fail(id, -32600, "Invalid request");
