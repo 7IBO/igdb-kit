@@ -14,3 +14,5 @@ REDIS_URL=redis://localhost:6379 bun run --filter igdb-kit test:redis
 ```
 
 A change that users will notice comes with a changeset (`bunx changeset`), which writes its line in the changelog and sets the next version.
+
+The weekly "Update IGDB schema" pull request is finished the same day by following [`.github/schema-update.md`](.github/schema-update.md).
