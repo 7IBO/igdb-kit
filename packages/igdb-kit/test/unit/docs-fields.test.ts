@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { changes, parseDocs, textOf } from "../../scripts/docs-fields";
+import { changes, merged, parseDocs, textOf } from "../../scripts/docs-fields";
 
 // Two sections shaped like the docs page: a heading, the address, then the table of fields. A third
 // section, a guide, has neither and is skipped.
@@ -14,7 +14,11 @@ const PAGE = `<h1 id="getting-started">Getting Started</h1><p>Read https://api.i
 <p><code>https://api.igdb.com/v4/covers</code></p>
 <table><tr><th>field</th><th>type</th><th>description</th></tr>
 <tr><td>image_type</td><td>Reference ID for Image Type</td><td>The image type &amp; its kind</td></tr>
-<tr><td>width</td><td>Integer</td><td></td></tr></table>`;
+<tr><td>width</td><td>Integer</td><td></td></tr></table>
+<h2 id="images">Images</h2><p>https://api.igdb.com/v4/covers</p>
+<table><tr><th>Name</th><th>Size</th></tr><tr><td>cover_small</td><td>90 x 128</td></tr></table>
+<h2 id="cover-2">Cover</h2><p>https://api.igdb.com/v4/covers</p>
+<table><tr><th>field</th><th>type</th></tr><tr><td>height</td><td>Integer</td></tr></table>`;
 
 describe("API docs", () => {
   test("reads each endpoint's name, path and fields, and skips sections without a table", () => {
@@ -22,6 +26,7 @@ describe("API docs", () => {
       {
         name: "Age Rating",
         path: "age_ratings",
+        anchor: "age-rating",
         fields: [
           { name: "category", type: "Category Enum", desc: "DEPRECATED! Use organization instead" },
           { name: "checksum", type: "uuid", desc: "Hash of the object" },
@@ -30,6 +35,7 @@ describe("API docs", () => {
       {
         name: "Cover",
         path: "covers",
+        anchor: "cover",
         fields: [
           { name: "image_type", type: "Reference ID for Image Type", desc: "The image type & its kind" },
           { name: "width", type: "Integer", desc: "" },
@@ -38,8 +44,28 @@ describe("API docs", () => {
     ]);
   });
 
+  test("skips a table that does not list fields, and a second section for the same address", () => {
+    const paths = parseDocs(PAGE).map((e) => e.path);
+    expect(paths).toEqual(["age_ratings", "covers"]);
+  });
+
   test("decodes entities and collapses spaces", () => {
     expect(textOf("A&nbsp;<b>bold</b>\n  &#39;word&#39; &lt;3")).toBe("A bold 'word' <3");
+    expect(textOf("It&#x27;s one&hellip; &rsquo;")).toBe("It's one\u2026 \u2019");
+    expect(textOf("line<br>break, <code>a</code>.")).toBe("line break, a.");
+    expect(textOf("&unknown; &#0;")).toBe("&unknown; &#0;");
+  });
+
+  test("keeps an endpoint the page no longer gives, and says so", () => {
+    const before = parseDocs(PAGE);
+    const after = before.slice(1);
+    expect(merged(before, after).map((e) => e.path)).toEqual(["covers", "age_ratings"]);
+    const [first] = before;
+    if (!first) throw new Error("no endpoint");
+    const renamed = [{ ...first, name: "Age Rating Old" }, ...after];
+    expect(changes(before, renamed)).toEqual([
+      "- Endpoint `age_ratings` renamed: Age Rating to Age Rating Old",
+    ]);
   });
 
   test("lists new, changed and removed endpoints and fields", () => {
@@ -55,6 +81,8 @@ describe("API docs", () => {
       "- New endpoint `logos`",
     ]);
     expect(changes(before, before)).toEqual([]);
-    expect(changes(before, before.slice(1))).toEqual(["- Endpoint `age_ratings` left the docs"]);
+    expect(changes(before, before.slice(1))).toEqual([
+      "- Endpoint `age_ratings` left the docs: its previous entry is kept (remove it by hand if IGDB dropped it)",
+    ]);
   });
 });

@@ -923,7 +923,7 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "trusted": {
    "type": "boolean",
-   "description": "True when IGDB has checked that the address belongs to the item"
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",
@@ -957,10 +957,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "What the dimension measures"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
    "type": "string",
@@ -976,10 +978,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The name of the item"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
    "type": "string",
@@ -1390,10 +1394,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The game's content safety rating"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
    "type": "string",
@@ -2650,7 +2656,7 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "trusted": {
    "type": "boolean",
-   "description": "True when IGDB has checked that the address belongs to the item"
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",
@@ -2785,7 +2791,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The game's value for the metric; each metric has its own scale"
   },
   "calculated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "When IGDB computed the value"
   },
   "created_at": {
    "type": "timestamp",
@@ -3068,7 +3075,7 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "alternative_name": {
    "type": "string",
-   "description": "The alternative name that matched"
+   "description": "Every alternative name of the result, joined into one string"
   },
   "character": {
    "type": "relation",
@@ -3083,11 +3090,11 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   "company": {
    "type": "relation",
    "endpoint": "companies",
-   "description": "The company found"
+   "description": "Never filled: companies are not in the search index"
   },
   "description": {
    "type": "string",
-   "description": "A short description of the result"
+   "description": "Never filled by IGDB"
   },
   "game": {
    "type": "relation",
@@ -3178,7 +3185,7 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "trusted": {
    "type": "boolean",
-   "description": "True when IGDB has checked that the address belongs to the item"
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",

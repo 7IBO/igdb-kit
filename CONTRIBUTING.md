@@ -14,7 +14,7 @@ TWITCH_CLIENT_ID=… TWITCH_CLIENT_SECRET=… bun run --filter igdb-kit test:int
 REDIS_URL=redis://localhost:6379 bun run --filter igdb-kit test:redis
 ```
 
-The generated types take their descriptions from `codegen/docs-fields.json` (IGDB's API docs). A field the docs leave without a description gets one from `codegen/field-notes.json`, by entity (`"Game": { "slug": "…" }`) or for every entity (`"*"`); codegen warns about a note on a field that no longer exists.
+The generated types take their descriptions from `codegen/docs-fields.json` (IGDB's API docs). A field the docs leave without a description gets one from `codegen/field-notes.json`, by entity (`"InvolvedCompany": { "developer": "…" }`) or for every entity (`"*"`); codegen warns about a note on a field that no entity has any more.
 
 A change that users will notice comes with a changeset (`bunx changeset`), which writes its line in the changelog and sets the next version.
 

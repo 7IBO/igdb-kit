@@ -819,7 +819,7 @@ export interface CompanyTypeHistory {
  */
 export interface CompanyWebsite {
   id: number;
-  /** True when IGDB has checked that the address belongs to the item */
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;
@@ -839,9 +839,15 @@ export interface ContentSafetyRating {
   id: number;
   /** The name of the item */
   name: string;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
   /** Hash of the object */
   checksum: string;
@@ -861,9 +867,15 @@ export interface ContentSafetyRatingDimension {
   value: number;
   /** What the dimension measures */
   description: string;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
   /** Hash of the object */
   checksum: string;
@@ -1300,9 +1312,15 @@ export interface GameContentSafetyRating {
   content_safety_rating_dimension: ContentSafetyRatingDimension;
   /** The game's content safety rating */
   content_safety_rating: ContentSafetyRating;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
   /** Hash of the object */
   checksum: string;
@@ -2109,7 +2127,7 @@ export interface PlatformVersionReleaseDate {
  */
 export interface PlatformWebsite {
   id: number;
-  /** True when IGDB has checked that the address belongs to the item */
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;
@@ -2161,7 +2179,10 @@ export interface PopularityPrimitive {
   popularity_type: PopularityType;
   /** The game's value for the metric; each metric has its own scale */
   value: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * When IGDB computed the value
+   * Unix timestamp in seconds.
+   */
   calculated_at: number;
   /**
    * Date this was initially added to the IGDB database
@@ -2414,15 +2435,15 @@ export interface Search {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "published_at";
   id: number;
-  /** The alternative name that matched */
+  /** Every alternative name of the result, joined into one string */
   alternative_name: string;
   /** The character found */
   character: Character;
   /** The collection found */
   collection: Collection;
-  /** The company found */
+  /** Never filled: companies are not in the search index */
   company: Company;
-  /** A short description of the result */
+  /** Never filled by IGDB */
   description: string;
   /** The game found */
   game: Game;
@@ -2477,7 +2498,7 @@ export interface Website {
   id: number;
   /** The game this website is associated with */
   game: Game;
-  /** True when IGDB has checked that the address belongs to the item */
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;

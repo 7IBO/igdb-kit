@@ -148,6 +148,7 @@ interface ProtoEnum {
 interface DocEntity {
   name: string;
   path: string;
+  anchor?: string;
   fields: { name: string; type: string; desc: string }[];
 }
 
@@ -207,6 +208,10 @@ for (const [message, fields] of messages) {
     if (!documented) doc.fields.push({ name: f.name, type: "", desc: note });
     else if (!documented.desc.trim()) documented.desc = note;
   }
+}
+for (const field of Object.keys(notes["*"] ?? {})) {
+  if (![...messages.values()].some((fields) => fields.some((f) => f.name === field)))
+    warnings.push(`codegen/field-notes.json describes *.${field}, which no entity of the proto has`);
 }
 for (const [message, fields] of Object.entries(notes)) {
   if (message === "*" || message === "_") continue;
@@ -371,7 +376,7 @@ for (const [name, fields] of messages) {
       name in TIER_RESTRICTED
         ? "Not in the public docs: IGDB answers 403 unless your access tier includes it."
         : "",
-      doc?.path ? `@see https://api-docs.igdb.com/#${docAnchor(doc.name)}` : "",
+      doc?.path ? `@see https://api-docs.igdb.com/#${doc.anchor ?? docAnchor(doc.name)}` : "",
     ],
     "",
   );
