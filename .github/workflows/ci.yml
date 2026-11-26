@@ -5,9 +5,10 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Weekly, for the integration tests alone: a change on IGDB's side shows up without commits,
-    # before the schema update of 06:00 (the two share the Twitch quota).
-    - cron: "0 5 * * 1"
+    # Weekly, for the integration tests alone, so a change on IGDB's side shows up even without
+    # commits. GitHub starts schedules hours late here, so this one is kept a day before schema.yml's
+    # (the two share the Twitch quota).
+    - cron: "0 5 * * 0"
   # Manual runs. The "Version packages" PR, opened by github-actions, gets its required checks
   # once a maintainer approves or re-runs its pull_request run: dispatched runs don't count.
   workflow_dispatch:
@@ -16,17 +17,10 @@ permissions:
   contents: read
 
 jobs:
-  # One job for every offline check: each job is billed by the started minute, so the former seven
-  # jobs cost seven minutes a run. The name stays the one the main branch's ruleset requires.
   check:
     name: Lint, typecheck, unit tests, build
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7
-        ports: ["6379:6379"]
-        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 10
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
@@ -40,43 +34,91 @@ jobs:
       - run: bun run test
       - run: bun run build
       - run: bun run --filter igdb-kit lint:package
-      - name: Redis adapters
-        run: bun run --filter igdb-kit test:redis
+
+  redis:
+    name: Redis adapters
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 2s --health-retries 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.5
+      - run: bun install --frozen-lockfile
+      - run: bun run --filter igdb-kit test:redis
         env:
           REDIS_URL: redis://localhost:6379
-      - name: Type tests on TypeScript 5.9, 6.0 and 7.0
+
+  types:
+    name: Type tests on TypeScript ${{ matrix.ts }}
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ts: ["5.9", "6.0", "7.0"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.5
+      - run: bun install --frozen-lockfile
+      - name: tsc ${{ matrix.ts }}
         working-directory: packages/igdb-kit
         run: |
-          for TSC in ../../node_modules/typescript-5.9/bin/tsc ../../node_modules/typescript-6.0/bin/tsc ../../node_modules/typescript/bin/tsc; do
-            echo "tsc $($TSC --version)"
-            $TSC --noEmit -p test/types
-          done
+          case "${{ matrix.ts }}" in
+            7.0) TSC=../../node_modules/typescript/bin/tsc ;;
+            *) TSC=../../node_modules/typescript-${{ matrix.ts }}/bin/tsc ;;
+          esac
+          $TSC --noEmit -p test/types
+
+  node:
+    name: Built package on Node ${{ matrix.node }}
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.5
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
-      - name: Smoke test on Node 20
+          node-version: ${{ matrix.node }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Smoke test ESM and CJS
         working-directory: packages/igdb-kit
-        run: bash ../../scripts/smoke.sh
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-      - name: Smoke test on Node 22
-        working-directory: packages/igdb-kit
-        run: bash ../../scripts/smoke.sh
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-      - name: Smoke test on Node 24
-        working-directory: packages/igdb-kit
-        run: bash ../../scripts/smoke.sh
+        run: |
+          node --input-type=module -e "import { createIGDB } from './dist/index.js'; const q = createIGDB({ clientId: 'a', clientSecret: 'b' }).games.select('name').where((g) => g.rating.gt(1)); if (q.toApicalypse() !== 'fields name; where rating > 1;') process.exit(1)"
+          node -e "const { createIGDB } = require('./dist/index.cjs'); createIGDB({ clientId: 'a', clientSecret: 'b' }).games.limit(1).toApicalypse()"
+          node --input-type=module -e "import { redisCache } from 'igdb-kit/redis'; if (typeof redisCache !== 'function') process.exit(1)"
+          node -e "const { redisLimiter } = require('igdb-kit/redis'); if (typeof redisLimiter !== 'function') process.exit(1)"
+          node --input-type=module -e "import { webhookHandler } from 'igdb-kit/webhooks'; if (typeof webhookHandler !== 'function') process.exit(1)"
+          node -e "const { parseWebhook } = require('igdb-kit/webhooks'); if (typeof parseWebhook !== 'function') process.exit(1)"
+          node --input-type=module -e "import { igdbProxy } from 'igdb-kit/proxy'; import { createIGDB } from 'igdb-kit'; const h = igdbProxy({ igdb: createIGDB({ clientId: 'a', clientSecret: 'b' }), endpoints: ['games'] }); const r = await h(new Request('http://x/api/igdb/genres', { method: 'POST', body: 'fields name;' })); if (r.status !== 404) process.exit(1)"
+          node -e "const { igdbProxy } = require('igdb-kit/proxy'); const { createIGDB } = require('igdb-kit'); igdbProxy({ igdb: createIGDB({ clientId: 'a', clientSecret: 'b' }) })"
+          node --input-type=module -e "import { releaseDate } from 'igdb-kit/game'; if (releaseDate({ release_dates: [{ id: 1, date: 0, date_format: 0, release_region: 8, platform: 6 }] }).year !== 1970) process.exit(1)"
+          node -e "const { formatPlaytime } = require('igdb-kit/game'); if (formatPlaytime(7200, { locale: 'en-US' }) !== '2 hr') process.exit(1)"
+          node --input-type=module -e "import { videoLinks } from 'igdb-kit/game'; import { imageSrcSet } from 'igdb-kit'; if (videoLinks({ videos: [{ id: 1, video_id: 'D1mDo1CEMuE', name: 'Launch Trailer' }] })[0].kind !== 'trailer' || !imageSrcSet('co1wyy', 'thumb').endsWith(' 2x')) process.exit(1)"
+          node -e "const { eventTime, countryName } = require('igdb-kit/game'); if (eventTime({ start_time: 0, time_zone: 'PST' }, { locale: 'en' }).timeZone !== 'America/Los_Angeles' || countryName(250, 'en') !== 'France') process.exit(1)"
+          node --input-type=module -e "import { endpointSchema, jsonSchema } from 'igdb-kit/schema'; if (endpointSchema('games').fields.find((f) => f.name === 'platforms').endpoint !== 'platforms' || jsonSchema('games').required[0] !== 'id') process.exit(1)"
+          node -e "const { endpointSchema } = require('igdb-kit/schema'); if (!endpointSchema('games').linkedFrom.some((l) => l.endpoint === 'release_dates' && l.field === 'game')) process.exit(1)"
+          node -e "const { createLabels } = require('igdb-kit/i18n'); const { ja } = require('igdb-kit/i18n/ja'); const { label } = createLabels([ja]); if (label('genres', 12, 'ja-JP') !== ja.labels.genres[12] || label('genres', 12, 'en') !== 'Role-playing (RPG)') process.exit(1)"
 
   integration:
     name: Integration tests (real IGDB API)
     runs-on: ubuntu-latest
-    # Weekly and by hand only: the real API costs a minute and the Twitch quota on every run, and an
-    # offline check covers each pull request. Run it by hand before merging a change to a request.
-    # Needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET repository secrets.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Needs TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET repository secrets; forks do not get them.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
       TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
