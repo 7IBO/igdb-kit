@@ -962,7 +962,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     const rows = await igdb.websites.select("game").where('url ~ *"ja.wikipedia.org"*').limit(10).execute();
     const ids = [...new Set(rows.map((r) => r.game).filter((id): id is number => typeof id === "number"))];
     expect(ids.length).toBeGreaterThan(0);
-    const games = await igdb.games.select("websites.type", "websites.url").where((g) => g.id.any(...ids));
+    const games = await igdb.games.select("websites.type", "websites.url").where((g) => g.id.in(...ids));
     for (const game of games) expect(wikipediaLink(game, "ja-JP")?.language).toBe("ja");
     const witcher3 = await igdb.games.select("websites.type", "websites.url").findByIdOrThrow(1942);
     expect(wikipediaLink(witcher3, "fr-FR")).toMatchObject({ language: expect.stringMatching(/^(fr|en)$/) });
