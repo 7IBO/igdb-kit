@@ -47,7 +47,7 @@ export interface TransportHooks {
   onRateLimited?: (info: { path: string }) => void;
   /**
    * The credentials were refused, which no retry fixes: Twitch refused the client id or secret, or
-   * IGDB answered 401 or 403 (a token refused after its renewal, a fixed `accessToken`, a proxy's
+   * IGDB answered 401, or 403 for another reason than the tier or the query (a token refused after its renewal, a fixed `accessToken`, a proxy's
    * own credentials). Called once per token request Twitch refuses, in each process, and once per
    * request IGDB refuses: it repeats until the credentials are fixed. What it throws or rejects is
    * ignored.
@@ -69,8 +69,9 @@ export interface AuthErrorInfo {
 
 /** @internal Calls `onAuthError`, ignoring what it throws or rejects. */
 export function reportAuthError(hook: TransportHooks["onAuthError"], info: AuthErrorInfo): void {
+  if (!hook) return;
   try {
-    void Promise.resolve(hook?.(info)).catch(() => {});
+    void Promise.resolve(hook(info)).catch(() => {});
   } catch {
     // ignored
   }

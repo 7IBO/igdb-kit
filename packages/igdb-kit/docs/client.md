@@ -55,7 +55,7 @@ const igdb = createIGDB({
 `hooks.onAuthError` is the one to alert on: it is called when the credentials are refused, which no retry fixes, with `{ path, error, expiresAt }`.
 
 - Twitch refusing the client id or secret gives the path `oauth2/token`, once per token request however many queries waited for it. When only the renewal ahead of expiry was refused, `expiresAt` says when the token in use expires and requests fail: that is the early warning of a changed secret, and `onRetry` is called for the same renewal. Otherwise `expiresAt` is `null`: requests fail now.
-- IGDB answering 401 or 403 (a token refused after its renewal, a fixed `accessToken`, a proxy's own credentials, or an auth layer in front of your proxy) gives the request's path, once per request, with `expiresAt: null`. Through `igdb-kit/proxy`, the browser client hears the refusals of the server's credentials too, once per visitor's request: alert from the server.
+- IGDB answering 401, or 403 for another reason than the API tier or the query (a token refused after its renewal, a fixed `accessToken`, a proxy's own credentials, or an auth layer in front of your proxy) gives the request's path, once per request, with `expiresAt: null`. Through `igdb-kit/proxy`, the browser client hears the refusals of the server's credentials too, once per visitor's request: alert from the server.
 
 It repeats until the credentials are fixed (a refused renewal ahead of expiry is tried again after 1 minute, then 2, 4 and so on up to 30), in each process, so deduplicate the alerts. What it throws or rejects is ignored.
 
