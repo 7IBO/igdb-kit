@@ -140,6 +140,25 @@ describe("duplicateCandidates()", () => {
     expect(three[0]?.conflicts).toEqual(["common_name"]);
   });
 
+  test("two products of one store with no id in common are two games", () => {
+    const at = { first_release_date: y(2022), platforms: [6] };
+    const pairs = duplicateCandidates(
+      [
+        game(1, "Winter", {
+          ...at,
+          websites: [{ url: "https://store.steampowered.com/app/1919040/Winter" }],
+        }),
+        game(2, "Winter", {
+          ...at,
+          websites: [{ url: "https://store.steampowered.com/app/2216010/Winter" }],
+        }),
+      ],
+      { minScore: 0 },
+    );
+    expect(pairs[0]?.conflicts).toEqual(["store"]);
+    expect(pairs[0]?.score).toBe(0.48);
+  });
+
   test("a year apart adds little", () => {
     const pairs = duplicateCandidates(
       [game(1, "Mire", { first_release_date: y(2021) }), game(2, "Mire", { first_release_date: y(2022) })],

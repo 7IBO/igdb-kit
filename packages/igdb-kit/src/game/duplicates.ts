@@ -77,10 +77,11 @@ export type DuplicateReason =
   | "developer";
 
 /**
- * What weakens a pair: release years two or more apart, developers with none in common, or a
- * name that three games or more of those passed share ("Abyss", "Survivors").
+ * What weakens a pair: release years two or more apart, developers with none in common, products
+ * of one store with no id in common (two Steam apps), or a name that three games or more of those
+ * passed share ("Abyss", "Survivors").
  */
-export type DuplicateConflict = "year" | "developer" | "common_name";
+export type DuplicateConflict = "year" | "developer" | "store" | "common_name";
 
 /** A pair from {@link duplicateCandidates}. */
 export interface DuplicateCandidate<G> {
@@ -90,8 +91,8 @@ export interface DuplicateCandidate<G> {
    * 0 to 1: 0.5 for the same name (0.4 when three games or more share it, the same once the
    * edition label is left out, or one's alternative name), 0.6 for a store id with no name in
    * common, plus 0.3 for a shared store id, 0.2 for the same release year (0.05 a year apart), 0.1
-   * for a platform and 0.15 for a developer in common. Times 0.5 for years two or more apart, 0.7
-   * for developers with none in common.
+   * for a platform and 0.15 for a developer in common. Times 0.5 for years two or more apart, 0.6
+   * for products of one store with no id in common, 0.7 for developers with none in common.
    */
   score: number;
   reasons: DuplicateReason[];
@@ -285,6 +286,8 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
   if (shares(a.stores, b.stores)) {
     reasons.push("store_id");
     score = score === 0 ? 0.6 : score + 0.3;
+  } else if (shares(storesOf(a.stores), storesOf(b.stores))) {
+    conflicts.push("store");
   }
   if (score === 0) return null;
   let factor = 1;
@@ -311,6 +314,7 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
       factor *= 0.7;
     }
   }
+  if (conflicts.includes("store")) factor *= 0.6;
   const [first, second] = a.id < b.id ? [a, b] : [b, a];
   return {
     games: [first.game, second.game],
@@ -318,6 +322,11 @@ function compare<G>(a: Prepared<G>, b: Prepared<G>, common: boolean): DuplicateC
     reasons,
     conflicts,
   };
+}
+
+/** The stores of a game's store ids: "steam app", "xbox product". */
+function storesOf(ids: ReadonlySet<string>): Set<string> {
+  return new Set([...ids].map((id) => id.slice(0, id.lastIndexOf(" "))));
 }
 
 function shares<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): boolean {
