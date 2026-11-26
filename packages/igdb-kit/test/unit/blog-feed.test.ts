@@ -33,6 +33,33 @@ describe("blog feed", () => {
     expect(newArticles(parseFeed(FEED), seen).fresh).toEqual([]);
   });
 
+  test("reads Medium's spaced layout, with spaces inside CDATA and other tags in each item", () => {
+    const spaced = `<rss><channel><title>
+<![CDATA[ IGDB - Medium ]]>
+</title><item>
+<title>
+<![CDATA[ Every Cover Tells a Story: Expanded Cover & Logo Data on IGDB ]]>
+</title>
+<link>https://medium.com/igdb/every-cover-tells-a-story-830a0faa9841?source=rss----6cd72f534b46---4</link>
+<guid isPermaLink="false">https://medium.com/p/830a0faa9841</guid>
+<category>
+<![CDATA[ api ]]>
+</category>
+<pubDate>Fri, 07 Aug 2026 08:49:07 GMT</pubDate>
+<content:encoded>
+<![CDATA[ <p>The existing artwork_type field is now going to be deprecated.</p> ]]>
+</content:encoded>
+</item></channel></rss>`;
+    expect(parseFeed(spaced)).toEqual([
+      {
+        id: "https://medium.com/p/830a0faa9841",
+        title: "Every Cover Tells a Story: Expanded Cover & Logo Data on IGDB",
+        link: "https://medium.com/igdb/every-cover-tells-a-story-830a0faa9841",
+        published: "2026-08-07",
+      },
+    ]);
+  });
+
   test("finds no article in a page that is not a feed", () => {
     expect(parseFeed("<html><title>Just a moment...</title></html>")).toEqual([]);
   });

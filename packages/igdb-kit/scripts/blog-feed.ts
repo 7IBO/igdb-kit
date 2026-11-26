@@ -23,7 +23,7 @@ export interface Article {
 }
 
 const text = (xml: string, tag: string) => {
-  const m = xml.match(new RegExp(`<${tag}>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`));
+  const m = xml.match(new RegExp(`<${tag}>\\s*(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?\\s*</${tag}>`));
   return m?.[1]?.trim() ?? "";
 };
 
