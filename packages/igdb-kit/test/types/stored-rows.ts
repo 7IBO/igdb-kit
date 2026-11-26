@@ -1,6 +1,6 @@
 // The helpers of igdb-kit/game, and rankChanges(), read rows from a local copy, with no cast (docs/local-copy.md).
 import { type PopularitySnapshotRow, rankChanges } from "../../src";
-import { externalIds, releaseDate, storeLinks } from "../../src/game";
+import { externalIds, releaseDate, storeLinks, wikipediaLink } from "../../src/game";
 
 // A row as a database client types it.
 type Row = { id: number; [field: string]: unknown };
@@ -10,6 +10,7 @@ const game = { ...stored, release_dates: rows, websites: rows, external_games: r
 releaseDate(game, { locale: "fr-FR" });
 storeLinks(game, { locale: "fr-FR" });
 externalIds(game);
+wikipediaLink(game, { locale: "fr-FR" });
 // An index signature skips the check of the fields a helper reads.
 releaseDate(stored);
 
