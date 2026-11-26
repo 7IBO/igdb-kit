@@ -81,11 +81,11 @@ const byConcept = await igdb.games
   .findByExternalIds(ExternalGameSource.PlaystationStoreUS, ["201930"]); // GTA V
 ```
 
-A concept found is nearly always the right game. In 300 titles checked, 3 led to another game, where Sony files a soundtrack, a level pack or a free episode under that game's concept, and a few to an edition or a remaster: compare its `game_type` and `version_parent` with what the title is before keeping it. For a title with no concept, `games.match()` below takes its name.
+A concept found is nearly always the right game. Of the 189, 3 led to another game, where Sony files a soundtrack, a level pack or a free episode under that game's concept, and a few to an edition or a remaster: compare its `game_type` and `version_parent` with what the title is before keeping it. For a title with no concept, `games.match()` below takes its name.
 
 ## By title: games.match()
 
-For a title without a store id IGDB knows, such as a PlayStation trophy list with no concept and most Xbox titles, `games.match()` returns the games it may be, best first, each with a score from 0 to 1:
+For a title without a store id IGDB knows, such as a PlayStation title with no concept and most Xbox titles, `games.match()` returns the games it may be, best first, each with a score from 0 to 1:
 
 ```ts
 const [best, next] = await igdb.games
