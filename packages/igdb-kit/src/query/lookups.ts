@@ -1,5 +1,6 @@
 import { NotFoundError, QueryError } from "../core/errors";
 import { type EndpointName, endpoints, entities } from "../generated/schema";
+import type { LabelDictionary } from "../i18n/types";
 import { REFERENCE_ENDPOINTS } from "../links/expand";
 import {
   type ExecuteOptions,
@@ -140,27 +141,35 @@ async function fromTable(
   send: ExecuteOptions,
 ): Promise<Found> {
   const others = otherNames[endpoint] ?? [];
+  const translated = translations(runner.labels ?? [], endpoint);
   const rows = await new Query<EndpointName, Row>(runner, endpoint, {
     fields: ["id", "name", ...others],
     sort: { field: "id", direction: "asc" },
     limit: MAX_LIMIT,
     cacheTtlMs: LOOKUP_TTL_MS,
   }).execute(send);
-  const texts = (row: Row) => {
-    // A platform's alternative names are a list: "PSX, PSOne, PS".
-    const all = [row.name, ...others.map((field) => row[field])].flatMap((value, i) =>
-      typeof value !== "string" ? [] : i === 0 ? [value] : value.split(","),
-    );
-    // "Role-playing (RPG)" also answers to "Role-playing" and "RPG", "PC (Microsoft Windows)" to "PC".
-    const parts = all.flatMap((text) => /^(.+?)\s*\((.+)\)$/.exec(text.trim())?.slice(1) ?? []);
-    return [...all, ...parts].map((text) => text.trim().toLowerCase()).filter((text) => text !== "");
-  };
+  const ownLabels = (row: Row) => translated.flatMap((labels) => labels[row.id] ?? []);
+  // A row's names: its own, a platform's other names ("PSX, PSOne, PS" is a list), then its labels
+  // in the client's dictionaries ("Jeu de rôle (RPG)").
+  const shown = (row: Row) => [
+    ...(row.name ? [row.name] : []),
+    ...others.flatMap((field) => (typeof row[field] === "string" ? (row[field] as string).split(",") : [])),
+    ...ownLabels(row),
+  ];
+  const texts = new Map(
+    rows.map((row) => {
+      const all = shown(row);
+      // "Role-playing (RPG)" also answers to "Role-playing" and "RPG", "PC (Microsoft Windows)" to "PC".
+      const parts = all.flatMap((text) => /^(.+?)\s*\((.+)\)$/.exec(text.trim())?.slice(1) ?? []);
+      return [row, [...all, ...parts].map(fold).filter((text) => text !== "")];
+    }),
+  );
   const ids = new Map<string, number[]>();
   const missing: string[] = [];
   const suggestions: string[] = [];
   for (const name of names) {
-    const wanted = name.toLowerCase();
-    const matching = rows.filter((row) => texts(row).includes(wanted));
+    const wanted = fold(name);
+    const matching = rows.filter((row) => texts.get(row)?.includes(wanted));
     ids.set(
       name,
       matching.map((row) => row.id),
@@ -169,11 +178,35 @@ async function fromTable(
     missing.push(name);
     for (const row of rows) {
       if (suggestions.length >= SUGGESTIONS * missing.length) break;
-      if (row.name && texts(row).some((text) => text.toLowerCase().includes(wanted)))
-        suggestions.push(row.name);
+      if (!row.name || !texts.get(row)?.some((text) => text.includes(wanted))) continue;
+      // In the language the user typed: "rôle" suggests "Jeu de rôle (RPG)".
+      suggestions.push(ownLabels(row).find((label) => fold(label).includes(wanted)) ?? row.name);
     }
   }
   return { ids, missing, suggestions };
+}
+
+/** The labels of `endpoint` in each dictionary, by id: "Jeu de rôle (RPG)" for genre 12 in French. */
+function translations(dictionaries: readonly LabelDictionary[], endpoint: EndpointName) {
+  const tables = (dictionary: LabelDictionary) =>
+    dictionary.labels as Partial<Record<string, Readonly<Record<number, string | undefined>>>>;
+  return dictionaries.flatMap((dictionary) => {
+    const labels = tables(dictionary)[endpoint];
+    return labels ? [labels] : [];
+  });
+}
+
+/**
+ * Lower case, without Latin accents: "jeu de role" finds "Jeu de rôle". Only the combining marks
+ * of Latin letters go, so that kana keep their voicing marks (ガ is not カ).
+ */
+function fold(text: string): string {
+  return text
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .normalize("NFC")
+    .toLowerCase();
 }
 
 /** One cached `name ~ "..."` query per name, then the rows that contain the names it misses. */

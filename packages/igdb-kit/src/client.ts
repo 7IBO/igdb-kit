@@ -5,6 +5,7 @@ import { IGDBError, QueryError } from "./core/errors";
 import { type Limiter, type LocalLimiterOptions, sharedLimiter } from "./core/limiter";
 import { blocksOf, reportRequest, Transport, type TransportHooks } from "./core/transport";
 import { type EndpointName, endpoints, type Game, PopularityType } from "./generated/schema";
+import type { LabelDictionary } from "./i18n/types";
 import { gameLink } from "./links/by-game";
 import { type Expanded, expand, type IdKeys } from "./links/expand";
 import { type NoGameFields, View, type ViewLinks } from "./links/view";
@@ -58,6 +59,11 @@ interface CommonClientOptions extends BatcherOptions {
   cache?: CacheStore | undefined;
   /** Cache every query for this long unless it calls `cache(false)`. Default: only `cache()`d queries. */
   cacheTtlMs?: number | undefined;
+  /**
+   * Dictionaries of `igdb-kit/i18n` whose labels `named()` also matches on reference tables:
+   * with `labels: [fr]`, `g.genres.named("Jeu de rôle")` filters on the RPG genre. Sends nothing more.
+   */
+  labels?: readonly LabelDictionary[] | undefined;
 }
 
 /** A client that calls IGDB with your Twitch credentials. Server side only. */
@@ -234,6 +240,7 @@ export function createIGDB(options: IGDBClientOptions): IGDBClient {
     return sent;
   };
   const runner: QueryRunner = {
+    labels: options.labels,
     run: async (request: QueryRequest, runOptions?: ExecuteOptions): Promise<RawResponse> => {
       // Company names (`developedBy("Nintendo")`) become ids first: their cache and batch keys are the ids.
       const sent = request.lookups?.length ? await resolveLookups(request, runner, runOptions) : request;

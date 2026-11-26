@@ -127,3 +127,31 @@ describe("igdb-kit/i18n", () => {
     expect(entries("genres", "en")).toContainEqual({ id: 12, label: "Role-playing (RPG)" });
   });
 });
+
+describe("labels matched by named()", () => {
+  // named() folds accents and case: a label shared by two ids of a table would filter on both. The
+  // content descriptors are left out: "Violence" is one descriptor per rating body, in English too.
+  test("no label, in any language or English, names two ids of one table", () => {
+    const fold = (text: string) =>
+      text
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .normalize("NFC")
+        .toLowerCase();
+    const clashes: string[] = [];
+    for (const table of Object.keys(en.labels)) {
+      if (table === "age_rating_content_descriptions_v2") continue;
+      const owners = new Map<string, Set<string>>();
+      for (const dictionary of [en, ...Object.values(dictionaries)]) {
+        const texts = (dictionary.labels as Texts)[table] ?? {};
+        for (const [id, text] of Object.entries(texts)) {
+          const key = fold(text);
+          owners.set(key, (owners.get(key) ?? new Set()).add(id));
+        }
+      }
+      for (const [text, ids] of owners) if (ids.size > 1) clashes.push(`${table}: "${text}" (${[...ids]})`);
+    }
+    expect(clashes).toEqual([]);
+  });
+});

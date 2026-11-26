@@ -13,6 +13,7 @@ Every function that takes a locale types it as `Locale`: editors suggest the loc
 | Show the age rating of the user's country | `ageRating(game, { locale })` | [`igdb-kit/game`](display.md#age-ratings) |
 | Link to stores in the user's language | `storeLinks(game, { locale })` | [`igdb-kit/game`](display.md#companies-stores-and-links) |
 | Say whether a game has audio, subtitles or interface in the user's language | `supportsLanguage(game, locale)`, `languages(game, { locale })` | [`igdb-kit/game`](display.md#names-and-languages) |
+| Filter on a genre or theme typed in the user's language | `createIGDB({ ..., labels: [fr] })`, then `g.genres.named("Jeu de rôle")` | [Queries](queries.md#relations-by-name) |
 | Keep only games with a French voice-over | `where((g) => g.supportsLanguage("fr-FR", "audio"))` | [Queries](queries.md#named-filters-on-games) |
 | Name regions, countries and languages | `releaseRegionName()`, `countryName()`, `languageName()` | [`igdb-kit/game`](display.md#names-and-languages) |
 | Show an event's time in the user's zone | `eventTime(event, { locale, timeZone })` | [`igdb-kit/game`](display.md#names-and-languages) |

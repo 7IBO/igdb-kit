@@ -55,7 +55,18 @@ Each field only offers the operators that fit its type, and enum fields only acc
 
 ### Relations by name
 
-`named()` works on any relation to a table with names: platforms (also by abbreviation or alternative name: "PS5", "Switch", "PSX"), genres ("RPG" matches "Role-playing (RPG)"), themes, game modes, franchises, collections, keywords, companies... A name matches in full, ignoring case.
+`named()` works on any relation to a table with names: platforms (also by abbreviation or alternative name: "PS5", "Switch", "PSX"), genres ("RPG" matches "Role-playing (RPG)"), themes, game modes, franchises, collections, keywords, companies... A name matches in full, ignoring case, and on reference tables, Latin accents too.
+
+With the client's `labels` option, a reference table with names (genres, themes, game modes, player perspectives...) also answers to its labels in those languages of [`igdb-kit/i18n`](languages.md#translated-labels-igdb-kiti18n), so a name typed by the user can go straight to the filter. The table is read as before, so this sends no request more:
+
+```ts
+import { fr } from "igdb-kit/i18n/fr";
+
+const igdb = createIGDB({ clientId, clientSecret, labels: [fr] });
+igdb.games.where((g) => g.genres.named("Jeu de rôle", "aventure")); // genres = (12,31)
+```
+
+No label of the built-in dictionaries names two rows of a table, in any language or in English, except the content descriptors, which share their names between rating bodies ("Violence" is one descriptor of the ESRB and one of PEGI), in English too. A name that matches nothing suggests the labels in the language typed: "rôle" suggests "Jeu de rôle (RPG)".
 
 igdb-kit looks the names up before sending the query and filters on their ids: a reference table is read whole once and cached for a day, any other table costs one cached request per name. A name that matches nothing throws a `NotFoundError` whose `suggestions` lists close names.
 
