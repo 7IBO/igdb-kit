@@ -108,7 +108,10 @@ export const GameVersionFeatureValueIncludedFeatureEnum = {
 } as const;
 export type GameVersionFeatureValueIncludedFeatureEnum = (typeof GameVersionFeatureValueIncludedFeatureEnum)[keyof typeof GameVersionFeatureValueIncludedFeatureEnum];
 
-/** Entity of the `age_ratings` endpoint. */
+/**
+ * Entity of the `age_ratings` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating
+ */
 export interface AgeRating {
   id: number;
   /** The url for the image of a age rating */
@@ -125,7 +128,10 @@ export interface AgeRating {
   rating_content_descriptions: AgeRatingContentDescriptionV2[];
 }
 
-/** Entity of the `age_rating_categories` endpoint. */
+/**
+ * Entity of the `age_rating_categories` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating-category
+ */
 export interface AgeRatingCategory {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -148,23 +154,31 @@ export interface AgeRatingCategory {
   checksum: string;
 }
 
-/** Entity of the `age_rating_content_descriptions` endpoint. */
+/**
+ * Entity of the `age_rating_content_descriptions` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating-content-description
+ */
 export interface AgeRatingContentDescription {
   id: number;
   /** @deprecated */
   category: AgeRatingContentDescriptionCategoryEnum;
+  /** The content descriptor, as the organization words it */
   description: string;
   /** Hash of the object */
   checksum: string;
 }
 
-/** Entity of the `age_rating_content_description_types` endpoint. */
+/**
+ * Entity of the `age_rating_content_description_types` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating-content-description-type
+ */
 export interface AgeRatingContentDescriptionType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -180,11 +194,15 @@ export interface AgeRatingContentDescriptionType {
   checksum: string;
 }
 
-/** Entity of the `age_rating_content_descriptions_v2` endpoint. */
+/**
+ * Entity of the `age_rating_content_descriptions_v2` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating-content-description-v2
+ */
 export interface AgeRatingContentDescriptionV2 {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The content descriptor, as the organization words it, such as "Blood and Gore" */
   description: string;
   /** The rating organization */
   organization: AgeRatingOrganization;
@@ -204,7 +222,10 @@ export interface AgeRatingContentDescriptionV2 {
   description_type: AgeRatingContentDescriptionType;
 }
 
-/** Entity of the `age_rating_organizations` endpoint. */
+/**
+ * Entity of the `age_rating_organizations` endpoint.
+ * @see https://api-docs.igdb.com/#age-rating-organization
+ */
 export interface AgeRatingOrganization {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -225,7 +246,10 @@ export interface AgeRatingOrganization {
   checksum: string;
 }
 
-/** Entity of the `alternative_names` endpoint. */
+/**
+ * Entity of the `alternative_names` endpoint.
+ * @see https://api-docs.igdb.com/#alternative-name
+ */
 export interface AlternativeName {
   id: number;
   /** A description of what kind of alternative name it is (Acronym, Working title, Japanese title etc) */
@@ -238,7 +262,10 @@ export interface AlternativeName {
   checksum: string;
 }
 
-/** Entity of the `executables` endpoint. */
+/**
+ * Entity of the `executables` endpoint.
+ * @see https://api-docs.igdb.com/#executable
+ */
 export interface Executable {
   id: number;
   /** The game this executable belongs to */
@@ -255,10 +282,15 @@ export interface Executable {
   checksum: string;
 }
 
-/** Entity of the `artworks` endpoint. */
+/**
+ * Entity of the `artworks` endpoint.
+ * @see https://api-docs.igdb.com/#artwork
+ */
 export interface Artwork {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The game this artwork is associated with */
   game: Game;
@@ -281,13 +313,17 @@ export interface Artwork {
   image_type: ImageType;
 }
 
-/** Entity of the `artwork_types` endpoint. */
+/**
+ * Entity of the `artwork_types` endpoint.
+ * @see https://api-docs.igdb.com/#artwork-type
+ */
 export interface ArtworkType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -303,7 +339,10 @@ export interface ArtworkType {
   checksum: string;
 }
 
-/** Entity of the `characters` endpoint. */
+/**
+ * Entity of the `characters` endpoint.
+ * @see https://api-docs.igdb.com/#character
+ */
 export interface Character {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -319,9 +358,11 @@ export interface Character {
   created_at: number;
   /** A text describing a character */
   description: string;
+  /** The games the character appears in */
   games: Game[];
   /** An image depicting a character */
   mug_shot: CharacterMugShot;
+  /** The name of the item */
   name: string;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
@@ -334,15 +375,21 @@ export interface Character {
   url: string;
   /** Hash of the object */
   checksum: string;
+  /** The character's gender */
   character_gender: CharacterGender;
+  /** The character's species */
   character_species: CharacterSpecie;
 }
 
-/** Entity of the `character_genders` endpoint. */
+/**
+ * Entity of the `character_genders` endpoint.
+ * @see https://api-docs.igdb.com/#character-gender
+ */
 export interface CharacterGender {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -358,10 +405,15 @@ export interface CharacterGender {
   checksum: string;
 }
 
-/** Entity of the `character_mug_shots` endpoint. */
+/**
+ * Entity of the `character_mug_shots` endpoint.
+ * @see https://api-docs.igdb.com/#character-mug-shot
+ */
 export interface CharacterMugShot {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The height of the image in pixels */
   height: number;
@@ -375,11 +427,15 @@ export interface CharacterMugShot {
   checksum: string;
 }
 
-/** Entity of the `character_species` endpoint. */
+/**
+ * Entity of the `character_species` endpoint.
+ * @see https://api-docs.igdb.com/#character-specie
+ */
 export interface CharacterSpecie {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -395,7 +451,10 @@ export interface CharacterSpecie {
   checksum: string;
 }
 
-/** Entity of the `collections` endpoint. */
+/**
+ * Entity of the `collections` endpoint.
+ * @see https://api-docs.igdb.com/#collection
+ */
 export interface Collection {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -422,11 +481,16 @@ export interface Collection {
   checksum: string;
   /** The type of collection */
   type: CollectionType;
+  /** Relations in which this collection is the parent */
   as_parent_relations: CollectionRelation[];
+  /** Relations in which this collection is the child */
   as_child_relations: CollectionRelation[];
 }
 
-/** Entity of the `collection_memberships` endpoint. */
+/**
+ * Entity of the `collection_memberships` endpoint.
+ * @see https://api-docs.igdb.com/#collection-membership
+ */
 export interface CollectionMembership {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "updated_at" | "created_at";
@@ -451,7 +515,10 @@ export interface CollectionMembership {
   checksum: string;
 }
 
-/** Entity of the `collection_membership_types` endpoint. */
+/**
+ * Entity of the `collection_membership_types` endpoint.
+ * @see https://api-docs.igdb.com/#collection-membership-type
+ */
 export interface CollectionMembershipType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "updated_at" | "created_at";
@@ -476,7 +543,10 @@ export interface CollectionMembershipType {
   checksum: string;
 }
 
-/** Entity of the `collection_relations` endpoint. */
+/**
+ * Entity of the `collection_relations` endpoint.
+ * @see https://api-docs.igdb.com/#collection-relation
+ */
 export interface CollectionRelation {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "updated_at" | "created_at";
@@ -501,7 +571,10 @@ export interface CollectionRelation {
   checksum: string;
 }
 
-/** Entity of the `collection_relation_types` endpoint. */
+/**
+ * Entity of the `collection_relation_types` endpoint.
+ * @see https://api-docs.igdb.com/#collection-relation-type
+ */
 export interface CollectionRelationType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "updated_at" | "created_at";
@@ -528,7 +601,10 @@ export interface CollectionRelationType {
   checksum: string;
 }
 
-/** Entity of the `collection_types` endpoint. */
+/**
+ * Entity of the `collection_types` endpoint.
+ * @see https://api-docs.igdb.com/#collection-type
+ */
 export interface CollectionType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "updated_at" | "created_at";
@@ -551,7 +627,10 @@ export interface CollectionType {
   checksum: string;
 }
 
-/** Entity of the `companies` endpoint. */
+/**
+ * Entity of the `companies` endpoint.
+ * @see https://api-docs.igdb.com/#company
+ */
 export interface Company {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "change_date" | "created_at" | "start_date" | "updated_at";
@@ -576,6 +655,7 @@ export interface Company {
   developed: Game[];
   /** The company’s logo */
   logo: CompanyLogo;
+  /** The name of the item */
   name: string;
   /** A company with a controlling interest in a specific company */
   parent: Company;
@@ -611,10 +691,15 @@ export interface Company {
   company_type_histories: CompanyTypeHistory[];
 }
 
-/** Entity of the `company_logos` endpoint. */
+/**
+ * Entity of the `company_logos` endpoint.
+ * @see https://api-docs.igdb.com/#company-logo
+ */
 export interface CompanyLogo {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The height of the image in pixels */
   height: number;
@@ -628,11 +713,15 @@ export interface CompanyLogo {
   checksum: string;
 }
 
-/** Entity of the `company_sizes` endpoint. */
+/**
+ * Entity of the `company_sizes` endpoint.
+ * @see https://api-docs.igdb.com/#company-size
+ */
 export interface CompanySize {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -648,11 +737,15 @@ export interface CompanySize {
   checksum: string;
 }
 
-/** Entity of the `company_statuses` endpoint. */
+/**
+ * Entity of the `company_statuses` endpoint.
+ * @see https://api-docs.igdb.com/#company-status
+ */
 export interface CompanyStatus {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -668,11 +761,15 @@ export interface CompanyStatus {
   checksum: string;
 }
 
-/** Entity of the `company_types` endpoint. */
+/**
+ * Entity of the `company_types` endpoint.
+ * @see https://api-docs.igdb.com/#company-type
+ */
 export interface CompanyType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -688,7 +785,10 @@ export interface CompanyType {
   checksum: string;
 }
 
-/** Entity of the `company_type_histories` endpoint. */
+/**
+ * Entity of the `company_type_histories` endpoint.
+ * @see https://api-docs.igdb.com/#company-type-history
+ */
 export interface CompanyTypeHistory {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -713,9 +813,13 @@ export interface CompanyTypeHistory {
   checksum: string;
 }
 
-/** Entity of the `company_websites` endpoint. */
+/**
+ * Entity of the `company_websites` endpoint.
+ * @see https://api-docs.igdb.com/#company-website
+ */
 export interface CompanyWebsite {
   id: number;
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;
@@ -733,11 +837,19 @@ export interface ContentSafetyRating {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
+  /** Hash of the object */
   checksum: string;
 }
 
@@ -749,20 +861,35 @@ export interface ContentSafetyRatingDimension {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The content safety rating this dimension belongs to */
   content_safety_rating: ContentSafetyRating;
+  /** The dimension's value */
   value: number;
+  /** What the dimension measures */
   description: string;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
+  /** Hash of the object */
   checksum: string;
 }
 
-/** Entity of the `covers` endpoint. */
+/**
+ * Entity of the `covers` endpoint.
+ * @see https://api-docs.igdb.com/#cover
+ */
 export interface Cover {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The game this cover is associated with. If it is empty then this cover belongs to a game_localization, which can be found under game_localization field */
   game: Game;
@@ -782,11 +909,15 @@ export interface Cover {
   image_type: ImageType;
 }
 
-/** Entity of the `date_formats` endpoint. */
+/**
+ * Entity of the `date_formats` endpoint.
+ * @see https://api-docs.igdb.com/#date-format
+ */
 export interface DateFormat {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The precision of a date: YYYYMMDD, YYYYMM, YYYY, YYYYQ1 to YYYYQ4 or TBD */
   format: string;
   /**
    * Date this was initially added to the IGDB database
@@ -802,12 +933,17 @@ export interface DateFormat {
   checksum: string;
 }
 
-/** Entity of the `entity_types` endpoint. */
+/**
+ * Entity of the `entity_types` endpoint.
+ * @see https://api-docs.igdb.com/#entity-type
+ */
 export interface EntityType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
+  /** What the entity type covers */
   description: string;
   /**
    * Date this was initially added to the IGDB database
@@ -823,7 +959,10 @@ export interface EntityType {
   checksum: string;
 }
 
-/** Entity of the `events` endpoint. */
+/**
+ * Entity of the `events` endpoint.
+ * @see https://api-docs.igdb.com/#event
+ */
 export interface Event {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "start_time" | "end_time" | "created_at" | "updated_at";
@@ -870,14 +1009,19 @@ export interface Event {
   checksum: string;
 }
 
-/** Entity of the `event_logos` endpoint. */
+/**
+ * Entity of the `event_logos` endpoint.
+ * @see https://api-docs.igdb.com/#event-logo
+ */
 export interface EventLogo {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
   /** The event associated with this logo. */
   event: Event;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The height of the image in pixels */
   height: number;
@@ -901,7 +1045,10 @@ export interface EventLogo {
   checksum: string;
 }
 
-/** Entity of the `event_networks` endpoint. */
+/**
+ * Entity of the `event_networks` endpoint.
+ * @see https://api-docs.igdb.com/#event-network
+ */
 export interface EventNetwork {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -926,7 +1073,10 @@ export interface EventNetwork {
   checksum: string;
 }
 
-/** Entity of the `external_games` endpoint. */
+/**
+ * Entity of the `external_games` endpoint.
+ * @see https://api-docs.igdb.com/#external-game
+ */
 export interface ExternalGame {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -963,11 +1113,15 @@ export interface ExternalGame {
   game_release_format: GameReleaseFormat;
 }
 
-/** Entity of the `external_game_sources` endpoint. */
+/**
+ * Entity of the `external_game_sources` endpoint.
+ * @see https://api-docs.igdb.com/#external-game-source
+ */
 export interface ExternalGameSource {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -983,7 +1137,10 @@ export interface ExternalGameSource {
   checksum: string;
 }
 
-/** Entity of the `franchises` endpoint. */
+/**
+ * Entity of the `franchises` endpoint.
+ * @see https://api-docs.igdb.com/#franchise
+ */
 export interface Franchise {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1010,7 +1167,10 @@ export interface Franchise {
   checksum: string;
 }
 
-/** Entity of the `games` endpoint. */
+/**
+ * Entity of the `games` endpoint.
+ * @see https://api-docs.igdb.com/#game
+ */
 export interface Game {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "first_release_date" | "updated_at";
@@ -1063,6 +1223,7 @@ export interface Game {
   keywords: Keyword[];
   /** Multiplayer modes for this game */
   multiplayer_modes: MultiplayerMode[];
+  /** The name of the item */
   name: string;
   /** If a DLC, expansion or part of a bundle, this is the main game or bundle */
   parent_game: Game;
@@ -1145,17 +1306,30 @@ export interface GameContentSafetyRating {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The game this row belongs to */
   game: Game;
+  /** The dimension of the rating */
   content_safety_rating_dimension: ContentSafetyRatingDimension;
+  /** The game's content safety rating */
   content_safety_rating: ContentSafetyRating;
-  /** Unix timestamp in seconds. */
+  /**
+   * Date this was initially added to the IGDB database
+   * Unix timestamp in seconds.
+   */
   created_at: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * The last date this entry was updated in the IGDB database
+   * Unix timestamp in seconds.
+   */
   updated_at: number;
+  /** Hash of the object */
   checksum: string;
 }
 
-/** Entity of the `game_engines` endpoint. */
+/**
+ * Entity of the `game_engines` endpoint.
+ * @see https://api-docs.igdb.com/#game-engine
+ */
 export interface GameEngine {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1188,10 +1362,15 @@ export interface GameEngine {
   checksum: string;
 }
 
-/** Entity of the `game_engine_logos` endpoint. */
+/**
+ * Entity of the `game_engine_logos` endpoint.
+ * @see https://api-docs.igdb.com/#game-engine-logo
+ */
 export interface GameEngineLogo {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The height of the image in pixels */
   height: number;
@@ -1205,11 +1384,15 @@ export interface GameEngineLogo {
   checksum: string;
 }
 
-/** Entity of the `game_localizations` endpoint. */
+/**
+ * Entity of the `game_localizations` endpoint.
+ * @see https://api-docs.igdb.com/#game-localization
+ */
 export interface GameLocalization {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /** The cover of this game localization */
   cover: Cover;
@@ -1231,7 +1414,10 @@ export interface GameLocalization {
   checksum: string;
 }
 
-/** Entity of the `game_modes` endpoint. */
+/**
+ * Entity of the `game_modes` endpoint.
+ * @see https://api-docs.igdb.com/#game-mode
+ */
 export interface GameMode {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1256,11 +1442,15 @@ export interface GameMode {
   checksum: string;
 }
 
-/** Entity of the `game_release_formats` endpoint. */
+/**
+ * Entity of the `game_release_formats` endpoint.
+ * @see https://api-docs.igdb.com/#game-release-format
+ */
 export interface GameReleaseFormat {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** Digital or Physical */
   format: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1276,11 +1466,15 @@ export interface GameReleaseFormat {
   checksum: string;
 }
 
-/** Entity of the `game_statuses` endpoint. */
+/**
+ * Entity of the `game_statuses` endpoint.
+ * @see https://api-docs.igdb.com/#game-status
+ */
 export interface GameStatus {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The status, such as Released, Early Access, Cancelled or Delisted */
   status: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1296,7 +1490,10 @@ export interface GameStatus {
   checksum: string;
 }
 
-/** Entity of the `game_time_to_beats` endpoint. */
+/**
+ * Entity of the `game_time_to_beats` endpoint.
+ * @see https://api-docs.igdb.com/#game-time-to-beat
+ */
 export interface GameTimeToBeat {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1325,11 +1522,15 @@ export interface GameTimeToBeat {
   checksum: string;
 }
 
-/** Entity of the `game_types` endpoint. */
+/**
+ * Entity of the `game_types` endpoint.
+ * @see https://api-docs.igdb.com/#game-type
+ */
 export interface GameType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The type, such as Main Game, DLC, Expansion, Bundle or Remake */
   type: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1345,7 +1546,10 @@ export interface GameType {
   checksum: string;
 }
 
-/** Entity of the `game_versions` endpoint. */
+/**
+ * Entity of the `game_versions` endpoint.
+ * @see https://api-docs.igdb.com/#game-version
+ */
 export interface GameVersion {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1372,7 +1576,10 @@ export interface GameVersion {
   checksum: string;
 }
 
-/** Entity of the `game_version_features` endpoint. */
+/**
+ * Entity of the `game_version_features` endpoint.
+ * @see https://api-docs.igdb.com/#game-version-feature
+ */
 export interface GameVersionFeature {
   id: number;
   /** The category of the feature description */
@@ -1389,7 +1596,10 @@ export interface GameVersionFeature {
   checksum: string;
 }
 
-/** Entity of the `game_version_feature_values` endpoint. */
+/**
+ * Entity of the `game_version_feature_values` endpoint.
+ * @see https://api-docs.igdb.com/#game-version-feature-value
+ */
 export interface GameVersionFeatureValue {
   id: number;
   /** The version/edition this value refers to */
@@ -1404,7 +1614,10 @@ export interface GameVersionFeatureValue {
   checksum: string;
 }
 
-/** Entity of the `game_videos` endpoint. */
+/**
+ * Entity of the `game_videos` endpoint.
+ * @see https://api-docs.igdb.com/#game-video
+ */
 export interface GameVideo {
   id: number;
   /** The game this video is associated with */
@@ -1417,7 +1630,10 @@ export interface GameVideo {
   checksum: string;
 }
 
-/** Entity of the `genres` endpoint. */
+/**
+ * Entity of the `genres` endpoint.
+ * @see https://api-docs.igdb.com/#genre
+ */
 export interface Genre {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1427,6 +1643,7 @@ export interface Genre {
    * Unix timestamp in seconds.
    */
   created_at: number;
+  /** The name of the item */
   name: string;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
@@ -1441,11 +1658,15 @@ export interface Genre {
   checksum: string;
 }
 
-/** Entity of the `image_types` endpoint. */
+/**
+ * Entity of the `image_types` endpoint.
+ * @see https://api-docs.igdb.com/#image-type
+ */
 export interface ImageType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1461,21 +1682,30 @@ export interface ImageType {
   checksum: string;
 }
 
-/** Entity of the `involved_companies` endpoint. */
+/**
+ * Entity of the `involved_companies` endpoint.
+ * @see https://api-docs.igdb.com/#involved-company
+ */
 export interface InvolvedCompany {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The company */
   company: Company;
   /**
    * Date this was initially added to the IGDB database
    * Unix timestamp in seconds.
    */
   created_at: number;
+  /** True when the company developed the game */
   developer: boolean;
+  /** The game this row belongs to */
   game: Game;
+  /** True when the company ported the game to another platform */
   porting: boolean;
+  /** True when the company published the game */
   publisher: boolean;
+  /** True when the company helped develop the game */
   supporting: boolean;
   /**
    * The last date this entry was updated in the IGDB database
@@ -1486,7 +1716,10 @@ export interface InvolvedCompany {
   checksum: string;
 }
 
-/** Entity of the `keywords` endpoint. */
+/**
+ * Entity of the `keywords` endpoint.
+ * @see https://api-docs.igdb.com/#keyword
+ */
 export interface Keyword {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1496,6 +1729,7 @@ export interface Keyword {
    * Unix timestamp in seconds.
    */
   created_at: number;
+  /** The name of the item */
   name: string;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
@@ -1510,7 +1744,10 @@ export interface Keyword {
   checksum: string;
 }
 
-/** Entity of the `languages` endpoint. */
+/**
+ * Entity of the `languages` endpoint.
+ * @see https://api-docs.igdb.com/#language
+ */
 export interface Language {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1535,13 +1772,19 @@ export interface Language {
   checksum: string;
 }
 
-/** Entity of the `language_supports` endpoint. */
+/**
+ * Entity of the `language_supports` endpoint.
+ * @see https://api-docs.igdb.com/#language-support
+ */
 export interface LanguageSupport {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The game this row belongs to */
   game: Game;
+  /** The language */
   language: Language;
+  /** What the language covers: Audio, Subtitles or Interface */
   language_support_type: LanguageSupportType;
   /**
    * Date this was initially added to the IGDB database
@@ -1557,11 +1800,15 @@ export interface LanguageSupport {
   checksum: string;
 }
 
-/** Entity of the `language_support_types` endpoint. */
+/**
+ * Entity of the `language_support_types` endpoint.
+ * @see https://api-docs.igdb.com/#language-support-type
+ */
 export interface LanguageSupportType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1577,10 +1824,15 @@ export interface LanguageSupportType {
   checksum: string;
 }
 
-/** Entity of the `logos` endpoint. */
+/**
+ * Entity of the `logos` endpoint.
+ * @see https://api-docs.igdb.com/#logo
+ */
 export interface Logo {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The game this logo is associated with */
   game: Game;
@@ -1598,7 +1850,10 @@ export interface Logo {
   image_type: ImageType;
 }
 
-/** Entity of the `multiplayer_modes` endpoint. */
+/**
+ * Entity of the `multiplayer_modes` endpoint.
+ * @see https://api-docs.igdb.com/#multiplayer-mode
+ */
 export interface MultiplayerMode {
   id: number;
   /** True if the game supports campaign coop */
@@ -1631,11 +1886,15 @@ export interface MultiplayerMode {
   checksum: string;
 }
 
-/** Entity of the `network_types` endpoint. */
+/**
+ * Entity of the `network_types` endpoint.
+ * @see https://api-docs.igdb.com/#network-type
+ */
 export interface NetworkType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /** Urls associated with the event type */
   event_networks: EventNetwork[];
@@ -1653,7 +1912,10 @@ export interface NetworkType {
   checksum: string;
 }
 
-/** Entity of the `platforms` endpoint. */
+/**
+ * Entity of the `platforms` endpoint.
+ * @see https://api-docs.igdb.com/#platform
+ */
 export interface Platform {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1696,7 +1958,10 @@ export interface Platform {
   platform_type: PlatformType;
 }
 
-/** Entity of the `platform_families` endpoint. */
+/**
+ * Entity of the `platform_families` endpoint.
+ * @see https://api-docs.igdb.com/#platform-family
+ */
 export interface PlatformFamily {
   id: number;
   /** The name of the platform family */
@@ -1707,10 +1972,15 @@ export interface PlatformFamily {
   checksum: string;
 }
 
-/** Entity of the `platform_logos` endpoint. */
+/**
+ * Entity of the `platform_logos` endpoint.
+ * @see https://api-docs.igdb.com/#platform-logo
+ */
 export interface PlatformLogo {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The height of the image in pixels */
   height: number;
@@ -1724,11 +1994,15 @@ export interface PlatformLogo {
   checksum: string;
 }
 
-/** Entity of the `platform_types` endpoint. */
+/**
+ * Entity of the `platform_types` endpoint.
+ * @see https://api-docs.igdb.com/#platform-type
+ */
 export interface PlatformType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1744,7 +2018,10 @@ export interface PlatformType {
   checksum: string;
 }
 
-/** Entity of the `platform_versions` endpoint. */
+/**
+ * Entity of the `platform_versions` endpoint.
+ * @see https://api-docs.igdb.com/#platform-version
+ */
 export interface PlatformVersion {
   id: number;
   /** Who developed this platform version */
@@ -1787,20 +2064,28 @@ export interface PlatformVersion {
   checksum: string;
 }
 
-/** Entity of the `platform_version_companies` endpoint. */
+/**
+ * Entity of the `platform_version_companies` endpoint.
+ * @see https://api-docs.igdb.com/#platform-version-company
+ */
 export interface PlatformVersionCompany {
   id: number;
   /** Any notable comments about the developer */
   comment: string;
   /** The company responsible for developing this platform version */
   company: Company;
+  /** True when the company developed the platform version */
   developer: boolean;
+  /** True when the company manufactured the platform version */
   manufacturer: boolean;
   /** Hash of the object */
   checksum: string;
 }
 
-/** Entity of the `platform_version_release_dates` endpoint. */
+/**
+ * Entity of the `platform_version_release_dates` endpoint.
+ * @see https://api-docs.igdb.com/#platform-version-release-date
+ */
 export interface PlatformVersionReleaseDate {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "date" | "updated_at";
@@ -1836,9 +2121,13 @@ export interface PlatformVersionReleaseDate {
   release_region: ReleaseDateRegion;
 }
 
-/** Entity of the `platform_websites` endpoint. */
+/**
+ * Entity of the `platform_websites` endpoint.
+ * @see https://api-docs.igdb.com/#platform-website
+ */
 export interface PlatformWebsite {
   id: number;
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;
@@ -1848,7 +2137,10 @@ export interface PlatformWebsite {
   type: WebsiteType;
 }
 
-/** Entity of the `player_perspectives` endpoint. */
+/**
+ * Entity of the `player_perspectives` endpoint.
+ * @see https://api-docs.igdb.com/#player-perspective
+ */
 export interface PlayerPerspective {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -1858,6 +2150,7 @@ export interface PlayerPerspective {
    * Unix timestamp in seconds.
    */
   created_at: number;
+  /** The name of the item */
   name: string;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
@@ -1872,15 +2165,24 @@ export interface PlayerPerspective {
   checksum: string;
 }
 
-/** Entity of the `popularity_primitives` endpoint. */
+/**
+ * Entity of the `popularity_primitives` endpoint.
+ * @see https://api-docs.igdb.com/#popularity-primitive
+ */
 export interface PopularityPrimitive {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "calculated_at" | "created_at" | "updated_at";
   id: number;
+  /** The id of the game, as a number: not a relation, so it cannot be expanded */
   game_id: number;
+  /** The metric this value measures */
   popularity_type: PopularityType;
+  /** The game's value for the metric; each metric has its own scale */
   value: number;
-  /** Unix timestamp in seconds. */
+  /**
+   * When IGDB computed the value
+   * Unix timestamp in seconds.
+   */
   calculated_at: number;
   /**
    * Date this was initially added to the IGDB database
@@ -1894,14 +2196,19 @@ export interface PopularityPrimitive {
   updated_at: number;
   /** Hash of the object */
   checksum: string;
+  /** Where the metric comes from: IGDB, Steam, Twitch... */
   external_popularity_source: ExternalGameSource;
 }
 
-/** Entity of the `popularity_types` endpoint. */
+/**
+ * Entity of the `popularity_types` endpoint.
+ * @see https://api-docs.igdb.com/#popularity-type
+ */
 export interface PopularityType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -1915,14 +2222,19 @@ export interface PopularityType {
   updated_at: number;
   /** Hash of the object */
   checksum: string;
+  /** Where the metric comes from: IGDB, Steam, Twitch... */
   external_popularity_source: ExternalGameSource;
 }
 
-/** Entity of the `regions` endpoint. */
+/**
+ * Entity of the `regions` endpoint.
+ * @see https://api-docs.igdb.com/#region
+ */
 export interface Region {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /** This can be either ’locale’ or ‘continent’ */
   category: string;
@@ -1942,7 +2254,10 @@ export interface Region {
   checksum: string;
 }
 
-/** Entity of the `release_dates` endpoint. */
+/**
+ * Entity of the `release_dates` endpoint.
+ * @see https://api-docs.igdb.com/#release-date
+ */
 export interface ReleaseDate {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "date" | "updated_at";
@@ -1957,6 +2272,7 @@ export interface ReleaseDate {
    * Unix timestamp in seconds.
    */
   date: number;
+  /** The game this row belongs to */
   game: Game;
   /** A human readable representation of the date */
   human: string;
@@ -1983,11 +2299,15 @@ export interface ReleaseDate {
   d: number;
 }
 
-/** Entity of the `release_date_regions` endpoint. */
+/**
+ * Entity of the `release_date_regions` endpoint.
+ * @see https://api-docs.igdb.com/#release-date-region
+ */
 export interface ReleaseDateRegion {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The region's slug, such as europe, north_america or worldwide */
   region: string;
   /**
    * Date this was initially added to the IGDB database
@@ -2003,7 +2323,10 @@ export interface ReleaseDateRegion {
   checksum: string;
 }
 
-/** Entity of the `release_date_statuses` endpoint. */
+/**
+ * Entity of the `release_date_statuses` endpoint.
+ * @see https://api-docs.igdb.com/#release-date-status
+ */
 export interface ReleaseDateStatus {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -2026,7 +2349,10 @@ export interface ReleaseDateStatus {
   checksum: string;
 }
 
-/** Entity of the `reports` endpoint. */
+/**
+ * Entity of the `reports` endpoint.
+ * @see https://api-docs.igdb.com/#report
+ */
 export interface Report {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -2053,11 +2379,15 @@ export interface Report {
   checksum: string;
 }
 
-/** Entity of the `report_types` endpoint. */
+/**
+ * Entity of the `report_types` endpoint.
+ * @see https://api-docs.igdb.com/#report-type
+ */
 export interface ReportType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
   id: number;
+  /** The name of the item */
   name: string;
   /**
    * Date this was initially added to the IGDB database
@@ -2073,10 +2403,15 @@ export interface ReportType {
   checksum: string;
 }
 
-/** Entity of the `screenshots` endpoint. */
+/**
+ * Entity of the `screenshots` endpoint.
+ * @see https://api-docs.igdb.com/#screenshot
+ */
 export interface Screenshot {
   id: number;
+  /** True when the image has an alpha channel (transparency) */
   alpha_channel: boolean;
+  /** True when the image is animated */
   animated: boolean;
   /** The game this video is associated with */
   game: Game;
@@ -2092,30 +2427,45 @@ export interface Screenshot {
   checksum: string;
 }
 
-/** Entity of the `search` endpoint. */
+/**
+ * Entity of the `search` endpoint.
+ * @see https://api-docs.igdb.com/#search
+ */
 export interface Search {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "published_at";
   id: number;
+  /** Every alternative name of the result, joined into one string */
   alternative_name: string;
+  /** The character found */
   character: Character;
+  /** The collection found */
   collection: Collection;
+  /** Never filled: companies are not in the search index */
   company: Company;
+  /** Never filled by IGDB */
   description: string;
+  /** The game found */
   game: Game;
+  /** The name of the item */
   name: string;
+  /** The platform found */
   platform: Platform;
   /**
    * The date this item was initially published by the third party
    * Unix timestamp in seconds.
    */
   published_at: number;
+  /** The theme found */
   theme: Theme;
   /** Hash of the object */
   checksum: string;
 }
 
-/** Entity of the `themes` endpoint. */
+/**
+ * Entity of the `themes` endpoint.
+ * @see https://api-docs.igdb.com/#theme
+ */
 export interface Theme {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";
@@ -2125,6 +2475,7 @@ export interface Theme {
    * Unix timestamp in seconds.
    */
   created_at: number;
+  /** The name of the item */
   name: string;
   /** A url-safe, unique, lower-case version of the name */
   slug: string;
@@ -2139,11 +2490,15 @@ export interface Theme {
   checksum: string;
 }
 
-/** Entity of the `websites` endpoint. */
+/**
+ * Entity of the `websites` endpoint.
+ * @see https://api-docs.igdb.com/#website
+ */
 export interface Website {
   id: number;
   /** The game this website is associated with */
   game: Game;
+  /** IGDB's trusted flag on the link; IGDB does not document what it checks */
   trusted: boolean;
   /** The website address (URL) of the item */
   url: string;
@@ -2153,7 +2508,10 @@ export interface Website {
   type: WebsiteType;
 }
 
-/** Entity of the `website_types` endpoint. */
+/**
+ * Entity of the `website_types` endpoint.
+ * @see https://api-docs.igdb.com/#website-type
+ */
 export interface WebsiteType {
   /** @internal Fields holding a Unix timestamp in seconds. */
   readonly [timestampKey]?: "created_at" | "updated_at";

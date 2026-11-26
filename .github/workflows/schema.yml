@@ -21,6 +21,14 @@ jobs:
         with:
           bun-version: 1.4.5
       - run: bun install --frozen-lockfile
+      # The descriptions and deprecation notices of the generated types come from IGDB's API docs:
+      # refresh them before codegen. A page that cannot be read leaves the file as it is, says so in
+      # the PR body and fails the run at its end.
+      - name: IGDB's API docs
+        id: docs
+        continue-on-error: true
+        working-directory: packages/igdb-kit
+        run: bun run --silent docs-fields > "$RUNNER_TEMP/docs.md"
       # --fetch also downloads the reference tables (GameType, Platform...), which needs credentials.
       - run: bun run --filter igdb-kit codegen -- --fetch
         env:
@@ -43,6 +51,7 @@ jobs:
             echo "Regenerated from the latest igdbapi.proto and reference tables."
             echo
             bun run audit || echo "**The audit found problems: fix them before merging.**"
+            cat "$RUNNER_TEMP/docs.md"
             if [ "$UNIT" = failure ]; then
               echo
               echo "**The unit tests fail on the fresh tables: fix them before merging.**"
@@ -69,6 +78,6 @@ jobs:
           commit-message: Update IGDB schema from igdbapi.proto
           body-path: audit.md
           add-paths: packages/igdb-kit
-      - name: Fail when the unit tests failed or the blog feed could not be read
-        if: steps.unit.outcome == 'failure' || steps.blog.outcome == 'failure'
+      - name: Fail when the unit tests failed or the docs or the blog feed could not be read
+        if: steps.unit.outcome == 'failure' || steps.blog.outcome == 'failure' || steps.docs.outcome == 'failure'
         run: exit 1

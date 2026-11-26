@@ -16,7 +16,7 @@ export interface FieldSchema {
   endpoint?: EndpointName;
   /** The names of an integer that holds one of a few values (`game_version_features.category`). */
   values?: Record<string, number>;
-  /** IGDB's description of the field. */
+  /** IGDB's description of the field, or igdb-kit's where IGDB's docs give none. */
   description?: string;
   /** IGDB deprecated the field but still fills it. Deprecated fields it replaced or stopped filling are left out. */
   deprecated?: boolean;

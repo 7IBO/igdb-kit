@@ -39,7 +39,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "A url-safe, unique, lower-case version of the name"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -151,7 +152,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "deprecated": true
   },
   "description": {
-   "type": "string"
+   "type": "string",
+   "description": "The content descriptor, as the organization words it"
   },
   "checksum": {
    "type": "string",
@@ -163,7 +165,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "description": {
-   "type": "string"
+   "type": "string",
+   "description": "The content descriptor, as the organization words it, such as \"Blood and Gore\""
   },
   "organization": {
    "type": "relation",
@@ -273,7 +276,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "A url-safe, unique, lower-case version of the name"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -293,10 +297,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "game": {
    "type": "relation",
@@ -340,7 +346,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -360,10 +367,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "height": {
    "type": "integer",
@@ -391,7 +400,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -430,7 +440,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   "games": {
    "type": "relation",
    "endpoint": "games",
-   "array": true
+   "array": true,
+   "description": "The games the character appears in"
   },
   "mug_shot": {
    "type": "relation",
@@ -438,7 +449,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "An image depicting a character"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "slug": {
    "type": "string",
@@ -458,11 +470,13 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "character_gender": {
    "type": "relation",
-   "endpoint": "character_genders"
+   "endpoint": "character_genders",
+   "description": "The character's gender"
   },
   "character_species": {
    "type": "relation",
-   "endpoint": "character_species"
+   "endpoint": "character_species",
+   "description": "The character's species"
   }
  },
  "collection_membership_types": {
@@ -661,12 +675,14 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   "as_parent_relations": {
    "type": "relation",
    "endpoint": "collection_relations",
-   "array": true
+   "array": true,
+   "description": "Relations in which this collection is the parent"
   },
   "as_child_relations": {
    "type": "relation",
    "endpoint": "collection_relations",
-   "array": true
+   "array": true,
+   "description": "Relations in which this collection is the child"
   }
  },
  "companies": {
@@ -706,7 +722,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The company’s logo"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "parent": {
    "type": "relation",
@@ -777,10 +794,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "height": {
    "type": "integer",
@@ -808,7 +827,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -828,7 +848,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -880,7 +901,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -900,7 +922,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "trusted": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",
@@ -922,22 +945,28 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "content_safety_rating": {
    "type": "relation",
-   "endpoint": "content_safety_ratings"
+   "endpoint": "content_safety_ratings",
+   "description": "The content safety rating this dimension belongs to"
   },
   "value": {
-   "type": "integer"
+   "type": "integer",
+   "description": "The dimension's value"
   },
   "description": {
-   "type": "string"
+   "type": "string",
+   "description": "What the dimension measures"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
-   "type": "string"
+   "type": "string",
+   "description": "Hash of the object"
   }
  },
  "content_safety_ratings": {
@@ -945,16 +974,20 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
-   "type": "string"
+   "type": "string",
+   "description": "Hash of the object"
   }
  },
  "covers": {
@@ -962,10 +995,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "game": {
    "type": "relation",
@@ -1008,7 +1043,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "format": {
-   "type": "string"
+   "type": "string",
+   "description": "The precision of a date: YYYYMMDD, YYYYMM, YYYY, YYYYQ1 to YYYYQ4 or TBD"
   },
   "created_at": {
    "type": "timestamp",
@@ -1028,10 +1064,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "description": {
-   "type": "string"
+   "type": "string",
+   "description": "What the entity type covers"
   },
   "created_at": {
    "type": "timestamp",
@@ -1056,10 +1094,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The event associated with this logo."
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "height": {
    "type": "integer",
@@ -1225,7 +1265,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -1339,24 +1380,30 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "game": {
    "type": "relation",
-   "endpoint": "games"
+   "endpoint": "games",
+   "description": "The game this row belongs to"
   },
   "content_safety_rating_dimension": {
    "type": "relation",
-   "endpoint": "content_safety_rating_dimensions"
+   "endpoint": "content_safety_rating_dimensions",
+   "description": "The dimension of the rating"
   },
   "content_safety_rating": {
    "type": "relation",
-   "endpoint": "content_safety_ratings"
+   "endpoint": "content_safety_ratings",
+   "description": "The game's content safety rating"
   },
   "created_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "Date this was initially added to the IGDB database"
   },
   "updated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "The last date this entry was updated in the IGDB database"
   },
   "checksum": {
-   "type": "string"
+   "type": "string",
+   "description": "Hash of the object"
   }
  },
  "game_engine_logos": {
@@ -1364,10 +1411,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "height": {
    "type": "integer",
@@ -1445,7 +1494,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "cover": {
    "type": "relation",
@@ -1509,7 +1559,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "format": {
-   "type": "string"
+   "type": "string",
+   "description": "Digital or Physical"
   },
   "created_at": {
    "type": "timestamp",
@@ -1529,7 +1580,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "status": {
-   "type": "string"
+   "type": "string",
+   "description": "The status, such as Released, Early Access, Cancelled or Delisted"
   },
   "created_at": {
    "type": "timestamp",
@@ -1586,7 +1638,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "type": {
-   "type": "string"
+   "type": "string",
+   "description": "The type, such as Main Game, DLC, Expansion, Bundle or Remake"
   },
   "created_at": {
    "type": "timestamp",
@@ -1847,7 +1900,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "Multiplayer modes for this game"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "parent_game": {
    "type": "relation",
@@ -2036,7 +2090,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "Date this was initially added to the IGDB database"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "slug": {
    "type": "string",
@@ -2060,7 +2115,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -2081,27 +2137,33 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "company": {
    "type": "relation",
-   "endpoint": "companies"
+   "endpoint": "companies",
+   "description": "The company"
   },
   "created_at": {
    "type": "timestamp",
    "description": "Date this was initially added to the IGDB database"
   },
   "developer": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company developed the game"
   },
   "game": {
    "type": "relation",
-   "endpoint": "games"
+   "endpoint": "games",
+   "description": "The game this row belongs to"
   },
   "porting": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company ported the game to another platform"
   },
   "publisher": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company published the game"
   },
   "supporting": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company helped develop the game"
   },
   "updated_at": {
    "type": "timestamp",
@@ -2121,7 +2183,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "Date this was initially added to the IGDB database"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "slug": {
    "type": "string",
@@ -2145,7 +2208,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -2166,15 +2230,18 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "game": {
    "type": "relation",
-   "endpoint": "games"
+   "endpoint": "games",
+   "description": "The game this row belongs to"
   },
   "language": {
    "type": "relation",
-   "endpoint": "languages"
+   "endpoint": "languages",
+   "description": "The language"
   },
   "language_support_type": {
    "type": "relation",
-   "endpoint": "language_support_types"
+   "endpoint": "language_support_types",
+   "description": "What the language covers: Audio, Subtitles or Interface"
   },
   "created_at": {
    "type": "timestamp",
@@ -2223,10 +2290,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "game": {
    "type": "relation",
@@ -2327,7 +2396,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "event_networks": {
    "type": "relation",
@@ -2370,10 +2440,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "height": {
    "type": "integer",
@@ -2401,7 +2473,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -2430,10 +2503,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The company responsible for developing this platform version"
   },
   "developer": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company developed the platform version"
   },
   "manufacturer": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the company manufactured the platform version"
   },
   "checksum": {
    "type": "string",
@@ -2580,7 +2655,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "trusted": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",
@@ -2677,7 +2753,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "Date this was initially added to the IGDB database"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "slug": {
    "type": "string",
@@ -2701,17 +2778,21 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "game_id": {
-   "type": "integer"
+   "type": "integer",
+   "description": "The id of the game, as a number: not a relation, so it cannot be expanded"
   },
   "popularity_type": {
    "type": "relation",
-   "endpoint": "popularity_types"
+   "endpoint": "popularity_types",
+   "description": "The metric this value measures"
   },
   "value": {
-   "type": "number"
+   "type": "number",
+   "description": "The game's value for the metric; each metric has its own scale"
   },
   "calculated_at": {
-   "type": "timestamp"
+   "type": "timestamp",
+   "description": "When IGDB computed the value"
   },
   "created_at": {
    "type": "timestamp",
@@ -2727,7 +2808,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "external_popularity_source": {
    "type": "relation",
-   "endpoint": "external_game_sources"
+   "endpoint": "external_game_sources",
+   "description": "Where the metric comes from: IGDB, Steam, Twitch..."
   }
  },
  "popularity_types": {
@@ -2735,7 +2817,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -2751,7 +2834,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "external_popularity_source": {
    "type": "relation",
-   "endpoint": "external_game_sources"
+   "endpoint": "external_game_sources",
+   "description": "Where the metric comes from: IGDB, Steam, Twitch..."
   }
  },
  "regions": {
@@ -2759,7 +2843,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "category": {
    "type": "string",
@@ -2787,7 +2872,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "region": {
-   "type": "string"
+   "type": "string",
+   "description": "The region's slug, such as europe, north_america or worldwide"
   },
   "created_at": {
    "type": "timestamp",
@@ -2841,7 +2927,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "game": {
    "type": "relation",
-   "endpoint": "games"
+   "endpoint": "games",
+   "description": "The game this row belongs to"
   },
   "human": {
    "type": "string",
@@ -2893,7 +2980,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "created_at": {
    "type": "timestamp",
@@ -2948,10 +3036,12 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alpha_channel": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image has an alpha channel (transparency)"
   },
   "animated": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "True when the image is animated"
   },
   "game": {
    "type": "relation",
@@ -2984,33 +3074,41 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "type": "integer"
   },
   "alternative_name": {
-   "type": "string"
+   "type": "string",
+   "description": "Every alternative name of the result, joined into one string"
   },
   "character": {
    "type": "relation",
-   "endpoint": "characters"
+   "endpoint": "characters",
+   "description": "The character found"
   },
   "collection": {
    "type": "relation",
-   "endpoint": "collections"
+   "endpoint": "collections",
+   "description": "The collection found"
   },
   "company": {
    "type": "relation",
-   "endpoint": "companies"
+   "endpoint": "companies",
+   "description": "Never filled: companies are not in the search index"
   },
   "description": {
-   "type": "string"
+   "type": "string",
+   "description": "Never filled by IGDB"
   },
   "game": {
    "type": "relation",
-   "endpoint": "games"
+   "endpoint": "games",
+   "description": "The game found"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "platform": {
    "type": "relation",
-   "endpoint": "platforms"
+   "endpoint": "platforms",
+   "description": "The platform found"
   },
   "published_at": {
    "type": "timestamp",
@@ -3018,7 +3116,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
   },
   "theme": {
    "type": "relation",
-   "endpoint": "themes"
+   "endpoint": "themes",
+   "description": "The theme found"
   },
   "checksum": {
    "type": "string",
@@ -3034,7 +3133,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "Date this was initially added to the IGDB database"
   },
   "name": {
-   "type": "string"
+   "type": "string",
+   "description": "The name of the item"
   },
   "slug": {
    "type": "string",
@@ -3084,7 +3184,8 @@ export const fieldSchemas: Record<EndpointName, Record<string, Omit<FieldSchema,
    "description": "The game this website is associated with"
   },
   "trusted": {
-   "type": "boolean"
+   "type": "boolean",
+   "description": "IGDB's trusted flag on the link; IGDB does not document what it checks"
   },
   "url": {
    "type": "string",
