@@ -49,21 +49,25 @@ export function duplicateFields(): Selection<"games", DuplicateFields | Duplicat
 /** A game whose selection lets {@link duplicateCandidates} work. */
 export interface DuplicateInput {
   id: number;
-  name?: string | undefined;
-  game_type?: Ref | undefined;
-  version_parent?: Ref | undefined;
-  parent_game?: Ref | undefined;
-  first_release_date?: number | undefined;
-  platforms?: readonly Ref[] | undefined;
-  alternative_names?: readonly { name?: string | undefined }[] | undefined;
-  involved_companies?: readonly { company?: Ref | undefined; developer?: boolean | undefined }[] | undefined;
-  websites?: readonly { url?: string | undefined }[] | undefined;
-  external_games?:
-    | readonly { external_game_source?: Ref | undefined; uid?: string | undefined }[]
+  name?: string | null | undefined;
+  game_type?: Ref | null | undefined;
+  version_parent?: Ref | null | undefined;
+  parent_game?: Ref | null | undefined;
+  first_release_date?: number | null | undefined;
+  platforms?: readonly Ref[] | null | undefined;
+  alternative_names?: readonly { name?: string | null | undefined }[] | null | undefined;
+  involved_companies?:
+    | readonly { company?: Ref | null | undefined; developer?: boolean | null | undefined }[]
+    | null
     | undefined;
-  remakes?: readonly Ref[] | undefined;
-  remasters?: readonly Ref[] | undefined;
-  ports?: readonly Ref[] | undefined;
+  websites?: readonly { url?: string | null | undefined }[] | null | undefined;
+  external_games?:
+    | readonly { external_game_source?: Ref | null | undefined; uid?: string | null | undefined }[]
+    | null
+    | undefined;
+  remakes?: readonly Ref[] | null | undefined;
+  remasters?: readonly Ref[] | null | undefined;
+  ports?: readonly Ref[] | null | undefined;
 }
 
 /** Why two games may be one: what they share. */
@@ -155,8 +159,9 @@ interface Prepared<G> {
  * "VII" read as "7"), the name without its edition label, an alternative name, or a store id (from
  * `websites` and `external_games`). Left out: editions and versions (`version_parent`), DLCs,
  * bundles and other content, a remake or remaster next to its original, ports IGDB ties to their
- * game (`parent_game`), pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`),
- * and two remakes or ports of different games, or of one game on other platforms.
+ * game (`parent_game`, so a port entered twice under one game is not proposed either), pairs IGDB
+ * already links (`parent_game`, `remakes`, `remasters`, `ports`), and two remakes or remasters of
+ * different games, or of one game on other platforms. Null fields of a local copy read as missing.
  *
  * ```ts
  * const games = await igdb.games.select(...duplicateFields()).where("name = (\"Hades\")").execute();
@@ -189,6 +194,10 @@ export function duplicateCandidates<G extends { id: number }>(
     for (const store of entry.stores) group(`s ${store}`, index);
   }
 
+  // A name is common when three games or more that could pair carry it: same name, same kind.
+  const named = new Map<string, number>();
+  for (const entry of prepared)
+    named.set(`${entry.kind} ${entry.name}`, (named.get(`${entry.kind} ${entry.name}`) ?? 0) + 1);
   const seen = new Set<string>();
   const pairs: DuplicateCandidate<G>[] = [];
   for (const members of groups.values()) {
@@ -202,7 +211,7 @@ export function duplicateCandidates<G extends { id: number }>(
         const key = a.id < b.id ? `${a.id} ${b.id}` : `${b.id} ${a.id}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        const pair = compare(a, b, (groups.get(`n ${a.name}`)?.length ?? 0) > 2);
+        const pair = compare(a, b, (named.get(`${a.kind} ${a.name}`) ?? 0) > 2);
         if (pair && pair.score >= minScore) pairs.push(pair);
       }
     }
@@ -228,24 +237,27 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
   for (const { storeId } of externalIds(input as never))
     if (storeId) stores.add(`${storeId.store} ${storeId.kind} ${storeId.id}`);
   const year =
-    input.first_release_date === undefined
-      ? undefined
-      : new Date(input.first_release_date * 1000).getUTCFullYear();
-  const ids = (refs: readonly Ref[] | undefined) => (refs ?? []).flatMap((ref) => idOf(ref) ?? []);
+    typeof input.first_release_date === "number"
+      ? new Date(input.first_release_date * 1000).getUTCFullYear()
+      : undefined;
+  const ids = (refs: readonly (Ref | null | undefined)[] | null | undefined) =>
+    (refs ?? []).flatMap((ref) => idOf(ref) ?? []);
   const linked = new Set([
     ...ids(input.remakes),
     ...ids(input.remasters),
     ...ids(input.ports),
-    ...ids(input.parent_game === undefined ? [] : [input.parent_game]),
+    ...ids([input.parent_game]),
   ]);
   return {
     game,
     id: game.id,
     kind,
     name,
-    base: titleKey(withoutEdition(clean(input.name))),
+    base: titleKey(withoutEdition(clean(input.name))) || name,
     alternatives: new Set(
-      (input.alternative_names ?? []).flatMap((alt) => (alt.name ? [titleKey(clean(alt.name))] : [])),
+      (input.alternative_names ?? [])
+        .flatMap((alt) => (alt.name ? [titleKey(clean(alt.name))] : []))
+        .filter(Boolean),
     ),
     stores,
     year,
@@ -254,7 +266,7 @@ function prepare<G extends { id: number }>(game: G): Prepared<G> | null {
       (input.involved_companies ?? []).flatMap((row) => (row.developer ? (idOf(row.company) ?? []) : [])),
     ),
     linked,
-    parent: idOf(input.parent_game),
+    parent: idOf(input.parent_game) ?? undefined,
   };
 }
 

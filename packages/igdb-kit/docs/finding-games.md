@@ -103,7 +103,7 @@ const [pair] = duplicateCandidates(games);
 
 Two games pair up when they share a name (compared as `games.match()` compares titles), the name without its edition label, an alternative name, or a store id from `websites` or `external_games`. The score then adds a release year (the same, or a little for a year apart), a platform and a developer in common, and drops for years two or more apart (the 1993 Doom and the 2016 one), for developers with none in common, for two products of one store with no id in common (two Steam apps), and for a name three games or more share ("Abyss" names many small games). A name alone gives 0.5 and the default `minScore` is 0.7: a name needs the same year, or a platform and a developer, or a store id. `reasons` and `conflicts` say what counted.
 
-Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game, and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
+Left out: editions (`version_parent`), DLCs, expansions, bundles, mods, episodes, seasons, forks, packs and updates, a remake or remaster next to its original, ports IGDB ties to their game (so a port entered twice under one game is not proposed either), and pairs IGDB already links (`parent_game`, `remakes`, `remasters`, `ports`). Two remakes of one game can pair up. A name or store id shared by more than `maxGroup` games (50) is left out of the grouping: "Tetris" names many games.
 
 Pairs are found only among the games you pass. For the whole catalogue, read it once with `iterate()`, which pages by id at 500 rows a request under the client's limiter (about 800 requests for the 380,000 games, a few minutes at IGDB's 4 requests a second), then compare everything at once:
 
@@ -116,4 +116,4 @@ for await (const game of igdb.games
 const pairs = duplicateCandidates(games);
 ```
 
-With a local copy of IGDB, pass its rows instead: the same fields, the relations as ids.
+With a local copy of IGDB, pass its rows instead: the same fields, single references (`game_type`, `parent_game`, `version_parent`) and lists of games or platforms as ids, `alternative_names`, `involved_companies`, `websites` and `external_games` as rows with their fields. A null reads as missing.

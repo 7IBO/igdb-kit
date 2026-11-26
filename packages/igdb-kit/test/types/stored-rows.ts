@@ -1,6 +1,13 @@
 // The helpers of igdb-kit/game, and rankChanges(), read rows from a local copy, with no cast (docs/local-copy.md).
 import { type PopularitySnapshotRow, rankChanges } from "../../src";
-import { externalIds, ratingOf, releaseDate, storeLinks, wikipediaLink } from "../../src/game";
+import {
+  duplicateCandidates,
+  externalIds,
+  ratingOf,
+  releaseDate,
+  storeLinks,
+  wikipediaLink,
+} from "../../src/game";
 
 // A row as a database client types it.
 type Row = { id: number; [field: string]: unknown };
@@ -43,3 +50,16 @@ declare const ratedRow: { id: number; total_rating: number | null; total_rating_
 ratingOf(ratedRow, { minCount: 5 });
 // @ts-expect-error a numeric column read as a string must be converted
 ratingOf({ id: 1, total_rating: "90.5", total_rating_count: "12" });
+
+// duplicateCandidates() reads stored rows, nulls included.
+declare const storedGames: {
+  id: number;
+  name: string;
+  game_type: number | null;
+  version_parent: number | null;
+  parent_game: number | null;
+  first_release_date: number | null;
+  platforms: number[] | null;
+}[];
+duplicateCandidates(storedGames);
+duplicateCandidates(rows);

@@ -4,7 +4,10 @@ import { GameType } from "../../src/generated/schema";
 
 const y = (year: number) => Date.UTC(year, 5, 1) / 1000;
 
-function game(id: number, name: string, more: Partial<DuplicateInput> = {}) {
+/** The input without nulls at the top: the shape a query result has. */
+type TestGame = { [K in keyof DuplicateInput]?: Exclude<DuplicateInput[K], null> } & { id: number };
+
+function game(id: number, name: string, more: Partial<TestGame> = {}) {
   return {
     id,
     name,
@@ -14,7 +17,7 @@ function game(id: number, name: string, more: Partial<DuplicateInput> = {}) {
     first_release_date: undefined,
     platforms: undefined,
     ...more,
-  } as DuplicateInput & { id: number };
+  } as TestGame;
 }
 
 const ids = (pairs: { games: [{ id: number }, { id: number }] }[]) =>
@@ -178,6 +181,41 @@ describe("duplicateCandidates()", () => {
     expect(duplicateCandidates([remake(1, 9, [18]), remake(2, 9, [33])], { minScore: 0 })).toEqual([]);
     expect(duplicateCandidates([remake(1, 9, [18]), remake(2, 8, [18])], { minScore: 0 })).toEqual([]);
     expect(ids(duplicateCandidates([remake(1, 9, [18]), remake(2, 9, [18])]))).toEqual([[1, 2]]);
+  });
+
+  test("reads nulls of a local copy as missing: no year 1970", () => {
+    const row = (id: number, date: number | null) => ({
+      id,
+      name: "Foo",
+      game_type: 0,
+      version_parent: null,
+      parent_game: null,
+      first_release_date: date,
+      platforms: null,
+      websites: [{ url: null }],
+    });
+    expect(duplicateCandidates([row(1, null), row(2, null)], { minScore: 0 })[0]?.reasons).toEqual(["name"]);
+    expect(duplicateCandidates([row(1, null), row(2, y(2020))], { minScore: 0 })[0]?.score).toBe(0.5);
+  });
+
+  test("a common name counts only games that could pair, and empty keys never match", () => {
+    const at = { first_release_date: y(2005), platforms: [6] };
+    const pairs = duplicateCandidates([
+      game(1, "Resident Evil 4", at),
+      game(2, "Resident Evil 4", at),
+      game(3, "Resident Evil 4", { first_release_date: y(2023), game_type: GameType.Remake }),
+      game(4, "Hades II", { ...at, alternative_names: [{ name: "Resident Evil 4" }] }),
+    ]);
+    expect(pairs.find((p) => p.games[1].id === 2)?.conflicts).toEqual([]);
+    expect(pairs.find((p) => p.games[1].id === 2)?.score).toBe(0.8);
+    const symbols = duplicateCandidates(
+      [
+        game(1, "♥ (Deluxe)", { first_release_date: y(2020), alternative_names: [{ name: "★" }] }),
+        game(2, "★ - Deluxe Edition", { first_release_date: y(2020), alternative_names: [{ name: "♦" }] }),
+      ],
+      { minScore: 0 },
+    );
+    expect(symbols).toEqual([]);
   });
 
   test("two remakes of one game pair up", () => {
