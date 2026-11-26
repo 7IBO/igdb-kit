@@ -1,5 +1,13 @@
 # igdb-kit
 
+## 0.10.0
+
+### Minor Changes
+
+- 5b1243f: `npx igdb-kit mcp` runs an MCP server over stdio, so that Claude Code, Claude Desktop, Cursor and other assistants can read IGDB with your own Twitch credentials (`TWITCH_CLIENT_ID`, `TWITCH_CLIENT_SECRET`). Its tools: `search_games`, `get_game`, `upcoming_releases`, `popular_games`, `query` (Apicalypse) and `describe_endpoint`, all read-only, sent through the client's rate limit and token renewal, and cached 10 minutes. `igdb-kit/mcp` exports `createMcpServer()` and `serveLines()` for your own transport or client. No new dependency. See docs/mcp.md.
+- 43ac226: `hooks.onAuthError({ path, error, expiresAt })` is called when the credentials are refused, which no retry fixes. Twitch refusing the client id or secret reports `oauth2/token`, once per token request; `expiresAt` is when the token in use expires when only its renewal ahead of expiry was refused, else `null`. IGDB answering 401, or 403 for another reason than the API tier or the query (a token refused after its renewal, a fixed `accessToken`, a proxy's credentials) reports the request's path, once per request. New type `AuthErrorInfo`.
+- cce2ac5: `rankChanges(before, after)` compares two stored snapshots of `popularitySnapshot()`: one entry per game and metric, with its `status` (`entered`, `up`, `down`, `same`, `left`), the places gained, and its rank and value `before` and `after`. A metric found in only one snapshot is left out. Sends no request. New types `RankChange`, `RankChangeRow` and `RankChangeStatus`.
+
 ## 0.9.0
 
 ### Minor Changes
