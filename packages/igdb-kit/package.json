@@ -17,6 +17,9 @@
     "dist",
     "CHANGELOG.md"
   ],
+  "bin": {
+    "igdb-kit": "./dist/cli.mjs"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -79,6 +82,16 @@
       "require": {
         "types": "./dist/schema.d.cts",
         "default": "./dist/schema.cjs"
+      }
+    },
+    "./mcp": {
+      "import": {
+        "types": "./dist/mcp.d.ts",
+        "default": "./dist/mcp.js"
+      },
+      "require": {
+        "types": "./dist/mcp.d.cts",
+        "default": "./dist/mcp.cjs"
       }
     },
     "./i18n": {

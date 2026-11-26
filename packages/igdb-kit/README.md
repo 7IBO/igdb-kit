@@ -100,6 +100,8 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 
 **Run it on servers**: explicit `batch()`, caching, Redis to share the token and the rate limit across processes, and a proxy for the browser ([Client, batching and servers](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/client.md)).
 
+**Give it to an assistant**: `npx igdb-kit mcp` is an MCP server with your Twitch credentials, for Claude Code, Claude Desktop or Cursor ([MCP server](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/mcp.md)).
+
 ## Documentation
 
 | Page | Covers |
@@ -113,6 +115,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | [Languages](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/languages.md) | Everything that follows a locale, `resolveLocale()`, translated labels in `igdb-kit/i18n` |
 | [Keeping a local copy](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/local-copy.md) | `sync()`, webhooks, `removed()`, `igdb-kit/schema` |
 | [Client, batching and servers](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/client.md) | Rate limit and tokens, options, hooks, `batch()`, caching, Redis, browser proxy, errors |
+| [MCP server](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/mcp.md) | `npx igdb-kit mcp`: IGDB's data for Claude Code, Claude Desktop, Cursor and other assistants |
 | [Conventions](https://github.com/7IBO/igdb-kit/blob/main/packages/igdb-kit/docs/conventions.md) | The naming, laziness, options, dates and missing values rules the whole API follows |
 
 ## Entry points
@@ -126,6 +129,7 @@ game.genres?.map((genre) => label("genres", genre, "fr"));    // ["Jeu de rôle 
 | `igdb-kit/proxy` | `igdbProxy()`, to query IGDB from the browser through your server |
 | `igdb-kit/redis` | A token store, a rate limiter and a cache shared through Redis |
 | `igdb-kit/webhooks` | `webhookHandler()` and `parseWebhook()` |
+| `igdb-kit/mcp` | `createMcpServer()`, the server `npx igdb-kit mcp` runs |
 
 ## Compatibility
 
