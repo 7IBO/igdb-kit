@@ -67,11 +67,13 @@ const id = parseStoreUrl(input); // "store.steampowered.com/app/292030/The_Witch
 if (id?.store === "steam") await igdb.games.select("name").findByExternalIds(ExternalGameSource.Steam, [id.id]);
 ```
 
-A PlayStation concept is a `PlaystationStoreUS` id; IGDB has no PlayStation product ids.
+A PlayStation concept is a `PlaystationStoreUS` id; IGDB has no PlayStation product ids. A Microsoft Store product (`store: "xbox"`, `kind: "product"`) is a `Microsoft` id, or for some games, Hollow Knight: Silksong among them, only an `XboxGamePassUltimateCloud` one. An Xbox 360 game's uuid is under `XboxMarketplace` as it is, and under `Microsoft` after `"xbox360"`. Look an Xbox id up in both of its sources, two `findByExternalIds()` in one `batch()`.
 
 ### PlayStation title ids (PPSA, CUSA)
 
-Sony names a game by title id (`PPSA01234_00` on PS5, `CUSA05678_00` on PS4), in trophy lists and played games. IGDB keeps none of them: measured on 26 November 2026 on 300 PS4 and PS5 title ids (the public andshrew/PlayStation-Titles list), 4 are found in IGDB, through the 2,616 PlayStation links of `websites` that are product pages (`/product/UP0177-PPSA16195_00-…`); no `external_games` row holds one. Go through the store concept instead, which 284 of the 300 find, each in one game: Sony's catalogue gives a title id's concept (`catalog/v2/titles/{titleId}/concepts`, or `concept.id` in a player's played games), and IGDB has 15,904 PlayStation concepts:
+Sony names a product by title id (`PPSA01234_00` on PS5, `CUSA05678_00` on PS4), as in a player's played games. IGDB rarely has one: of 200 PS4 and PS5 title ids drawn at random from the public andshrew/PlayStation-Titles list, 3 appear in IGDB, in the few PlayStation links of `websites` that are product pages (`/product/UP0177-PPSA16195_00-…`), and those links often sit on a DLC or an edition rather than the game.
+
+Go through the title's store concept instead, which IGDB stores as a `PlaystationStoreUS` id: the concepts of 189 of the same 200 titles find a game, never more than one. The list gives each title's concept; elsewhere, Sony gives it through its own catalogue or as `concept.id` in a player's played games. igdb-kit does not call Sony.
 
 ```ts
 const byConcept = await igdb.games
@@ -79,11 +81,11 @@ const byConcept = await igdb.games
   .findByExternalIds(ExternalGameSource.PlaystationStoreUS, ["201930"]); // GTA V
 ```
 
-In the sample, 4 of the 284 led to the wrong game, where Sony files a soundtrack, a level pack or a free episode under another game's concept, and 5 to an edition, whose game `parentGame()` gives. For a title with no concept, `games.match()` below takes its name. A Microsoft Store product (`store: "xbox"`, `kind: "product"`) is a `Microsoft` id, or for some games, Hollow Knight: Silksong among them, only an `XboxGamePassUltimateCloud` one. An Xbox 360 game's uuid is under `XboxMarketplace` as it is, and under `Microsoft` after `"xbox360"`. Look an Xbox id up in both of its sources, two `findByExternalIds()` in one `batch()`.
+A concept found is nearly always the right game. In 300 titles checked, 3 led to another game, where Sony files a soundtrack, a level pack or a free episode under that game's concept, and a few to an edition or a remaster: compare its `game_type` and `version_parent` with what the title is before keeping it. For a title with no concept, `games.match()` below takes its name.
 
 ## By title: games.match()
 
-For a title without a store id IGDB knows, such as most PlayStation trophy lists and Xbox titles, `games.match()` returns the games it may be, best first, each with a score from 0 to 1:
+For a title without a store id IGDB knows, such as a PlayStation trophy list with no concept and most Xbox titles, `games.match()` returns the games it may be, best first, each with a score from 0 to 1:
 
 ```ts
 const [best, next] = await igdb.games
