@@ -644,6 +644,26 @@ webhookHandler<"games" | "platforms">({
   },
 });
 
+// A router types each handler by its endpoint and operation.
+import { webhookRouter } from "../../src/webhooks";
+
+const router = webhookRouter({ secret: "s" })
+  .on("games", ["create", "update"], (game, event) => {
+    expectType<Equal<typeof game.name, string | undefined>>();
+    expectType<Equal<typeof event.operation, "create" | "update">>();
+    expectType<Equal<typeof event.endpoint, "games">>();
+  })
+  .on("platforms", "delete", (data) => expectType<Equal<typeof data, { id: number }>>());
+// @ts-expect-error a delete gives only the id
+router.on("games", "delete", (data) => data.name);
+// @ts-expect-error unknown endpoint
+router.on("gamez", "update", () => {});
+// @ts-expect-error unknown operation
+router.on("games", "upsert", () => {});
+igdb.webhooks.ensure({ url: "https://x.test", secret: "s", routes: router.routes });
+// @ts-expect-error routes or endpoints, not both
+igdb.webhooks.ensure({ url: "https://x.test", secret: "s", routes: router.routes, endpoints: ["games"] });
+
 // A proxy client takes no credentials; a direct client needs a client id.
 const viaProxy = createIGDB({ proxyUrl: "/api/igdb" });
 expectType<Equal<typeof viaProxy, typeof igdb>>();

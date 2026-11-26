@@ -127,6 +127,22 @@ Bun.serve({ routes: { "/igdb": { POST: handler } } }); // or Hono: app.post("/ig
 
 It checks the secret before reading the body, and answers 401 when it is wrong, 413 on a body above `maxBodyBytes` (1 MB by default), and 500 when `onEvent` throws, so IGDB retries. With Express, use `parseWebhook({ headers: req.headers, body: req.body, url: req.url }, secret)`. `igdb.webhooks` also has `register`, `list`, `get`, `delete` and `test`.
 
+With one handler per endpoint and operation, use `webhookRouter`. Each handler gets the entity (every field, relations as ids) for a create or an update, `{ id }` for a delete, and the event second. Its `routes` registers only what it handles:
+
+```ts
+import { webhookRouter } from "igdb-kit/webhooks";
+
+const hooks = webhookRouter({ secret: process.env.IGDB_WEBHOOK_SECRET! })
+  .on("games", ["create", "update"], (game) => db.saveGame(game))
+  .on("games", "delete", ({ id }) => db.removeGame(id))
+  .on("platforms", "update", (platform) => db.savePlatform(platform));
+
+await igdb.webhooks.ensure({ url: "https://example.com/igdb", secret: process.env.IGDB_WEBHOOK_SECRET!, routes: hooks.routes });
+Bun.serve({ routes: { "/igdb": { POST: hooks.handler } } });
+```
+
+The handlers of a delivery run in the order they were added, one after the other; when one throws, the next do not run and the delivery is answered 500, so IGDB retries it. A delivery no handler takes is answered 200 and passed to `onUnhandled`, if given. `hooks.handler` answers like `webhookHandler`; with Express, `hooks.dispatch(parseWebhook(...))`.
+
 ## Deletions: removed()
 
 `sync({ since })` and webhooks miss rows deleted while you were not listening. `removed(ids)` checks stored ids against IGDB, 500 per query, and gives the reason and the replacement of a duplicate from IGDB's reports (games, companies and game localizations; most deletions have no report):

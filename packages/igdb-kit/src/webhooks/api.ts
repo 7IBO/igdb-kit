@@ -60,14 +60,28 @@ export interface RegisterWebhookOptions {
   operation: WebhookOperation;
 }
 
-export interface EnsureWebhooksOptions<N extends EndpointName> {
+interface EnsureBase {
   /** Base URL of your handler. `endpoint` and `operation` query parameters are added to it. */
   url: string;
   secret: string;
-  endpoints: readonly N[];
-  /** Default: create, update and delete. */
-  operations?: readonly WebhookOperation[] | undefined;
 }
+
+/** Each endpoint with each operation, or the routes of a `webhookRouter()` (`hooks.routes`). */
+export type EnsureWebhooksOptions<N extends EndpointName> = EnsureBase &
+  (
+    | {
+        endpoints: readonly N[];
+        /** Default: create, update and delete. */
+        operations?: readonly WebhookOperation[] | undefined;
+        routes?: undefined;
+      }
+    | {
+        /** The endpoint and operation pairs to register, such as a router's `routes`. */
+        routes: readonly { endpoint: N; operation: WebhookOperation }[];
+        endpoints?: undefined;
+        operations?: undefined;
+      }
+  );
 
 /** Registers, lists and removes the webhooks of your Twitch app. */
 export class Webhooks {
@@ -86,18 +100,20 @@ export class Webhooks {
 
   /**
    * Registers every endpoint and operation on one handler, adding `?endpoint=…&operation=…` to the
-   * URL. Call it at startup: it is idempotent and brings back webhooks IGDB deactivated.
+   * URL. Call it at startup: it is idempotent and brings back webhooks IGDB deactivated. With
+   * `routes`, only those pairs are registered.
    */
   async ensure<N extends EndpointName>(options: EnsureWebhooksOptions<N>): Promise<Webhook[]> {
     const operations = options.operations ?? ["create", "update", "delete"];
-    const jobs = options.endpoints.flatMap((endpoint) =>
-      operations.map((operation) => {
-        const url = new URL(options.url);
-        url.searchParams.set("endpoint", endpoint);
-        url.searchParams.set("operation", operation);
-        return this.register(endpoint, { url: url.toString(), secret: options.secret, operation });
-      }),
-    );
+    const pairs =
+      options.routes ??
+      options.endpoints.flatMap((endpoint) => operations.map((operation) => ({ endpoint, operation })));
+    const jobs = pairs.map(({ endpoint, operation }) => {
+      const url = new URL(options.url);
+      url.searchParams.set("endpoint", endpoint);
+      url.searchParams.set("operation", operation);
+      return this.register(endpoint, { url: url.toString(), secret: options.secret, operation });
+    });
     return Promise.all(jobs);
   }
 

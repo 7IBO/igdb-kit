@@ -1,5 +1,5 @@
 // Runs against the real IGDB API. Skipped unless TWITCH_CLIENT_ID and TWITCH_CLIENT_SECRET are set.
-// Uses about 90 requests. The webhook test registers webhooks on example.com and removes them.
+// Uses about 95 requests. The webhook test registers webhooks on example.com and removes them.
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   AgeRatingCategory,
@@ -69,6 +69,7 @@ import { en, type LabelTable } from "../../src/i18n";
 import { fr } from "../../src/i18n/fr";
 import { ja } from "../../src/i18n/ja";
 import { igdbProxy } from "../../src/proxy";
+import { webhookRouter } from "../../src/webhooks";
 
 // A test sends several requests, each of which IGDB can take seconds to answer when loaded: 5 s, the
 // default, failed tests that pass in 2.
@@ -496,6 +497,38 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     }
     const after = await igdb.webhooks.list();
     expect(after.some((l) => hooks.some((h) => h.id === l.id))).toBe(false);
+  });
+
+  test("webhookRouter(): registers its routes only, and routes a real entity", async () => {
+    const saved: string[] = [];
+    const router = webhookRouter({ secret: "ci-secret" })
+      .on("platforms", "update", (platform) => void saved.push(platform.name ?? ""))
+      .on("platforms", "delete", ({ id }) => void saved.push(`deleted ${id}`));
+    const url = `https://example.com/igdb-kit-ci/${crypto.randomUUID()}`;
+    const hooks = await igdb.webhooks.ensure({ url, secret: "ci-secret", routes: router.routes });
+    try {
+      expect(hooks.map((h) => h.operation).sort()).toEqual(["delete", "update"]);
+      expect(hooks.map((h) => new URL(h.url).searchParams.get("operation")).sort()).toEqual([
+        "delete",
+        "update",
+      ]);
+    } finally {
+      await Promise.all(hooks.map((h) => igdb.webhooks.delete(h.id)));
+    }
+    // A delivery carries the entity with every field, as `select("*")` reads it.
+    const platform = await igdb.platforms.select("*").findByIdOrThrow(6);
+    const deliver = (operation: string, body: unknown) =>
+      router.handler(
+        new Request(`${hooks[0]?.url ?? url}`, {
+          method: "POST",
+          headers: { "x-secret": "ci-secret", "x-endpoint": "platforms", "x-operation": operation },
+          body: JSON.stringify(body),
+        }),
+      );
+    expect((await deliver("update", platform)).status).toBe(200);
+    expect((await deliver("delete", { id: platform.id })).status).toBe(200);
+    expect((await deliver("create", platform)).status).toBe(200);
+    expect(saved).toEqual([platform.name ?? "", "deleted 6"]);
   });
 
   test("a browser client queries through igdbProxy", async () => {
