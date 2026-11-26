@@ -72,13 +72,15 @@ export function ratingOf<G extends object, S extends RatingSource = "total">(
 ): GameRating | null {
   const row = game as RatingRow;
   const prefer = options.prefer ?? (["total"] as S[]);
+  const { minCount } = options;
+  // Every minimum is checked first, so that a bad one throws even when an earlier source is shown.
+  if (typeof minCount === "object") for (const min of Object.values(minCount)) minimum(min);
+  else minimum(minCount ?? 1);
   for (const source of prefer) {
     const [valueField, countField] = sourceFields[source];
     const value = row[valueField];
     const count = row[countField];
-    const min = minimum(
-      typeof options.minCount === "object" ? (options.minCount[source] ?? 1) : (options.minCount ?? 1),
-    );
+    const min = minimum(typeof minCount === "object" ? (minCount[source] ?? 1) : (minCount ?? 1));
     if (typeof value !== "number" || typeof count !== "number") continue;
     if (count >= min) return { value, count, source };
   }

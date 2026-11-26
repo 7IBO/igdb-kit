@@ -38,8 +38,12 @@ describe("ratingOf()", () => {
   });
 
   test("throws for a minCount that is not a finite number", () => {
-    const game = { id: 2, total_rating: 70, total_rating_count: 3 };
+    const game = { id: 2, total_rating: 70, total_rating_count: 3, rating: null, rating_count: null };
     expect(() => ratingOf(game, { minCount: Number.NaN })).toThrow(TypeError);
     expect(() => ratingOf(game, { minCount: { total: Number.POSITIVE_INFINITY } })).toThrow(TypeError);
+    // Even for a source after the one shown.
+    expect(() => ratingOf(game, { prefer: ["total", "users"], minCount: { users: Number.NaN } })).toThrow(
+      TypeError,
+    );
   });
 });
