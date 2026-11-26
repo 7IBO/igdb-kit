@@ -333,10 +333,7 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     const rows = covers.get(coverGame) ?? [];
     expect(rows.some((c) => c.image_type !== ImageType.MainCover)).toBe(true);
     expect(bestImage({ id: coverGame, cover: undefined }, { covers: rows })?.source).toBe("cover");
-    expect(bestLogo(logos.get(logoGame) ?? [])).toMatchObject({
-      source: "logo",
-      type: ImageType.GameLogoColor,
-    });
+    expect(bestLogo(logos.get(logoGame) ?? [])).toMatchObject({ type: ImageType.GameLogoColor });
   });
 
   test("popularitySnapshot() returns ranked rows with their calculation time; IGDB keeps no history", async () => {

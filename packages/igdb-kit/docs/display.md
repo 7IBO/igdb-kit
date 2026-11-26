@@ -95,6 +95,7 @@ const { game, covers, logos } = await igdb.batch({
 const hero = game && bestImage(game, { prefer: "background", covers: covers.get(1942) ?? [] });
 const logo = bestLogo(logos.get(1942) ?? [], { on: "dark" });
 ```
+
 - **`platformVersions(platform, { locale? })`** returns `[{ version, release, releases }]`: the versions of a console (Slim, Pro, OLED) earliest first, with the date for the user's region.
 
 ## Missing data
