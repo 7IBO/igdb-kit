@@ -63,6 +63,7 @@ describe("webhookRouter", () => {
       'unknown operation "upsert"',
     );
     expect(() => hooks.on("gamez" as "games", "update", () => {})).toThrow('unknown endpoint "gamez"');
+    expect(() => hooks.on("games", "update", undefined as never)).toThrow("not a function");
     expect(hooks.routes).toEqual([]);
   });
 
@@ -110,13 +111,14 @@ describe("webhookRouter", () => {
     ).toHaveLength(1);
   });
 
-  test("ensure() takes endpoints or routes, one of them, with something to register", async () => {
+  test("ensure() takes endpoints or routes, one of them", async () => {
     const igdb = testClient(mockFetch(() => Response.json([])).fetch);
     const base = { url: "https://x.test/igdb", secret: "s" };
     const routes = [{ endpoint: "games", operation: "update" }] as const;
     await expect(igdb.webhooks.ensure({ ...base, routes, endpoints: ["games"] })).rejects.toThrow(TypeError);
     await expect(igdb.webhooks.ensure(base)).rejects.toThrow("either endpoints or routes");
-    await expect(igdb.webhooks.ensure({ ...base, routes: [] })).rejects.toThrow("nothing to register");
+    expect(await igdb.webhooks.ensure({ ...base, routes: [] })).toEqual([]);
+    expect(await igdb.webhooks.ensure({ ...base, endpoints: [] })).toEqual([]);
     await expect(igdb.webhooks.ensure({ ...base, routes, operations: ["create"] })).rejects.toThrow(
       TypeError,
     );

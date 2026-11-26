@@ -148,7 +148,8 @@ import { parseWebhook, WebhookError } from "igdb-kit/webhooks";
 
 app.post("/igdb", express.json(), async (req, res) => {
   try {
-    await hooks.dispatch(parseWebhook({ headers: req.headers, body: req.body, url: req.url }, secret));
+    const event = parseWebhook({ headers: req.headers, body: req.body, url: req.url }, process.env.IGDB_WEBHOOK_SECRET!);
+    await hooks.dispatch(event);
     res.sendStatus(200);
   } catch (error) {
     res.sendStatus(error instanceof WebhookError ? (error.status ?? 400) : 500);

@@ -92,7 +92,7 @@ export class Webhooks {
    * URL. Call it at startup: it is idempotent and brings back webhooks IGDB deactivated. With
    * `routes`, only those pairs are registered. It never removes a webhook: pairs registered before
    * and no longer wanted stay until `delete()`. Throws a `TypeError` when given both `endpoints`
-   * and `routes`, or neither, or nothing to register.
+   * and `routes`, or neither, or `operations` with `routes`. A pair given twice is registered once.
    */
   async ensure<N extends EndpointName>(options: EnsureWebhooksOptions<N>): Promise<Webhook[]> {
     const { endpoints, routes } = options;
@@ -105,7 +105,6 @@ export class Webhooks {
       routes ??
       (endpoints ?? []).flatMap((endpoint) => operations.map((operation) => ({ endpoint, operation })));
     const pairs = [...new Map(all.map((pair) => [`${pair.endpoint} ${pair.operation}`, pair])).values()];
-    if (pairs.length === 0) throw new TypeError("webhooks.ensure(): nothing to register");
     const jobs = pairs.map(({ endpoint, operation }) => {
       const url = new URL(options.url);
       url.searchParams.set("endpoint", endpoint);

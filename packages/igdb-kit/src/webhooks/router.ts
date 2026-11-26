@@ -65,8 +65,8 @@ export class WebhookRouter {
 
   /**
    * Handles one endpoint's creates, updates or deletes, or several operations at once. Returns the
-   * router, so calls chain. Throws a `TypeError` for an unknown endpoint or operation, adding
-   * nothing.
+   * router, so calls chain. Throws a `TypeError` for an unknown endpoint or operation, or a
+   * handler that is not a function, adding nothing.
    *
    * ```ts
    * router
@@ -82,6 +82,8 @@ export class WebhookRouter {
     if (!Object.hasOwn(endpoints, endpoint)) {
       throw new TypeError(`WebhookRouter.on(): unknown endpoint "${String(endpoint)}"`);
     }
+    if (typeof handler !== "function")
+      throw new TypeError("WebhookRouter.on(): the handler is not a function");
     const operations = [...new Set(typeof operation === "string" ? [operation] : operation)];
     if (operations.length === 0) throw new TypeError("WebhookRouter.on(): no operation given");
     const unknown = operations.find((op) => !OPERATIONS.includes(op));
