@@ -61,7 +61,7 @@ export function parseWebhook(delivery: WebhookDelivery, secret: string): Webhook
   const query = delivery.url ? new URL(delivery.url, "http://localhost").searchParams : undefined;
   const endpoint = normalizeEndpoint(header(delivery.headers, "x-endpoint") ?? query?.get("endpoint") ?? "");
   const operation = (header(delivery.headers, "x-operation") ?? query?.get("operation") ?? "").toLowerCase();
-  if (!(endpoint in endpoints))
+  if (!Object.hasOwn(endpoints, endpoint))
     throw new WebhookError(`Unknown webhook endpoint "${endpoint}"`, { status: 400 });
   if (operation !== "create" && operation !== "update" && operation !== "delete") {
     throw new WebhookError(`Unknown webhook operation "${operation}"`, { status: 400 });
@@ -88,7 +88,7 @@ function normalizeEndpoint(value: string): string {
 export interface WebhookHandlerOptions<N extends EndpointName> {
   secret: string;
   /** Called for each verified delivery. IGDB retries when this throws (the handler answers 500). */
-  onEvent: (event: WebhookEvent<N>) => void | Promise<void>;
+  onEvent: (event: WebhookEvent<N>) => unknown;
   /**
    * Largest delivery body read, in bytes; a larger one is answered 413. Default 1 MB (an entity
    * weighs a few KB).

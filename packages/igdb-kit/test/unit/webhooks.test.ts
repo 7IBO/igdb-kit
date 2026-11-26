@@ -104,6 +104,9 @@ describe("incoming deliveries", () => {
     expect(() =>
       parseWebhook({ headers: { ...headers, "x-endpoint": "nope" }, body: '{"id":1}' }, "s3cret"),
     ).toThrow('Unknown webhook endpoint "nope"');
+    expect(() =>
+      parseWebhook({ headers: { ...headers, "x-endpoint": "constructor" }, body: '{"id":1}' }, "s3cret"),
+    ).toThrow('Unknown webhook endpoint "constructor"');
     expect(() => parseWebhook({ headers, body: "not json" }, "s3cret")).toThrow("not JSON");
   });
 
