@@ -978,8 +978,11 @@ describe.skipIf(!clientId || !clientSecret)("real IGDB API", () => {
     expect(games.length).toBeGreaterThan(0);
     for (const game of games) {
       expect(wikipediaLink(game, { locale: "ja-JP" })).toMatchObject({ language: "ja", match: "locale" });
-      const fallback = wikipediaLink(game, { locale: "ko", english: false });
-      expect(fallback === null || fallback.language === "ko").toBe(true);
+      const english = (game.websites ?? []).some((w) =>
+        /^https?:\/\/en\.(m\.)?wikipedia\.org\//i.test(w.url ?? ""),
+      );
+      const korean = wikipediaLink(game, { locale: "ko" });
+      if (korean?.language !== "ko") expect(korean?.match ?? null).toBe(english ? "english" : null);
     }
     const witcher3 = await igdb.games.select(...wikipediaLinkFields()).findByIdOrThrow(1942);
     expect(wikipediaLink(witcher3, { locale: "en" })).toMatchObject({ language: "en", match: "locale" });
