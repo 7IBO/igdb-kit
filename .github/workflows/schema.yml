@@ -1,6 +1,7 @@
 name: Schema update
 
-# Weekly: downloads the latest igdbapi.proto, regenerates the types and opens a PR if anything changed.
+# Weekly: downloads the latest igdbapi.proto and reference tables, regenerates the types, reads IGDB's
+# blog feed, and opens a PR if anything changed or a new article came out.
 on:
   schedule:
     - cron: "0 6 * * 1"
@@ -14,10 +15,10 @@ jobs:
   regenerate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.2
+          bun-version: 1.4.5
       - run: bun install --frozen-lockfile
       # --fetch also downloads the reference tables (GameType, Platform...), which needs credentials.
       - run: bun run --filter igdb-kit codegen -- --fetch
@@ -36,6 +37,13 @@ jobs:
         env:
           TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
           TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+      # A new article is recorded in codegen/blog-feed.json, so it opens the PR on its own. A feed that
+      # cannot be read fails the run at its end, once the schema's PR is open.
+      - name: IGDB's blog
+        id: blog
+        continue-on-error: true
+        working-directory: packages/igdb-kit
+        run: bun run --silent blog-feed >> ../../audit.md
       - uses: peter-evans/create-pull-request@v7
         with:
           branch: chore/schema-update
@@ -43,3 +51,6 @@ jobs:
           commit-message: Update IGDB schema from igdbapi.proto
           body-path: audit.md
           add-paths: packages/igdb-kit
+      - name: Fail when the blog feed could not be read
+        if: steps.blog.outcome == 'failure'
+        run: exit 1
